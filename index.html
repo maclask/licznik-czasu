@@ -1,0 +1,178 @@
+<!doctype html>
+
+<html>
+<head>
+  <title>Licznik</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous">
+  <link rel="stylesheet" href="assets/css/style.css"/>
+  <meta charset="utf-8">
+</head>
+
+<body>
+
+
+ <div class="container">
+  
+  <div class="alert alert-success">
+    <strong>Zrobiono!</strong>
+  </div>
+  
+  <nav class="navbar navbar-expand ">
+<div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
+    <ul class="navbar-nav">
+      <li class="nav-item active">
+        <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.png" alt="licznik"/></a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.png" alt="Ustawienia"/></a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.png" alt="Pomoc"/></a>
+      </li>
+    </ul>
+  </div>
+  </nav>
+
+
+  
+<div id="timer" class="jumbotron" >
+ <div class="row justify-content-md-center">
+<h2 id="teza" class="text-uppercase"></h2>
+</div>
+<div class="row justify-content-md-center">
+ <div class="col-lg"></div>
+  <div class="col-lg timer"><span class="timer-minutes  text-monospace ">0</span>:<span class="timer-seconds text-monospace ">00</span></div>
+  <div class="col-lg"><div class="joker-timer"><p>Joker</p><span class="joker-minutes text-monospace ">0</span>:<span class="joker-seconds text-monospace ">00</span></div></div>
+</div>
+
+<div class="row justify-content-md-center">
+  <div class="col-lg-12 img-timer">
+    <img class="img1 img-fluid" src="img/idp.png" alt="" width="400px"/>
+    <img class="img2 img-fluid" src="#" alt="" width="0px"/>
+ </div>
+
+</div>
+<div class="row justify-content-md-center">
+  <div class="btn-group timer-controls">
+  <button type="button" class="btn btn-outline-primary start-stop">Start/stop</button>
+  <button type="button" class="btn btn-outline-primary reset">Reset</button>
+  <button type="button" class="btn btn-outline-primary ad-vocem">Ad vocem</button>
+  <button type="button" class="btn btn-outline-primary joker">Joker</button>
+</div> 
+</div>
+</div>
+ 
+<div id="settings" class="jumbotron">
+ 
+<h2>Ustawienia</h2>
+ 
+ 
+
+ 
+<div class="row sjustify-content-md-center">
+​<div class="col-auto"><label for="minuty" class="label-settings">Ilość minut </label></div>
+​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="4" type="number" min="0" ></div>
+<div class="col-auto"><input type="submit" class="zastosuj-minuty btn btn-outline-secondary" value="Zastosuj"></div>
+</div>
+
+<div class="row ajustify-content-md-center">
+​​<div class="col-auto"><label for="teza" class="label-settings">Teza </label></div>
+<div class="col-auto"> <textarea type="text" class="input-teza form-control" name="teza" rows="2" value=""></textarea></div>
+<div class="col-auto"><input type="submit" class="zastosuj-teza btn btn-outline-secondary" value="Zastosuj"></div>
+</div>
+
+<div class="row">
+<div class="col-auto">
+<div class="custom-control custom-checkbox">
+  <input type="checkbox" class="custom-control-input  controls-checkbox" id="customCheck1" checked>
+  <label class="custom-control-label" for="customCheck1">Pokaż menu sterujące</label>
+</div>
+</div>
+</div>
+
+<div class="row">
+<div class="col-auto">
+<div class="custom-control custom-checkbox">
+  <input type="checkbox" class="custom-control-input  sound-switch"  id="customCheck2">
+  <label class="custom-control-label" for="customCheck2">Wyłącz dźwięki</label>
+</div>
+</div>
+</div>
+
+<div class="row">
+​​<div class="col-auto"><label for="sound-test" class="label-settings">Test dźwięku </label></div>
+​​<div class="col-auto"><button class="sound-test1 btn btn-outline-secondary">30s do końca</button></div>
+​​<div class="col-auto"><button class="sound-test2 btn btn-outline-secondary">Koniec czasu</button></div>
+</div>
+
+<div class="row img-upload-row sjustify-content-md-center">
+    ​​<div class="col-lg-6">
+    <form id="form1" runat="server">
+     <div class="custom-file">
+  <input type="file" class="custom-file-input imgInp" id="imgInp1" lang="pl">
+  <label class="custom-file-label" for="customFileLang">Wybierz obraz</label>
+</div>
+    </form>
+    </div>
+    <div class="col-lg-6">
+    <form id="form2" runat="server">
+           <div class="custom-file">
+  <input type="file" class="custom-file-input imgInp" id="imgInp2" lang="pl">
+  <label class="custom-file-label" for="customFileLang">Wybierz drugi obraz</label>
+</div>
+    </form>
+    </div>
+</div>
+
+<div class="row sjustify-content-md-center">
+ <div class="col-lg-6">
+    <img class="img1 img-fluid" src="img/idp.png" alt="obraz 1" width="400px"/>
+ </div>
+ <div class="col-lg-6">  
+        <img class="img2 img-fluid" src="#" alt="obraz 2" width="0px"/>
+ </div>
+</div>
+    <audio src="audio/end.mp3" type="audio/mp3" alt="koniec czasu - dźwięk" id="endoftime"></audio>
+    <audio src="audio/30s.mp3" type="audio/mp3" alt="30s do końca - dźwięk" id="30stoend"></audio>
+
+</div>
+
+<div class="jumbotron" id="help">
+<h2>Pomoc</h2>
+  <p>Jak korzystać z licznika w szybki sposób?</p>            
+  <table class="table table-borderless">
+    <thead>
+      <tr>
+        <th>Klawisz</th>
+        <th>Akcja</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Ustawienie licznika głównego w pozycji startowej</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Ustawienie licznika ad vocem w pozycji startowej</td>
+      </tr>
+      <tr>
+        <td>Spacja</td>
+        <td>Rozpoczęcia/zapauzowanie liczenia</td>
+      </tr>
+      <tr>
+        <td>j</td>
+        <td>Rozpoczęcia odliczania asynchronicznego zegara Jokera</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</div>
+
+ <script src="assets/js/jquery3.3.1.min.js"></script>
+ <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.min.js" integrity="sha384-uefMccjFJAIv6A+rW+L4AHf99KvxDjWSu1z9VI8SKNVmz4sk7buKt/6v9KI65qnm" crossorigin="anonymous"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js" integrity="sha384-cs/chFZiN24E4KMATLdqdvsezGxaGsi4hLGOzlXwp5UZB1LY//20VyM2taTB4QvJ" crossorigin="anonymous"></script>
+ <script src="assets/js/stoper.js"></script>
+</body>
+</html>
