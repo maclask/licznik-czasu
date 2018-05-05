@@ -55,7 +55,7 @@ $('.joker-timer').hide();
 			started=false;
 		}
 		else{
-			interval = setInterval(updateDisplay, 100);
+			interval = setInterval(updateDisplay, 1000);
 			started=true;
 		}
 	}
