@@ -21,8 +21,7 @@
     ​​font-weight: 300;
     //font-size: 24px;
 }
-.img-upload-row{
-    border-top: solid 1px #e9ecef;
+.border-top{
     padding-top: 25px;
 }
 .timer-controls button{
@@ -51,4 +50,13 @@ body {
 }
 .img-timer {
 	text-align: center;
+}
+.table td, .table th {
+
+    border-top: none !important;
+}
+.credits{
+    font-weight: 600;
+    text-align: right;
+    
 }
