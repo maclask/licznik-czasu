@@ -1,7 +1,7 @@
 # Licznik czasu
 
 Licznik czasu przeznaczony jest do odmierzania czasu mów podczas debaty oksfordzkiej. Licznik dostosowany został do standardów Mistrzostw Polski Debat Oksfordzkich.
-Licznik dostępny jest na stronie **https://licznik-czasu.azurewebsites.net**.
+Licznik dostępny jest na stronie **https://licznik.macieklaskowski.pl**.
 
 # Funkcje
 
