@@ -47,7 +47,7 @@
 
 <div class="row justify-content-md-center">
   <div class="col-lg-12 img-timer">
-    <img class="img1 img-fluid" src="img/idp.png" alt="" width="400px"/>
+    <img class="img1 img-fluid" src="#" alt="" width="0px"/>
     <img class="img2 img-fluid" src="#" alt="" width="0px"/>
  </div>
 
@@ -60,7 +60,14 @@
   <button type="button" class="btn btn-outline-primary joker">Joker</button>
 </div> 
 </div>
+<div class="row justify-content-md-center">
+      <div class="btn-group timer-controls joker-controls">
+      <button type="button" class="btn btn-outline-primary joker-start-stop">Start/stop</button>
+      <button type="button" class="btn btn-outline-primary joker-reset">Reset</button>
+      <button type="button" class="btn btn-outline-primary joker-off">Zakończ</button>
+    </div> 
 </div>
+     </div>
  
 <div id="settings" class="jumbotron">
  
@@ -110,7 +117,22 @@
     <form id="form1" runat="server">
      <div class="custom-file">
   <input type="file" class="custom-file-input imgInp" id="imgInp1" lang="pl">
-  <label class="custom-file-label" for="customFileLang">Wybierz obraz</label>
+  <label class="custom-file-label" for="customFileLang">Wybierz obraz z dysku</label>
+Lub
+<div class="dropdown1">
+  <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+      Wybierz obraz z listy
+  </button>
+  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+    <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
+    <a class="dropdown-item" data="g5.jpg">G5</a>
+    <a class="dropdown-item" data="mpdo.png">MPDO</a>
+    <a class="dropdown-item" data="energa.jpg">Energa</a>
+    <a class="dropdown-item" data="ipn.jpg">IPN</a>
+    <a class="dropdown-item" data="#">brak obrazu</a>
+  </div>
+</div>
+         
 </div>
     </form>
     </div>
@@ -119,6 +141,20 @@
            <div class="custom-file">
   <input type="file" class="custom-file-input imgInp" id="imgInp2" lang="pl">
   <label class="custom-file-label" for="customFileLang">Wybierz drugi obraz</label>
+               Lub
+<div class="dropdown2">
+  <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+      Wybierz obraz z listy
+  </button>
+  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+    <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
+    <a class="dropdown-item" data="g5.jpg">G5</a>
+    <a class="dropdown-item" data="mpdo.png">MPDO</a>
+    <a class="dropdown-item" data="energa.jpg">Energa</a>
+    <a class="dropdown-item" data="ipn.jpg">IPN</a>
+      <a class="dropdown-item" data="#">brak obrazu</a>
+  </div>
+</div>
 </div>
     </form>
     </div>
@@ -126,7 +162,7 @@
 
 <div class="row sjustify-content-md-center">
  <div class="col-lg-6">
-    <img class="img1 img-fluid" src="img/idp.png" alt="obraz 1" width="400px"/>
+    <img class="img1 img-fluid" src="#" alt="obraz 1" width="0px"/>
  </div>
  <div class="col-lg-6">  
         <img class="img2 img-fluid" src="#" alt="obraz 2" width="0px"/>
@@ -164,6 +200,14 @@
         <td>j</td>
         <td>Rozpoczęcia odliczania asynchronicznego zegara Jokera</td>
       </tr>
+        <tr>
+        <td>h</td>
+        <td>Rozpoczęcia/zapauzowanie Jokera</td>
+      </tr>
+        <tr>
+        <td>l</td>
+        <td>Zakończenie Jokera</td>
+      </tr>
     </tbody>
   </table>
   <div class="row">
@@ -177,8 +221,9 @@
 
 </div>
 
+ <script src="assets/js/popper.min.js"></script>
  <script src="assets/js/jquery3.3.1.min.js"></script>
- <script src="assets/js/bootstrap.min.js"></script>
+ <script src="assets/js/bootstrap.bundle.min.js"></script>
  <script src="assets/js/stoper.js"></script>
 </body>
 </html>

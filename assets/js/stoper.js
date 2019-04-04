@@ -1,6 +1,8 @@
-
+(function($) {
 var sekundy = 0;
 var started = false;
+var joker_started = false;
+var joker_controls = true;
 var interval;
 var intervalJoker;
 var minuty;
@@ -9,8 +11,9 @@ var soundEnabled=true;
 		var minutyJoker;
 		var sekundyJoker;
 
- $('.alert').hide();
+$('.alert').hide();
 $('.joker-timer').hide();
+$('.joker-controls').hide();
 	$( "#settings" ).hide();
 	$( "#help" ).hide();	
 	minuty = $('.input-minuty').val();
@@ -33,7 +36,11 @@ $('.joker-timer').hide();
 	$('.reset').click(reset);
 	$('.ad-vocem').click(adVocem);
 	$('.joker').click(joker);
-	
+    
+	$('.joker-start-stop').click(joker_start_stop);
+	$('.joker-reset').click(joker);
+	$('.joker-off').click(joker_off);
+    
 		$('.sound-test1').click(playsound1);
 		$('.sound-test2').click(playsound2);
 		
@@ -68,6 +75,12 @@ $('.joker-timer').hide();
 	if (e.keyCode == 74 && !$(e.target).is(':input')){
 		joker();
 	}
+    if (e.keyCode == 72 && !$(e.target).is(':input') && joker_started){
+		joker_start_stop();
+	}
+    if (e.keyCode == 75 && !$(e.target).is(':input') && joker_started){
+		joker_off();
+	}
 });
  $(".imgInp").change(function(){
 		imgNumber = $(this).attr('id');
@@ -75,6 +88,10 @@ $('.joker-timer').hide();
  });
 	$('.controls-checkbox').click(function() {
     $(".timer-controls").toggle(this.checked);
+    if(joker_controls)
+        joker_controls = false;
+    else
+        joker_controls = true;
 });
 
 function readURL(input, imgNumber) {
@@ -84,7 +101,7 @@ function readURL(input, imgNumber) {
             reader.onload = function (e) {
 				if(imgNumber == 'imgInp1'){
                 $('.img1').attr('src', e.target.result);
-																$('.img1').attr('width', '400px');
+                $('.img1').attr('width', '400px');
 				}
 				else{
 				$('.img2').attr('src', e.target.result);
@@ -96,6 +113,21 @@ function readURL(input, imgNumber) {
         }
     }
 	
+function insert_img(name, imgNumber){
+    if(imgNumber == 'dropdown1 show'){
+                $('.img1').attr('src', 'img/'+name);
+				$('.img1').attr('width', '400px');
+				}
+				else{
+				$('.img2').attr('src', 'img/'+name);
+				$('.img2').attr('width', '400px');
+				}
+}
+$('.dropdown-item').click(function(){
+    console.log($(this).parent().parent().attr('class'));
+    insert_img($(this).attr('data'), $(this).parent().parent().attr('class'));
+
+})
 function updateDisplay(){
 
 	if(sekundy==0 & minuty==0){
@@ -140,8 +172,26 @@ function reset(){
 		$('#timer').find('.timer-seconds').text(sekundy);
 	}
 	
-
+function joker_start_stop(){
+    if(joker_started){
+			clearInterval(intervalJoker);
+			joker_started=false;
+		}
+		else{
+			intervalJoker = setInterval(jokerUpdate, 1000);
+			joker_started=true;
+		}
+}
+function joker_off(){
+    clearInterval(intervalJoker);
+    $('.joker-timer').hide();
+    $('.joker-controls').hide();
+    joker_started = false; 
+}
+    
 		function joker(){
+        if(joker_controls) 
+            $('.joker-controls').show();
 		clearInterval(intervalJoker);
 		$('.joker-timer').show();
 	 minutyJoker = 0;
@@ -149,6 +199,7 @@ function reset(){
 		$('#timer').find('.joker-minutes').text(minutyJoker);
 		$('#timer').find('.joker-seconds').text(sekundyJoker);
 			intervalJoker = setInterval(jokerUpdate, 1000);
+            joker_started = true;
 	}
 	
 	function jokerUpdate(){
@@ -158,6 +209,8 @@ function reset(){
 		if(soundEnabled)
 		playsound1();
 		$('.joker-timer').hide();
+        $('.joker-controls').hide();
+        joker_started = false;
 	}
 	else{
 		sekundyJoker--;
@@ -195,14 +248,13 @@ setTimeout(
 		else
 		soundEnabled=true;
 	}
+
 	
-	
-	
-$( "#settings-link" ).click(function() {
+$('#settings-link').click(function() {
 	//site = "settings";
-	$( "#timer" ).hide();
-	$( "#settings" ).show();
-	$( "#help" ).hide();
+	$('#timer').hide();
+	$('#settings').show();
+	$('#help').hide();
 });
 
 $( "#timer-link" ).click(function() {
@@ -218,3 +270,4 @@ $( "#help-link" ).click(function() {
 	$( "#settings" ).hide();
 		$( "#timer" ).hide();	
 });
+    })(jQuery);

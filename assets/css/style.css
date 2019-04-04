@@ -27,6 +27,18 @@
 .timer-controls button{
     text-transform: uppercase !important;
 }
+.joker-controls{
+    margin-top: 20px;
+}
+.joker-controls button{
+    border-color: rgb(122, 8, 112) !important;
+    color: rgb(122, 8, 112) !important;
+    
+}
+.joker-controls button:hover{
+    background-color: rgb(122, 8, 112) !important;
+    color: #fff !important;
+}
 .joker-timer{
     font-size: 80px;
     color: rgb(122, 8, 112);
