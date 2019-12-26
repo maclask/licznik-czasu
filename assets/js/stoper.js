@@ -1,5 +1,5 @@
 (function($) {
-var sekundy = 0;
+var sekundy;
 var started = false;
 var joker_started = false;
 var joker_controls = true;
@@ -16,11 +16,15 @@ $('.joker-timer').hide();
 $('.joker-controls').hide();
 	$( "#settings" ).hide();
 	$( "#help" ).hide();	
-	minuty = $('.input-minuty').val();
+	minuty = $('.input-minuty').val().split(":")[0];
+    sekundy = $('.input-minuty').val().split(":")[1];
 	$('#timer').find('.timer-minutes').text(minuty);
-	$('#timer').find('.timer-seconds').text("0"+sekundy);
+	$('#timer').find('.timer-seconds').text(sekundy);
 	//$(".timer-controls").toggle();
-
+$('button').focus(function() {
+        this.blur();
+    });
+    
 	$('.start-stop').click(function(){
 		if(started){
 			clearInterval(interval);
@@ -35,6 +39,7 @@ $('.joker-controls').hide();
 	$('.zastosuj-minuty').click(reset);
 	$('.reset').click(reset);
 	$('.ad-vocem').click(adVocem);
+    $('.apply-advocem-time').click(adVocem);
 	$('.joker').click(joker);
     
 	$('.joker-start-stop').click(joker_start_stop);
@@ -55,32 +60,36 @@ $('.joker-controls').hide();
 	
 	$(window).keyup(function(e){
 	// sprawdza czy wcisnieto spacje
-	if (e.keyCode == 32  && !$(e.target).is(':input')) {
-		e.preventDefault();
-		if(started){
-			clearInterval(interval);
-			started=false;
-		}
-		else{
-			interval = setInterval(updateDisplay, 1000);
-			started=true;
-		}
-	}
-	if (e.keyCode == 49 && !$(e.target).is(':input')){
-		reset();
-	}
-	if (e.keyCode == 50 && !$(e.target).is(':input')){
-		adVocem();
-	}
-	if (e.keyCode == 74 && !$(e.target).is(':input')){
-		joker();
-	}
-    if (e.keyCode == 72 && !$(e.target).is(':input') && joker_started){
-		joker_start_stop();
-	}
-    if (e.keyCode == 75 && !$(e.target).is(':input') && joker_started){
-		joker_off();
-	}
+        if(!$(e.target).is(':input')){
+            switch(e.keyCode){
+                case 32:
+                    e.preventDefault();
+                    if(started){
+                        clearInterval(interval);
+                        started=false;
+                    }
+                    else{
+                        interval = setInterval(updateDisplay, 1000);
+                        started=true;
+                    }
+                    break;
+                case 49:
+                    reset();
+                    break;
+                case 50:
+                    adVocem();
+                    break;
+                case 74:
+                    joker();
+                    break;
+                case 72:
+                    joker_start_stop();
+                    break;
+                case 75:
+                    joker_off();
+                    break;
+            }
+        }
 });
  $(".imgInp").change(function(){
 		imgNumber = $(this).attr('id');
@@ -107,6 +116,7 @@ function readURL(input, imgNumber) {
 				$('.img2').attr('src', e.target.result);
 				$('.img2').attr('width', '500px');
 				}
+                $('.img-timer').css('display','block');
             };
             
             reader.readAsDataURL(input.files[0]);
@@ -157,10 +167,11 @@ function updateDisplay2(){
 function reset(){
 		clearInterval(interval);
 		started=false;
-		minuty = $('.input-minuty').val();
-		sekundy = 0;
+		minuty = $('.input-minuty').val().split(":")[0];
+		sekundy = $('.input-minuty').val().split(":")[1];
+        minuty = minuty.replace(/^0+/, '');
 		$('#timer').find('.timer-minutes').text(minuty);
-		$('#timer').find('.timer-seconds').text("0"+sekundy);
+		$('#timer').find('.timer-seconds').text(sekundy);
 	}
 	
 	function adVocem(){

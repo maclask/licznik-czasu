@@ -10,9 +10,10 @@
 .jumbotron{
     background: white !important;
     box-shadow: 0 15px 35px rgba(50,50,93,.1), 0 5px 15px rgba(0,0,0,.07);
+    height:100%;
 }
 .input-minuty{
-    width: 70px;
+    width: 200px;
 }
 #settings .row{
     margin-bottom: 30px;
@@ -62,6 +63,7 @@ body {
 }
 .img-timer {
 	text-align: center;
+    display: none;
 }
 .table td, .table th {
 
@@ -71,4 +73,14 @@ body {
     font-weight: 600;
     text-align: right;
     
+}
+.adv{
+    width: 100%;
+    float: left;
+}
+.adv img{
+    float:  left;
+}
+.adv p{
+    margin: 10px;
 }
