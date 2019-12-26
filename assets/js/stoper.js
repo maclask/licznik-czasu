@@ -20,7 +20,9 @@ $('.joker-controls').hide();
 	$('#timer').find('.timer-minutes').text(minuty);
 	$('#timer').find('.timer-seconds').text("0"+sekundy);
 	//$(".timer-controls").toggle();
-
+$('button').focus(function() {
+        this.blur();
+    });
 	$('.start-stop').click(function(){
 		if(started){
 			clearInterval(interval);
