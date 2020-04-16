@@ -109,14 +109,13 @@ function readURL(input, imgNumber) {
             
             reader.onload = function (e) {
 				if(imgNumber == 'imgInp1'){
-                $('.img1').attr('src', e.target.result);
-                $('.img1').attr('width', '400px');
+                set_image(e.target.result, 1);
+
 				}
 				else{
-				$('.img2').attr('src', e.target.result);
-				$('.img2').attr('width', '500px');
+					set_image(e.target.result, 2);
+
 				}
-                $('.img-timer').css('display','block');
             };
             
             reader.readAsDataURL(input.files[0]);
@@ -124,14 +123,23 @@ function readURL(input, imgNumber) {
     }
 	
 function insert_img(name, imgNumber){
+	
     if(imgNumber == 'dropdown1 show'){
-                $('.img1').attr('src', 'img/'+name);
-				$('.img1').attr('width', '400px');
-				}
-				else{
-				$('.img2').attr('src', 'img/'+name);
-				$('.img2').attr('width', '400px');
-				}
+		set_image('img/'+name, 1);
+	}
+	else{
+		set_image('img/'+name, 2);	
+	}
+}
+function set_image(src, no){
+		if(src == "img/#"){
+			$('.img'+no).parent().css('display', 'none');
+		}else{
+			$('.img'+no).attr('src', src);
+			$('.img'+no).parent().css('display', 'grid');
+		}
+		
+
 }
 $('.dropdown-item').click(function(){
     console.log($(this).parent().parent().attr('class'));

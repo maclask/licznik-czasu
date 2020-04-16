@@ -5,6 +5,7 @@
   <title>Licznik czasu</title>
   <link rel="stylesheet" href="assets/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="assets/css/style.css"/>
+  <link href="assets/css/all.css" rel="stylesheet"> 
   <meta charset="utf-8">
 </head>
 
@@ -40,7 +41,7 @@
   
 <div id="timer" class="jumbotron" >
  <div class="row justify-content-md-center">
-<h2 id="teza" class="text-uppercase"></h2>
+<h2 id="teza" class="text-uppercase"></h2>  
 </div>
 <div class="row justify-content-md-center">
  <div class="col-lg"></div>
@@ -48,19 +49,22 @@
   <div class="col-lg"><div class="joker-timer"><p>Joker</p><span class="joker-minutes text-monospace ">0</span>:<span class="joker-seconds text-monospace ">00</span></div></div>
 </div>
 
-<div class="row justify-content-md-center">
-  <div class="col-lg-12 img-timer">
-    <img class="img1 img-fluid" src="#" alt="" width="0px"/>
-    <img class="img2 img-fluid" src="#" alt="" width="0px"/>
- </div>
-
+<div class="row img-grid justify-content-md-center">
+  <div class="img-container">
+    <img class="img1" src="img/idp.jpg" alt="logo1" />
+  </div>
+  <div class="img-container">
+    <img class="img2" src="img/idp.jpg" alt="logo1" />
+  </div>
 </div>
+
+
 <div class="row justify-content-md-center">
   <div class="btn-group timer-controls">
-  <button type="button" class="btn btn-outline-primary start-stop">Start/stop</button>
-  <button type="button" class="btn btn-outline-primary reset">Reset</button>
-  <button type="button" class="btn btn-outline-primary ad-vocem">Ad vocem</button>
-  <button type="button" class="btn btn-outline-primary joker">Joker</button>
+  <button type="button" class="btn btn-outline-primary start-stop"><i class="fas fa-play"></i></button>
+  <button type="button" class="btn btn-outline-primary reset"><i class="fas fa-redo-alt"></i></button>
+  <button type="button" class="btn btn-outline-primary ad-vocem">AV</button>
+  <button type="button" class="btn btn-outline-primary joker">J</button>
 </div> 
 </div>
 <div class="row justify-content-md-center">

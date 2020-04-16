@@ -61,10 +61,30 @@ body {
     background: #e9ecef !important;
 
 }
-.img-timer {
-	text-align: center;
-    display: none;
+.img-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    grid-gap: 1rem;
+    max-width: 500px;
+    margin: auto;;
 }
+.img-container {
+    padding: 1rem;
+    display: grid;
+    place-items: center;
+    max-width: 250px;
+    margin: auto;
+}
+.img-container::before {
+    content: "";
+    padding-bottom: 100%;
+    display: block;
+    grid-area: 1 / 1 / 2 / 2;
+  }
+  .img-container img{
+    width: 100%;
+    grid-area: 1 / 1 / 2 / 2;
+  }
 .table td, .table th {
 
     border-top: none !important;
