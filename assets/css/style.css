@@ -9,7 +9,10 @@
 }
 .jumbotron{
     background: white !important;
-    box-shadow: 0 15px 35px rgba(50,50,93,.1), 0 5px 15px rgba(0,0,0,.07);
+	/*background: #f3f3f5;*/
+    /*box-shadow: 0 15px 35px rgba(50,50,93,.1), 0 5px 15px rgba(0,0,0,.07);*/
+	-webkit-box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
+	box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
     height: 80vh;
     display: flex;
     align-items: center;
@@ -19,9 +22,10 @@
 .jumbotron > div{
     margin: auto;
 }
-.input-minuty{
-    width: 200px;
+.input-minuty, .input-minuty-advocem{
+    width: 100px;
 }
+
 #settings .row{
     margin-bottom: 30px;
 }
@@ -65,8 +69,8 @@
 }
 body {
 
-    background: #e9ecef !important;
-
+    /*background: #e9ecef !important;*/
+	background: #f3f3f5;
 }
 .img-grid{
     display: grid;
@@ -120,4 +124,7 @@ body {
 }
 nav{
     width: 100%;
+}
+.img-settings img{
+	width: 100px;
 }

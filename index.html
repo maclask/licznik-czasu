@@ -14,13 +14,11 @@
   <div class="container">
 
   <nav class="navbar navbar-expand ">
-    <div class="justify-content adv"><a href="https://www.facebook.com/Tr%C3%B3jmiejska-Liga-Debat-107128570681796/" target="_blank">
-    <img src="img/tld.png" width="70px"/><p>Trójmiejska Liga Debat<br/>Zobacz więcej >></p></a>
-    </div>
+
 <div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
   <ul class="navbar-nav">
     <li class="nav-item active">
-      <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.png" alt="licznik"/></a>
+      <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.png" alt="Licznik"/></a>
     </li>
     <li class="nav-item">
       <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.png" alt="Ustawienia"/></a>
@@ -29,7 +27,7 @@
       <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.png" alt="Pomoc"/></a>
     </li>
     <li class="nav-item">
-      <a class="nav-link full-screen-btn"   href="#">FS</a>
+      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.png" alt="Pełen ekran"/></a>
     </li>
     
   </ul>
@@ -70,10 +68,10 @@
 
   <div class="row justify-content-md-center">
     <div class="btn-group timer-controls">
-    <button type="button" class="btn btn-outline-primary start-stop"><i class="fas fa-play"></i></button>
-    <button type="button" class="btn btn-outline-primary reset"><i class="fas fa-redo-alt"></i></button>
-    <button type="button" class="btn btn-outline-primary ad-vocem">AV</button>
-    <button type="button" class="btn btn-outline-primary joker">J</button>
+    <button type="button" class="btn btn-outline-secondary start-stop">Start/stop</button>
+    <button type="button" class="btn btn-outline-secondary reset">Reset</button>
+    <button type="button" class="btn btn-outline-secondary ad-vocem">Ad Vocem</button>
+    <button type="button" class="btn btn-outline-secondary joker">Joker</button>
   </div> 
   </div>
   <div class="row justify-content-md-center">
@@ -93,14 +91,14 @@
 
  
 <div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Ilość minut </label></div>
-​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="04:00" type="time" min="0" ></div>
+​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania mowy </label></div>
+​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="04:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
 <div class="col-auto"><input type="submit" class="zastosuj-minuty btn btn-outline-secondary" value="Zastosuj"></div>
 </div>
 
 <div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Ilość sekund AdVocem </label></div>
-​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="00:30" type="time" min="0" ></div>
+​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania AdVocem </label></div>
+​<div class="col-auto"><input class="input-minuty-advocem form-control" name="minuty" value="00:30" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
 <div class="col-auto"><input type="submit" class="apply-advocem-time btn btn-outline-secondary" value="Zastosuj"></div>
 </div>
     
@@ -146,6 +144,8 @@ Lub
       Wybierz obraz z listy
   </button>
   <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+     <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
     <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
     <a class="dropdown-item" data="g5.jpg">G5</a>
     <a class="dropdown-item" data="mpdo.png">MPDO</a>
@@ -169,6 +169,8 @@ Lub
       Wybierz obraz z listy
   </button>
   <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+    <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
     <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
     <a class="dropdown-item" data="g5.jpg">G5</a>
     <a class="dropdown-item" data="mpdo.png">MPDO</a>
@@ -181,15 +183,15 @@ Lub
     </form>
     </div>
 </div>
+  <div class="row img-grid justify-content-md-center">
+    <div class="img-container img-settings">
+      <img class="img1" src="img/idp.jpg" alt="logo1" />
+    </div>
+    <div class="img-container img-settings">
+      <img class="img2" src="img/idp.jpg" alt="logo1" />
+    </div>
+  </div>
 
-<div class="row sjustify-content-md-center">
- <div class="col-lg-6">
-    <img class="img1 img-fluid" src="#" alt="obraz 1" width="0px"/>
- </div>
- <div class="col-lg-6">  
-        <img class="img2 img-fluid" src="#" alt="obraz 2" width="0px"/>
- </div>
-</div>
     <audio src="audio/end.mp3" type="audio/mp3" alt="koniec czasu - dźwięk" id="endoftime"></audio>
     <audio src="audio/30s.mp3" type="audio/mp3" alt="30s do końca - dźwięk" id="30stoend"></audio>
 

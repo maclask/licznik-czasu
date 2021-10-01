@@ -17,9 +17,20 @@ $('.joker-controls').hide();
 	$( "#settings" ).hide();
 	$( "#help" ).hide();	
 	minuty = $('.input-minuty').val().split(":")[0];
+	if(minuty != 0){
+		minuty = minuty.replace(/^0+/, '');
+	}
+	else{
+		minuty = 0;
+	}
     sekundy = $('.input-minuty').val().split(":")[1];
 	$('#timer').find('.timer-minutes').text(minuty);
 	$('#timer').find('.timer-seconds').text(sekundy);
+	minutyAdvocem = $('.input-minuty-advocem').val().split(":")[0];
+	sekundyAdvocem = $('.input-minuty-advocem').val().split(":")[1];
+	$(function () {
+  $('[data-toggle="tooltip"]').tooltip()
+})
 	//$(".timer-controls").toggle();
 $('button').focus(function() {
         this.blur();
@@ -39,7 +50,7 @@ $('button').focus(function() {
 	$('.zastosuj-minuty').click(reset);
 	$('.reset').click(reset);
 	$('.ad-vocem').click(adVocem);
-    $('.apply-advocem-time').click(adVocem);
+    $('.apply-advocem-time').click(change_advocem);
 	$('.joker').click(joker);
     
 	$('.joker-start-stop').click(joker_start_stop);
@@ -147,7 +158,6 @@ $('.dropdown-item').click(function(){
 
 })
 function updateDisplay(){
-
 	if(sekundy==0 & minuty==0){
 			clearInterval(interval);
 			if(soundEnabled)
@@ -177,7 +187,12 @@ function reset(){
 		started=false;
 		minuty = $('.input-minuty').val().split(":")[0];
 		sekundy = $('.input-minuty').val().split(":")[1];
-        minuty = minuty.replace(/^0+/, '');
+        if(minuty != 0){
+			minuty = minuty.replace(/^0+/, '');
+		}
+		else{
+			minuty = 0;
+		}
 		$('#timer').find('.timer-minutes').text(minuty);
 		$('#timer').find('.timer-seconds').text(sekundy);
 	}
@@ -185,10 +200,20 @@ function reset(){
 	function adVocem(){
 		clearInterval(interval);
 		started=false;
-		minuty = 0;
-		sekundy = 30;
+		minuty = minutyAdvocem;
+		sekundy = sekundyAdvocem;
+        if(minuty!= 0){
+			minuty = minuty.replace(/^0+/, '');
+		}
+		else{
+			minuty = 0;
+		}
 		$('#timer').find('.timer-minutes').text(minuty);
 		$('#timer').find('.timer-seconds').text(sekundy);
+	}
+	function change_advocem(){
+			minutyAdvocem = $('.input-minuty-advocem').val().split(":")[0];
+			sekundyAdvocem = $('.input-minuty-advocem').val().split(":")[1];
 	}
 	
 function joker_start_stop(){
