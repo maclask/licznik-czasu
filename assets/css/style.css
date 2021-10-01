@@ -9,11 +9,23 @@
 }
 .jumbotron{
     background: white !important;
-    box-shadow: 0 15px 35px rgba(50,50,93,.1), 0 5px 15px rgba(0,0,0,.07);
+	/*background: #f3f3f5;*/
+    /*box-shadow: 0 15px 35px rgba(50,50,93,.1), 0 5px 15px rgba(0,0,0,.07);*/
+	-webkit-box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
+	box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
+    height: 80vh;
+    display: flex;
+    align-items: center;
+    margin: auto;
+    min-width: 100%;
 }
-.input-minuty{
-    width: 70px;
+.jumbotron > div{
+    margin: auto;
 }
+.input-minuty, .input-minuty-advocem{
+    width: 100px;
+}
+
 #settings .row{
     margin-bottom: 30px;
 }
@@ -57,12 +69,33 @@
 }
 body {
 
-    background: #e9ecef !important;
-
+    /*background: #e9ecef !important;*/
+	background: #f3f3f5;
 }
-.img-timer {
-	text-align: center;
+.img-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    grid-gap: 1rem;
+    max-width: 500px;
+    margin: auto;;
 }
+.img-container {
+    padding: 1rem;
+    display: none; /*js changes it to grid*/
+    place-items: center;
+    max-width: 250px;
+    margin: auto;
+}
+.img-container::before {
+    content: "";
+    padding-bottom: 100%;
+    display: block;
+    grid-area: 1 / 1 / 2 / 2;
+  }
+  .img-container img{
+    width: 100%;
+    grid-area: 1 / 1 / 2 / 2;
+  }
 .table td, .table th {
 
     border-top: none !important;
@@ -71,4 +104,27 @@ body {
     font-weight: 600;
     text-align: right;
     
+}
+.adv{
+    width: 100%;
+    float: left;
+}
+.adv img{
+    float:  left;
+}
+.adv p{
+    margin: 10px;
+}
+.container{
+    min-height: 100%;  /* Fallback for browsers do NOT support vh unit */
+    min-height: 100vh; /* These two lines are counted as one :-)       */
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+}
+nav{
+    width: 100%;
+}
+.img-settings img{
+	width: 100px;
 }

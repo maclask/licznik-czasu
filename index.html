@@ -5,71 +5,85 @@
   <title>Licznik czasu</title>
   <link rel="stylesheet" href="assets/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="assets/css/style.css"/>
+  <link href="assets/css/all.css" rel="stylesheet"> 
   <meta charset="utf-8">
 </head>
 
 <body>
 
+  <div class="container">
 
- <div class="container">
+  <nav class="navbar navbar-expand ">
+
+<div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
+  <ul class="navbar-nav">
+    <li class="nav-item active">
+      <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.png" alt="Licznik"/></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.png" alt="Ustawienia"/></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.png" alt="Pomoc"/></a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.png" alt="Pełen ekran"/></a>
+    </li>
+    
+  </ul>
+</div>
+</nav>
+
+
   
   <div class="alert alert-success">
     <strong>Zrobiono!</strong>
   </div>
   
-  <nav class="navbar navbar-expand ">
-<div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
-    <ul class="navbar-nav">
-      <li class="nav-item active">
-        <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.png" alt="licznik"/></a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.png" alt="Ustawienia"/></a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.png" alt="Pomoc"/></a>
-      </li>
-    </ul>
-  </div>
-  </nav>
+
 
 
   
-<div id="timer" class="jumbotron" >
- <div class="row justify-content-md-center">
-<h2 id="teza" class="text-uppercase"></h2>
-</div>
-<div class="row justify-content-md-center">
- <div class="col-lg"></div>
-  <div class="col-lg timer"><span class="timer-minutes  text-monospace ">0</span>:<span class="timer-seconds text-monospace ">00</span></div>
-  <div class="col-lg"><div class="joker-timer"><p>Joker</p><span class="joker-minutes text-monospace ">0</span>:<span class="joker-seconds text-monospace ">00</span></div></div>
-</div>
+<div class="jumbotron" >
 
-<div class="row justify-content-md-center">
-  <div class="col-lg-12 img-timer">
-    <img class="img1 img-fluid" src="#" alt="" width="0px"/>
-    <img class="img2 img-fluid" src="#" alt="" width="0px"/>
- </div>
+<div id="timer">
+  <div class="row justify-content-md-center">
+  <h2 id="teza" class="text-uppercase"></h2>  
+  </div>
+  <div class="row justify-content-md-center">
+  <div class="col-lg"></div>
+    <div class="col-lg timer"><span class="timer-minutes  text-monospace ">0</span>:<span class="timer-seconds text-monospace ">00</span></div>
+    <div class="col-lg"><div class="joker-timer"><p>Joker</p><span class="joker-minutes text-monospace ">0</span>:<span class="joker-seconds text-monospace ">00</span></div></div>
+  </div>
 
+  <div class="row img-grid justify-content-md-center">
+    <div class="img-container">
+      <img class="img1" src="img/idp.jpg" alt="logo1" />
+    </div>
+    <div class="img-container">
+      <img class="img2" src="img/idp.jpg" alt="logo1" />
+    </div>
+  </div>
+
+
+  <div class="row justify-content-md-center">
+    <div class="btn-group timer-controls">
+    <button type="button" class="btn btn-outline-secondary start-stop">Start/stop</button>
+    <button type="button" class="btn btn-outline-secondary reset">Reset</button>
+    <button type="button" class="btn btn-outline-secondary ad-vocem">Ad Vocem</button>
+    <button type="button" class="btn btn-outline-secondary joker">Joker</button>
+  </div> 
+  </div>
+  <div class="row justify-content-md-center">
+        <div class="btn-group timer-controls joker-controls">
+        <button type="button" class="btn btn-outline-primary joker-start-stop">Start/stop</button>
+        <button type="button" class="btn btn-outline-primary joker-reset">Reset</button>
+        <button type="button" class="btn btn-outline-primary joker-off">Zakończ</button>
+      </div> 
+  </div>
 </div>
-<div class="row justify-content-md-center">
-  <div class="btn-group timer-controls">
-  <button type="button" class="btn btn-outline-primary start-stop">Start/stop</button>
-  <button type="button" class="btn btn-outline-primary reset">Reset</button>
-  <button type="button" class="btn btn-outline-primary ad-vocem">Ad vocem</button>
-  <button type="button" class="btn btn-outline-primary joker">Joker</button>
-</div> 
-</div>
-<div class="row justify-content-md-center">
-      <div class="btn-group timer-controls joker-controls">
-      <button type="button" class="btn btn-outline-primary joker-start-stop">Start/stop</button>
-      <button type="button" class="btn btn-outline-primary joker-reset">Reset</button>
-      <button type="button" class="btn btn-outline-primary joker-off">Zakończ</button>
-    </div> 
-</div>
-     </div>
- 
-<div id="settings" class="jumbotron">
+ <!--end of timer-->
+<div id="settings">
  
 <h2>Ustawienia</h2>
  
@@ -77,11 +91,17 @@
 
  
 <div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Ilość minut </label></div>
-​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="4" type="number" min="0" ></div>
+​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania mowy </label></div>
+​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="04:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
 <div class="col-auto"><input type="submit" class="zastosuj-minuty btn btn-outline-secondary" value="Zastosuj"></div>
 </div>
 
+<div class="row sjustify-content-md-center">
+​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania AdVocem </label></div>
+​<div class="col-auto"><input class="input-minuty-advocem form-control" name="minuty" value="00:30" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
+<div class="col-auto"><input type="submit" class="apply-advocem-time btn btn-outline-secondary" value="Zastosuj"></div>
+</div>
+    
 <div class="row ajustify-content-md-center">
 ​​<div class="col-auto"><label for="teza" class="label-settings">Teza </label></div>
 <div class="col-auto"> <textarea type="text" class="input-teza form-control" name="teza" rows="2" value=""></textarea></div>
@@ -124,6 +144,8 @@ Lub
       Wybierz obraz z listy
   </button>
   <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+     <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
     <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
     <a class="dropdown-item" data="g5.jpg">G5</a>
     <a class="dropdown-item" data="mpdo.png">MPDO</a>
@@ -147,6 +169,8 @@ Lub
       Wybierz obraz z listy
   </button>
   <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+    <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
     <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
     <a class="dropdown-item" data="g5.jpg">G5</a>
     <a class="dropdown-item" data="mpdo.png">MPDO</a>
@@ -159,21 +183,21 @@ Lub
     </form>
     </div>
 </div>
+  <div class="row img-grid justify-content-md-center">
+    <div class="img-container img-settings">
+      <img class="img1" src="img/idp.jpg" alt="logo1" />
+    </div>
+    <div class="img-container img-settings">
+      <img class="img2" src="img/idp.jpg" alt="logo1" />
+    </div>
+  </div>
 
-<div class="row sjustify-content-md-center">
- <div class="col-lg-6">
-    <img class="img1 img-fluid" src="#" alt="obraz 1" width="0px"/>
- </div>
- <div class="col-lg-6">  
-        <img class="img2 img-fluid" src="#" alt="obraz 2" width="0px"/>
- </div>
-</div>
     <audio src="audio/end.mp3" type="audio/mp3" alt="koniec czasu - dźwięk" id="endoftime"></audio>
     <audio src="audio/30s.mp3" type="audio/mp3" alt="30s do końca - dźwięk" id="30stoend"></audio>
 
 </div>
-
-<div class="jumbotron" id="help">
+ <!--end of settings-->
+<div id="help">
 <h2>Pomoc</h2>
   <p>Jak korzystać z licznika w szybki sposób?</p>            
   <table class="table table-borderless">
@@ -220,7 +244,9 @@ Lub
 </div>
 
 </div>
-
+ <!--end of timer-->
+ </div>
+  <!--end of jumbotron-->
  <script src="assets/js/popper.min.js"></script>
  <script src="assets/js/jquery3.3.1.min.js"></script>
  <script src="assets/js/bootstrap.bundle.min.js"></script>

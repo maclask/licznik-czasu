@@ -1,5 +1,5 @@
 (function($) {
-var sekundy = 0;
+var sekundy;
 var started = false;
 var joker_started = false;
 var joker_controls = true;
@@ -16,13 +16,26 @@ $('.joker-timer').hide();
 $('.joker-controls').hide();
 	$( "#settings" ).hide();
 	$( "#help" ).hide();	
-	minuty = $('.input-minuty').val();
+	minuty = $('.input-minuty').val().split(":")[0];
+	if(minuty != 0){
+		minuty = minuty.replace(/^0+/, '');
+	}
+	else{
+		minuty = 0;
+	}
+    sekundy = $('.input-minuty').val().split(":")[1];
 	$('#timer').find('.timer-minutes').text(minuty);
-	$('#timer').find('.timer-seconds').text("0"+sekundy);
+	$('#timer').find('.timer-seconds').text(sekundy);
+	minutyAdvocem = $('.input-minuty-advocem').val().split(":")[0];
+	sekundyAdvocem = $('.input-minuty-advocem').val().split(":")[1];
+	$(function () {
+  $('[data-toggle="tooltip"]').tooltip()
+})
 	//$(".timer-controls").toggle();
 $('button').focus(function() {
         this.blur();
     });
+
 	$('.start-stop').click(function(){
 		if(started){
 			clearInterval(interval);
@@ -37,6 +50,7 @@ $('button').focus(function() {
 	$('.zastosuj-minuty').click(reset);
 	$('.reset').click(reset);
 	$('.ad-vocem').click(adVocem);
+    $('.apply-advocem-time').click(change_advocem);
 	$('.joker').click(joker);
     
 	$('.joker-start-stop').click(joker_start_stop);
@@ -57,32 +71,36 @@ $('button').focus(function() {
 	
 	$(window).keyup(function(e){
 	// sprawdza czy wcisnieto spacje
-	if (e.keyCode == 32  && !$(e.target).is(':input')) {
-		e.preventDefault();
-		if(started){
-			clearInterval(interval);
-			started=false;
-		}
-		else{
-			interval = setInterval(updateDisplay, 1000);
-			started=true;
-		}
-	}
-	if (e.keyCode == 49 && !$(e.target).is(':input')){
-		reset();
-	}
-	if (e.keyCode == 50 && !$(e.target).is(':input')){
-		adVocem();
-	}
-	if (e.keyCode == 74 && !$(e.target).is(':input')){
-		joker();
-	}
-    if (e.keyCode == 72 && !$(e.target).is(':input') && joker_started){
-		joker_start_stop();
-	}
-    if (e.keyCode == 75 && !$(e.target).is(':input') && joker_started){
-		joker_off();
-	}
+        if(!$(e.target).is(':input')){
+            switch(e.keyCode){
+                case 32:
+                    e.preventDefault();
+                    if(started){
+                        clearInterval(interval);
+                        started=false;
+                    }
+                    else{
+                        interval = setInterval(updateDisplay, 1000);
+                        started=true;
+                    }
+                    break;
+                case 49:
+                    reset();
+                    break;
+                case 50:
+                    adVocem();
+                    break;
+                case 74:
+                    joker();
+                    break;
+                case 72:
+                    joker_start_stop();
+                    break;
+                case 75:
+                    joker_off();
+                    break;
+            }
+        }
 });
  $(".imgInp").change(function(){
 		imgNumber = $(this).attr('id');
@@ -102,12 +120,12 @@ function readURL(input, imgNumber) {
             
             reader.onload = function (e) {
 				if(imgNumber == 'imgInp1'){
-                $('.img1').attr('src', e.target.result);
-                $('.img1').attr('width', '400px');
+                set_image(e.target.result, 1);
+
 				}
 				else{
-				$('.img2').attr('src', e.target.result);
-				$('.img2').attr('width', '500px');
+					set_image(e.target.result, 2);
+
 				}
             };
             
@@ -116,14 +134,23 @@ function readURL(input, imgNumber) {
     }
 	
 function insert_img(name, imgNumber){
+	
     if(imgNumber == 'dropdown1 show'){
-                $('.img1').attr('src', 'img/'+name);
-				$('.img1').attr('width', '400px');
-				}
-				else{
-				$('.img2').attr('src', 'img/'+name);
-				$('.img2').attr('width', '400px');
-				}
+		set_image('img/'+name, 1);
+	}
+	else{
+		set_image('img/'+name, 2);	
+	}
+}
+function set_image(src, no){
+		if(src == "img/#"){
+			$('.img'+no).parent().css('display', 'none');
+		}else{
+			$('.img'+no).attr('src', src);
+			$('.img'+no).parent().css('display', 'grid');
+		}
+		
+
 }
 $('.dropdown-item').click(function(){
     console.log($(this).parent().parent().attr('class'));
@@ -131,7 +158,6 @@ $('.dropdown-item').click(function(){
 
 })
 function updateDisplay(){
-
 	if(sekundy==0 & minuty==0){
 			clearInterval(interval);
 			if(soundEnabled)
@@ -159,19 +185,35 @@ function updateDisplay2(){
 function reset(){
 		clearInterval(interval);
 		started=false;
-		minuty = $('.input-minuty').val();
-		sekundy = 0;
+		minuty = $('.input-minuty').val().split(":")[0];
+		sekundy = $('.input-minuty').val().split(":")[1];
+        if(minuty != 0){
+			minuty = minuty.replace(/^0+/, '');
+		}
+		else{
+			minuty = 0;
+		}
 		$('#timer').find('.timer-minutes').text(minuty);
-		$('#timer').find('.timer-seconds').text("0"+sekundy);
+		$('#timer').find('.timer-seconds').text(sekundy);
 	}
 	
 	function adVocem(){
 		clearInterval(interval);
 		started=false;
-		minuty = 0;
-		sekundy = 30;
+		minuty = minutyAdvocem;
+		sekundy = sekundyAdvocem;
+        if(minuty!= 0){
+			minuty = minuty.replace(/^0+/, '');
+		}
+		else{
+			minuty = 0;
+		}
 		$('#timer').find('.timer-minutes').text(minuty);
 		$('#timer').find('.timer-seconds').text(sekundy);
+	}
+	function change_advocem(){
+			minutyAdvocem = $('.input-minuty-advocem').val().split(":")[0];
+			sekundyAdvocem = $('.input-minuty-advocem').val().split(":")[1];
 	}
 	
 function joker_start_stop(){
@@ -251,7 +293,41 @@ setTimeout(
 		soundEnabled=true;
 	}
 
-	
+
+	var elem = document.documentElement;
+
+	/* View in fullscreen */
+	function toggleFullscreen() {
+	if(document.fullscreenElement){
+		if (document.exitFullscreen) {
+			document.exitFullscreen();
+		  } else if (document.mozCancelFullScreen) { /* Firefox */
+			document.mozCancelFullScreen();
+		  } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
+			document.webkitExitFullscreen();
+		  } else if (document.msExitFullscreen) { /* IE/Edge */
+			document.msExitFullscreen();
+		  }
+	}
+	else{
+		if (elem.requestFullscreen) {
+			elem.requestFullscreen();
+		  } else if (elem.mozRequestFullScreen) { /* Firefox */
+			elem.mozRequestFullScreen();
+		  } else if (elem.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+			elem.webkitRequestFullscreen();
+		  } else if (elem.msRequestFullscreen) { /* IE/Edge */
+			elem.msRequestFullscreen();
+		  }
+	}
+	  
+	}
+
+
+
+
+	$('.full-screen-btn').click(toggleFullscreen);
+
 $('#settings-link').click(function() {
 	//site = "settings";
 	$('#timer').hide();
@@ -272,4 +348,5 @@ $( "#help-link" ).click(function() {
 	$( "#settings" ).hide();
 		$( "#timer" ).hide();	
 });
-    })(jQuery);
+	})(jQuery);
+	
