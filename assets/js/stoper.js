@@ -10,7 +10,7 @@ var imgNumber;
 var soundEnabled=true;
 		var minutyJoker;
 		var sekundyJoker;
-
+$('[data-toggle="tooltip"]').tooltip({ trigger: "hover" });
 $('.alert').hide();
 $('.joker-timer').hide();
 $('.joker-controls').hide();
@@ -32,17 +32,29 @@ $('.joker-controls').hide();
   $('[data-toggle="tooltip"]').tooltip()
 })
 	//$(".timer-controls").toggle();
+function popTime(){
+	$('.timer').animate({scale: '93%'}, "fast");
+	$('.timer').animate({scale: '100%'}, "fast");
+}
 $('button').focus(function() {
         this.blur();
     });
 
 	$('.start-stop').click(function(){
 		if(started){
+			popTime()
+			$('.start-stop').text(function(index, text){
+				return text.replace("Stop", "Start");  
+			});
 			clearInterval(interval);
 			started=false;
 		}
 		else{
 			interval = setInterval(updateDisplay, 1000);
+			popTime()
+			$('.start-stop').text(function(index, text){
+				return text.replace("Start", "Stop");  
+			});
 			started=true;
 		}
 	});
@@ -76,12 +88,20 @@ $('button').focus(function() {
                 case 32:
                     e.preventDefault();
                     if(started){
+						popTime()
                         clearInterval(interval);
                         started=false;
+						$('.start-stop').text(function(index, text){
+				return text.replace("Stop", "Start");  
+			});
                     }
                     else{
+						popTime()
                         interval = setInterval(updateDisplay, 1000);
                         started=true;
+						$('.start-stop').text(function(index, text){
+				return text.replace("Start", "Stop");  
+			});
                     }
                     break;
                 case 49:
@@ -185,6 +205,9 @@ function updateDisplay2(){
 function reset(){
 		clearInterval(interval);
 		started=false;
+		$('.start-stop').text(function(index, text){
+				return text.replace("Stop", "Start");  
+			});
 		minuty = $('.input-minuty').val().split(":")[0];
 		sekundy = $('.input-minuty').val().split(":")[1];
         if(minuty != 0){

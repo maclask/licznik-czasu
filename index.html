@@ -14,20 +14,31 @@
   <div class="container">
 
   <nav class="navbar navbar-expand ">
-
+<!--
+<a href="#">  
+	<div class="justify-content-start media patron" data-toggle="tooltip" title="Baner zasponsorował Filip Kamiński, zwycięzca licytacji charytatywnej KSM">
+		<img src="img/icon-heart.svg" width="28" height="28" class="icon" alt="Serce"/>
+		<div class="media-body">
+			<small class="title">Wesprzyj fundacje </small>
+			<h4 class="name">Fundacja charytatywna</h4>
+			<small class="description"></small>
+		</div>
+	</div>
+</a>
+-->
 <div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
   <ul class="navbar-nav">
-    <li class="nav-item active">
-      <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.png" alt="Licznik"/></a>
+    <li class="nav-item active" data-toggle="tooltip" title="Licznik">
+      <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.svg" width="28" height="28" class="icon" alt="Licznik"/></a>
     </li>
-    <li class="nav-item">
-      <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.png" alt="Ustawienia"/></a>
+    <li class="nav-item" data-toggle="tooltip" title="Ustawienia">
+      <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.svg" width="28" height="28" class="icon" alt="Ustawienia"/></a>
     </li>
-    <li class="nav-item">
-      <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.png" alt="Pomoc"/></a>
+    <li class="nav-item" data-toggle="tooltip" title="Pomoc">
+      <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
     </li>
-    <li class="nav-item">
-      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.png" alt="Pełen ekran"/></a>
+    <li class="nav-item" data-toggle="tooltip" title="Pełen ekran">
+      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.svg" width="24" height="24" class="icon" alt="Pełen ekran"/></a>
     </li>
     
   </ul>
@@ -68,9 +79,9 @@
 
   <div class="row justify-content-md-center">
     <div class="btn-group timer-controls">
-    <button type="button" class="btn btn-outline-secondary start-stop">Start/stop</button>
+    <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
     <button type="button" class="btn btn-outline-secondary reset">Reset</button>
-    <button type="button" class="btn btn-outline-secondary ad-vocem">Ad Vocem</button>
+    <button type="button" class="btn btn-outline-secondary ad-vocem">Ad vocem</button>
     <button type="button" class="btn btn-outline-secondary joker">Joker</button>
   </div> 
   </div>
@@ -92,12 +103,12 @@
  
 <div class="row sjustify-content-md-center">
 ​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania mowy </label></div>
-​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="04:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
+​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="05:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
 <div class="col-auto"><input type="submit" class="zastosuj-minuty btn btn-outline-secondary" value="Zastosuj"></div>
 </div>
 
 <div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania AdVocem </label></div>
+​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania ad vocem </label></div>
 ​<div class="col-auto"><input class="input-minuty-advocem form-control" name="minuty" value="00:30" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
 <div class="col-auto"><input type="submit" class="apply-advocem-time btn btn-outline-secondary" value="Zastosuj"></div>
 </div>
@@ -139,20 +150,22 @@
   <input type="file" class="custom-file-input imgInp" id="imgInp1" lang="pl">
   <label class="custom-file-label" for="customFileLang">Wybierz obraz z dysku</label>
 Lub
-<div class="dropdown1">
+<div class="dropdown1 ">
   <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
       Wybierz obraz z listy
   </button>
-  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-     <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-    <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
-    <a class="dropdown-item" data="g5.jpg">G5</a>
-    <a class="dropdown-item" data="mpdo.png">MPDO</a>
-    <a class="dropdown-item" data="energa.jpg">Energa</a>
-    <a class="dropdown-item" data="ipn.jpg">IPN</a>
-    <a class="dropdown-item" data="#">brak obrazu</a>
-  </div>
+<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
+<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+<a class="dropdown-item" data="tld.png" href="#">TLD</a>
+<a class="dropdown-item" data="idp.png" href="#">IDP</a>
+<a class="dropdown-item" data="g5.jpg">G5</a>
+<a class="dropdown-item" data="WTDO.png">WTDO</a>
+<a class="dropdown-item" data="mpdo.png">MPDO</a>
+<a class="dropdown-item" data="ppdo.png">PPDO</a>
+<a class="dropdown-item" data="ksm.png">KSM</a>
+<a class="dropdown-item" data="ng.png">Nowy Głos</a>
+<a class="dropdown-item" data="#">brak obrazu</a>6
+</div>
 </div>
          
 </div>
@@ -164,20 +177,22 @@ Lub
   <input type="file" class="custom-file-input imgInp" id="imgInp2" lang="pl">
   <label class="custom-file-label" for="customFileLang">Wybierz drugi obraz</label>
                Lub
-<div class="dropdown2">
+<div class="dropdown2 ">
   <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
       Wybierz obraz z listy
   </button>
-  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-    <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-    <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
-    <a class="dropdown-item" data="g5.jpg">G5</a>
-    <a class="dropdown-item" data="mpdo.png">MPDO</a>
-    <a class="dropdown-item" data="energa.jpg">Energa</a>
-    <a class="dropdown-item" data="ipn.jpg">IPN</a>
-      <a class="dropdown-item" data="#">brak obrazu</a>
-  </div>
+<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
+<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+<a class="dropdown-item" data="tld.png" href="#">TLD</a>
+<a class="dropdown-item" data="idp.png" href="#">IDP</a>
+<a class="dropdown-item" data="g5.jpg">G5</a>
+<a class="dropdown-item" data="WTDO.png">WTDO</a>
+<a class="dropdown-item" data="mpdo.png">MPDO</a>
+<a class="dropdown-item" data="ppdo.png">PPDO</a>
+<a class="dropdown-item" data="ksm.png">KSM</a>
+<a class="dropdown-item" data="ng.png">Nowy Głos</a>
+<a class="dropdown-item" data="#">brak obrazu</a>6
+</div>
 </div>
 </div>
     </form>
@@ -229,7 +244,7 @@ Lub
         <td>Rozpoczęcia/zapauzowanie Jokera</td>
       </tr>
         <tr>
-        <td>l</td>
+        <td>k</td>
         <td>Zakończenie Jokera</td>
       </tr>
     </tbody>
@@ -240,6 +255,13 @@ Lub
      <a href="https://github.com/maclask/licznik-czasu">github.com/maclask/licznik-czasu</a><br/>
      &copy; Maciej Laskowski
     </div>
+	</div>
+	  <div class="row">
+	<div class="col border-top credits">
+     Ikony<br/>
+     &copy; 2018 Steve Schoger
+    </div>
+</div>
 
 </div>
 
