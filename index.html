@@ -6,6 +6,8 @@
   <link rel="stylesheet" href="assets/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="assets/css/style.css"/>
   <link href="assets/css/all.css" rel="stylesheet"> 
+  <script src='https://meet.jit.si/external_api.js'></script>
+  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   <meta charset="utf-8">
 </head>
 
@@ -26,10 +28,17 @@
     <li class="nav-item">
       <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.png" alt="Pomoc"/></a>
     </li>
-    <li class="nav-item">
-      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.png" alt="Pełen ekran"/></a>
+	    <li class="nav-item" data-toggle="tooltip" title="Rzut monetą">
+      <a class="nav-link"  id="coin-link" href="#"><img src="img/coin.svg" width="28" height="28" class="icon" alt="Rzut monetą"/></a>
     </li>
-    
+    <li class="nav-item" data-toggle="tooltip" title="Pełen ekran">
+      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.svg" width="24" height="24" class="icon" alt="Pełen ekran"/></a>
+    </li>
+	<!--
+	<li class="nav-item" data-toggle="tooltip" title="Debata">
+      <a class="nav-link" id="jitsi-link"   href="#"><img src="img/icon-group.svg" width="28" height="28" class="icon" alt="Jitsi"/></a>
+    </li>
+	-->
   </ul>
 </div>
 </nav>
@@ -43,7 +52,7 @@
 
 
 
-  
+
 <div class="jumbotron" >
 
 <div id="timer">
@@ -68,11 +77,11 @@
 
   <div class="row justify-content-md-center">
     <div class="btn-group timer-controls">
-    <button type="button" class="btn btn-outline-secondary start-stop">Start/stop</button>
-    <button type="button" class="btn btn-outline-secondary reset">Reset</button>
-    <button type="button" class="btn btn-outline-secondary ad-vocem">Ad Vocem</button>
-    <button type="button" class="btn btn-outline-secondary joker">Joker</button>
-  </div> 
+		<button type="button" class="btn btn-outline-secondary start-stop">Start</button>
+		<button type="button" class="btn btn-outline-secondary reset">Reset</button>
+		<button type="button" class="btn btn-outline-secondary ad-vocem">Ad vocem</button>
+		<button type="button" class="btn btn-outline-secondary joker">Joker</button>
+	</div> 
   </div>
   <div class="row justify-content-md-center">
         <div class="btn-group timer-controls joker-controls">
@@ -90,14 +99,22 @@
  
 
  
+  <div class="row sjustify-content-md-center">
+  ​<div class="col-auto"><label class="label-settings">Format debaty </label></div>
+    <div class="btn-group col-auto">
+		<button type="button" class="btn btn-outline-secondary oxford-debate">Oksfordzka</button>
+		<button type="button" class="btn btn-outline-secondary bp-debate">Brytyjska parlamentarna</button>
+	</div> 
+  </div>
 <div class="row sjustify-content-md-center">
 ​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania mowy </label></div>
 ​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="04:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
 <div class="col-auto"><input type="submit" class="zastosuj-minuty btn btn-outline-secondary" value="Zastosuj"></div>
 </div>
 
-<div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania AdVocem </label></div>
+
+<div class="row sjustify-content-md-center ad-vocem-settings">
+​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania ad vocem </label></div>
 ​<div class="col-auto"><input class="input-minuty-advocem form-control" name="minuty" value="00:30" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
 <div class="col-auto"><input type="submit" class="apply-advocem-time btn btn-outline-secondary" value="Zastosuj"></div>
 </div>
@@ -143,16 +160,19 @@ Lub
   <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
       Wybierz obraz z listy
   </button>
-  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-     <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-    <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
-    <a class="dropdown-item" data="g5.jpg">G5</a>
-    <a class="dropdown-item" data="mpdo.png">MPDO</a>
-    <a class="dropdown-item" data="energa.jpg">Energa</a>
-    <a class="dropdown-item" data="ipn.jpg">IPN</a>
-    <a class="dropdown-item" data="#">brak obrazu</a>
-  </div>
+<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
+<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+<a class="dropdown-item" data="tld.png" href="#">TLD</a>
+<a class="dropdown-item" data="idp.png" href="#">IDP</a>
+<a class="dropdown-item" data="KDUG.png" href="#">KDUG</a>
+<a class="dropdown-item" data="g5.jpg">G5</a>
+<a class="dropdown-item" data="WTDO.png">WTDO</a>
+<a class="dropdown-item" data="mpdo.png">MPDO</a>
+<a class="dropdown-item" data="ppdo.png">PPDO</a>
+<a class="dropdown-item" data="ksm.png">KSM</a>
+<a class="dropdown-item" data="ng.png">Nowy Głos</a>
+<a class="dropdown-item" data="#">brak obrazu</a>6
+</div>
 </div>
          
 </div>
@@ -168,16 +188,19 @@ Lub
   <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
       Wybierz obraz z listy
   </button>
-  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-    <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-	<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-    <a class="dropdown-item" data="idp.jpg" href="#">IDP</a>
-    <a class="dropdown-item" data="g5.jpg">G5</a>
-    <a class="dropdown-item" data="mpdo.png">MPDO</a>
-    <a class="dropdown-item" data="energa.jpg">Energa</a>
-    <a class="dropdown-item" data="ipn.jpg">IPN</a>
-      <a class="dropdown-item" data="#">brak obrazu</a>
-  </div>
+<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
+<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+<a class="dropdown-item" data="tld.png" href="#">TLD</a>
+<a class="dropdown-item" data="idp.png" href="#">IDP</a>
+<a class="dropdown-item" data="KDUG.png" href="#">KDUG</a>
+<a class="dropdown-item" data="g5.jpg">G5</a>
+<a class="dropdown-item" data="WTDO.png">WTDO</a>
+<a class="dropdown-item" data="mpdo.png">MPDO</a>
+<a class="dropdown-item" data="ppdo.png">PPDO</a>
+<a class="dropdown-item" data="ksm.png">KSM</a>
+<a class="dropdown-item" data="ng.png">Nowy Głos</a>
+<a class="dropdown-item" data="#">brak obrazu</a>6
+</div>
 </div>
 </div>
     </form>
@@ -242,10 +265,58 @@ Lub
     </div>
 
 </div>
-
+<div id="coin-flip">
+	<div class="outcome">
+	  
+	</div>
+	<button id="coinFlipButton" class="btn btn-outline-secondary">Rzuć monetą</button>
 </div>
+<div id="jitsi">
+	<div id="debate-timer"></div>
+	<div id="debate">
+	</div>
+	<div class="row justify-content-md-center debate-controls">
+		<div class="btn-group justify-content-md-center ">
+			<button type="button" class="btn btn-outline-secondary hand">Podnieś rękę</button>
+			<button type="button" class="btn btn-outline-secondary ad-vocem">Ad vocem</button>
+			<button type="button" class="btn btn-outline-secondary joker">Joker</button>
+		</div> 
+		<h3 class="justify-content-md-center">Panel moderatora</h3>
+		<div class="btn-group justify-content-md-center ">
+			<button type="button" class="btn btn-outline-secondary mute-all">Wycisz wszystkich</button>
+			<button type="button" class="btn btn-outline-secondary mute-all-except-speaker">Wycisz wszystkich oprócz mówcy</button>
+		</div> 
+	</div>
+</div>
+</div>
+
+
  <!--end of timer-->
  </div>
+ <div class="debate-participants">
+ <h2>Uczestnicy</h2>
+ <div class="participant" id="local-participant">
+	<img src="img/icon-user.svg" class="avatar icon" alt="avatar" width="20" height="20" />
+	<p class="display-name">Jan Kowalski</p>
+	<img src="img/icon-notification.svg" class="hand icon" alt="hand icon"  width="20" height="20" />
+	<img src="img/icon-microphone.svg" class="audio icon" alt="audio"  width="20" height="20"  />
+ </div>
+ <div id="debata-participants-end"></div>
+ </div>
+<div class="debate-chat">
+<h2>Czat</h2>
+<div id="chat-body">
+	<div class='message'>
+		<p class="from"></p>
+		<p class="message-body"></p>
+		<p class="message-time"></p>
+	</div>
+</div>
+​​<div class="row ajustify-content-md-center"><label for="chat-input" class="label-settings">Wiadomość</label></div>
+
+<div class="row ajustify-content-md-center"> <textarea type="text" class="chat-input form-control" name="chat-input" rows="2" value=""></textarea></div>
+<div class="row ajustify-content-md-center"><input type="submit" class="chat-submit btn btn-outline-secondary" value="Wyślij"></div>
+</div>
   <!--end of jumbotron-->
  <script src="assets/js/popper.min.js"></script>
  <script src="assets/js/jquery3.3.1.min.js"></script>

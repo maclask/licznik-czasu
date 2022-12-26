@@ -4,6 +4,17 @@
 #teza{
     text-align: center;
 }
+body{
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+
+}
+.container{
+	order:2;
+	margin-left: 0;
+	margin-right: 0;
+}
 .alert{
     position: absolute;
 }
@@ -15,6 +26,7 @@
 	box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
     height: 80vh;
     display: flex;
+	flex-direction: row;
     align-items: center;
     margin: auto;
     min-width: 100%;
@@ -128,3 +140,158 @@ nav{
 .img-settings img{
 	width: 100px;
 }
+.media{
+	display: flex;
+	align-items: center;
+}
+.media-body{
+	line-height: 0.3rem;
+	padding-left: 0.5rem;
+	color: rgba(1,1,1,0.75);
+}
+.media-body small{
+	font-size: 70%;
+}
+.media-body h4{
+	font-size: 1.2rem;
+	padding: 0;
+	margin: 0;
+}
+#coin-flip button{
+	margin: auto;
+	display: flex;
+}
+#coin-flip .outcome {
+  height: 200px;
+  width: 200px;
+  background: #ededf0;
+  margin-bottom: 50px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  transform: rotateY(0deg) rotateX(0deg);
+  transition: 1s;
+  font-size: 32px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: bold;
+  line-height: 0.8;
+  color: #212529;
+  box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
+   -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome, Edge, Opera and Firefox */
+}
+
+#coin-flip .outcome.flip {
+  transition: 1s;
+  transform: rotateY(720deg) rotateX(720deg);
+}
+#coin-flip .outcome.toss {
+  -webkit-animation: toss 0.7s forwards ease-in-out;
+          animation: toss 0.7s forwards ease-in-out;
+}
+#coin-flip .outcome:before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 185px;
+  width: 185px;
+  display: block;
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 50%;
+}
+#coin-flip .outcome:after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 190px;
+  width: 190px;
+  display: block;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+}
+
+@-webkit-keyframes toss {
+  0% {
+    top: 0px;
+  }
+  50% {
+    top: -150px;
+  }
+  100% {
+    top: 0px;
+  }
+}
+
+@keyframes toss {
+  0% {
+    top: 0px;
+  }
+  50% {
+    top: -150px;
+  }
+  100% {
+    top: 0px;
+  }
+}
+#jitsi{
+	display:flex;
+	flex-direction: column;
+}
+#debate{
+	 flex-grow: 4;
+}
+.debate-participants{
+	order: 1;
+	align-self: center;
+	width: 10%;
+}
+.debate-chat{
+	order: 3;
+	align-self: center;
+	
+}
+.from, .message-time{
+	font-variant: all-small-caps;
+	font-size: 14px;
+	margin-bottom: 0;
+}
+#chat-body{
+	overflow: auto;
+	height: 60vh;
+}
+.debate-participants .participant {
+	display: flex;
+	flex-direction: row;
+	font-size: 18px;
+}
+.debate-participants .participant .icon{
+	margin-top: 3px;
+	margin-right: 5px;
+}
+.debate-participants .participant.speaking .avatar{
+	background: hsla(112.4, 78%, 49.8%, 0.46);
+}
+.debate-participants .participant .display-name{
+	margin-right: 10px;
+}
+.debate-controls{
+	flex-direction: column;
+	justify-content: center;
+}
+.watermark {
+	scale: 50%;
+	}
