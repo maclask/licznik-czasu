@@ -438,6 +438,7 @@ $( "#coin-link" ).click(function() {
 	$( "#jitsi" ).hide();	
 	$( ".debate-participants" ).hide();
 	$( ".debate-chat" ).hide();
+
 });
 $( "#jitsi-link" ).click(function() {
 	$( "#jitsi" ).show();
@@ -449,6 +450,7 @@ $( "#jitsi-link" ).click(function() {
 	$( ".debate-chat" ).show();
 	createDebate();
 });
+
 
 
 	})(jQuery);
