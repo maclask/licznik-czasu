@@ -1,375 +1,309 @@
-(function($) {
-var sekundy;
-var started = false;
-var joker_started = false;
-var joker_controls = true;
-var interval;
-var intervalJoker;
-var minuty;
-var imgNumber;
-var soundEnabled=true;
-		var minutyJoker;
-		var sekundyJoker;
-$('[data-toggle="tooltip"]').tooltip({ trigger: "hover" });
-$('.alert').hide();
-$('.joker-timer').hide();
-$('.joker-controls').hide();
-	$( "#settings" ).hide();
-	$( "#help" ).hide();	
-	minuty = $('.input-minuty').val().split(":")[0];
-	if(minuty != 0){
-		minuty = minuty.replace(/^0+/, '');
-	}
-	else{
-		minuty = 0;
-	}
-    sekundy = $('.input-minuty').val().split(":")[1];
-	$('#timer').find('.timer-minutes').text(minuty);
-	$('#timer').find('.timer-seconds').text(sekundy);
-	minutyAdvocem = $('.input-minuty-advocem').val().split(":")[0];
-	sekundyAdvocem = $('.input-minuty-advocem').val().split(":")[1];
-	$(function () {
-  $('[data-toggle="tooltip"]').tooltip()
-})
-	//$(".timer-controls").toggle();
-function popTime(){
-	$('.timer').animate({scale: '93%'}, "fast");
-	$('.timer').animate({scale: '100%'}, "fast");
-}
-$('button').focus(function() {
-        this.blur();
-    });
+(function ($) {
+    var timerRunning = false;
+    var jokerRunning = false;
+    var showControls = true;
+    var soundEnabled = true;
 
-	$('.start-stop').click(function(){
-		if(started){
-			popTime()
-			$('.start-stop').text(function(index, text){
-				return text.replace("Stop", "Start");  
-			});
-			clearInterval(interval);
-			started=false;
-		}
-		else{
-			interval = setInterval(updateDisplay, 1000);
-			popTime()
-			$('.start-stop').text(function(index, text){
-				return text.replace("Start", "Stop");  
-			});
-			started=true;
-		}
-	});
-	
-	$('.zastosuj-minuty').click(reset);
-	$('.reset').click(reset);
-	$('.ad-vocem').click(adVocem);
-    $('.apply-advocem-time').click(change_advocem);
-	$('.joker').click(joker);
-    
-	$('.joker-start-stop').click(joker_start_stop);
-	$('.joker-reset').click(joker);
-	$('.joker-off').click(joker_off);
-    
-		$('.sound-test1').click(playsound1);
-		$('.sound-test2').click(playsound2);
-		
-		$('.sound-switch').click(soundSwitch);
-	
-	$('#settings').find(':submit').click(done);
-	
-		$('.zastosuj-teza').click(function(){
-		var teza = $('.input-teza').val();
-		$('#teza').text(teza);
-	});
-	
-	$(window).keyup(function(e){
-	// sprawdza czy wcisnieto spacje
-        if(!$(e.target).is(':input')){
-            switch(e.keyCode){
-                case 32:
-                    e.preventDefault();
-                    if(started){
-						popTime()
-                        clearInterval(interval);
-                        started=false;
-						$('.start-stop').text(function(index, text){
-				return text.replace("Stop", "Start");  
-			});
-                    }
-                    else{
-						popTime()
-                        interval = setInterval(updateDisplay, 1000);
-                        started=true;
-						$('.start-stop').text(function(index, text){
-				return text.replace("Start", "Stop");  
-			});
-                    }
-                    break;
-                case 49:
-                    reset();
-                    break;
-                case 50:
-                    adVocem();
-                    break;
-                case 74:
-                    joker();
-                    break;
-                case 72:
-                    joker_start_stop();
-                    break;
-                case 75:
-                    joker_off();
-                    break;
-            }
+    // Current display values (updated on pause/stop so resume picks up correctly)
+    var minutes, seconds;
+    var adVocemMinutes, adVocemSeconds;
+    var jokerSeconds;
+
+    // System-time anchors for drift-free countdown
+    var timerStartedAt, timerStartSeconds;
+    var jokerStartedAt, jokerStartSeconds;
+
+    var timerInterval, jokerInterval;
+    var lastTimerSecond = -1;
+    var lastJokerSecond = -1;
+
+    // --- Init ---
+
+    $('[data-toggle="tooltip"]').tooltip({ trigger: 'hover' });
+    $('.alert').hide();
+    $('.joker-timer').hide();
+    $('.joker-controls').hide();
+    $('#settings').hide();
+    $('#help').hide();
+    $('button').focus(function () { this.blur(); });
+
+    loadTimeFromInput();
+    loadAdVocemFromInput();
+
+    // --- Helpers ---
+
+    function loadTimeFromInput() {
+        var parts = $('.input-minuty').val().split(':');
+        minutes = parseInt(parts[0], 10) || 0;
+        seconds = parseInt(parts[1], 10) || 0;
+        renderTimer();
+    }
+
+    function loadAdVocemFromInput() {
+        var parts = $('.input-minuty-advocem').val().split(':');
+        adVocemMinutes = parseInt(parts[0], 10) || 0;
+        adVocemSeconds = parseInt(parts[1], 10) || 0;
+    }
+
+    function renderTimer() {
+        $('#timer').find('.timer-minutes').text(minutes);
+        $('#timer').find('.timer-seconds').text(seconds < 10 ? '0' + seconds : seconds);
+    }
+
+    function renderJoker() {
+        var m = Math.floor(jokerSeconds / 60);
+        var s = jokerSeconds % 60;
+        $('#timer').find('.joker-minutes').text(m);
+        $('#timer').find('.joker-seconds').text(s < 10 ? '0' + s : s);
+    }
+
+    function popTime() {
+        $('.timer').animate({ scale: '93%' }, 'fast');
+        $('.timer').animate({ scale: '100%' }, 'fast');
+    }
+
+    // --- Main timer ---
+
+    function timerTick() {
+        var elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
+        var remaining = timerStartSeconds - elapsed;
+
+        if (remaining <= 0) {
+            minutes = 0;
+            seconds = 0;
+            renderTimer();
+            stopTimer();
+            if (soundEnabled) playEndSound();
+            return;
         }
-});
- $(".imgInp").change(function(){
-		imgNumber = $(this).attr('id');
-       readURL(this, imgNumber);
- });
-	$('.controls-checkbox').click(function() {
-    $(".timer-controls").toggle(this.checked);
-    if(joker_controls)
-        joker_controls = false;
-    else
-        joker_controls = true;
-});
 
-function readURL(input, imgNumber) {
+        if (remaining === lastTimerSecond) return;
+        lastTimerSecond = remaining;
+
+        minutes = Math.floor(remaining / 60);
+        seconds = remaining % 60;
+
+        if (soundEnabled && minutes === 0 && seconds === 30) playDingSound();
+
+        renderTimer();
+    }
+
+    function startTimer() {
+        if (timerRunning) return;
+        timerStartedAt = Date.now();
+        timerStartSeconds = minutes * 60 + seconds;
+        lastTimerSecond = timerStartSeconds;
+        timerInterval = setInterval(timerTick, 250);
+        timerRunning = true;
+        $('.start-stop').text('Stop');
+    }
+
+    function stopTimer() {
+        if (!timerRunning) return;
+        clearInterval(timerInterval);
+        timerRunning = false;
+        var elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
+        var remaining = Math.max(0, timerStartSeconds - elapsed);
+        minutes = Math.floor(remaining / 60);
+        seconds = remaining % 60;
+        renderTimer();
+        $('.start-stop').text('Start');
+    }
+
+    function toggleTimer() {
+        if (timerRunning) stopTimer(); else startTimer();
+        popTime();
+    }
+
+    function reset() {
+        clearInterval(timerInterval);
+        timerRunning = false;
+        $('.start-stop').text('Start');
+        loadTimeFromInput();
+    }
+
+    function setAdVocem() {
+        clearInterval(timerInterval);
+        timerRunning = false;
+        $('.start-stop').text('Start');
+        minutes = adVocemMinutes;
+        seconds = adVocemSeconds;
+        renderTimer();
+    }
+
+    // --- Joker timer ---
+
+    function jokerTick() {
+        var elapsed = Math.floor((Date.now() - jokerStartedAt) / 1000);
+        var remaining = jokerStartSeconds - elapsed;
+
+        if (remaining <= 0) {
+            jokerSeconds = 0;
+            renderJoker();
+            jokerOff();
+            if (soundEnabled) playDingSound();
+            return;
+        }
+
+        if (remaining === lastJokerSecond) return;
+        lastJokerSecond = remaining;
+        jokerSeconds = remaining;
+        renderJoker();
+    }
+
+    function jokerStart() {
+        clearInterval(jokerInterval);
+        jokerSeconds = 30;
+        jokerStartedAt = Date.now();
+        jokerStartSeconds = 30;
+        lastJokerSecond = 30;
+        renderJoker();
+        $('.joker-timer').show();
+        if (showControls) $('.joker-controls').show();
+        jokerInterval = setInterval(jokerTick, 250);
+        jokerRunning = true;
+    }
+
+    function jokerToggle() {
+        if (jokerRunning) {
+            clearInterval(jokerInterval);
+            jokerRunning = false;
+            var elapsed = Math.floor((Date.now() - jokerStartedAt) / 1000);
+            jokerSeconds = Math.max(0, jokerStartSeconds - elapsed);
+        } else {
+            jokerStartedAt = Date.now();
+            jokerStartSeconds = jokerSeconds;
+            lastJokerSecond = jokerSeconds;
+            jokerInterval = setInterval(jokerTick, 250);
+            jokerRunning = true;
+        }
+    }
+
+    function jokerOff() {
+        clearInterval(jokerInterval);
+        jokerRunning = false;
+        $('.joker-timer').hide();
+        $('.joker-controls').hide();
+    }
+
+    // --- Sound ---
+
+    function playDingSound() {
+        var s = $('#30stoend').get(0);
+        s.currentTime = 0;
+        s.play();
+    }
+
+    function playEndSound() {
+        var s = $('#endoftime').get(0);
+        s.currentTime = 0;
+        s.play();
+    }
+
+    function toggleSound() {
+        soundEnabled = !soundEnabled;
+    }
+
+    // --- Images ---
+
+    function setImage(src, no) {
+        if (!src) {
+            $('.img' + no).parent().css('display', 'none');
+        } else {
+            $('.img' + no).attr('src', src).parent().css('display', 'grid');
+        }
+    }
+
+    function readImageFile(input, no) {
         if (input.files && input.files[0]) {
             var reader = new FileReader();
-            
-            reader.onload = function (e) {
-				if(imgNumber == 'imgInp1'){
-                set_image(e.target.result, 1);
-
-				}
-				else{
-					set_image(e.target.result, 2);
-
-				}
-            };
-            
+            reader.onload = function (e) { setImage(e.target.result, no); };
             reader.readAsDataURL(input.files[0]);
         }
     }
-	
-function insert_img(name, imgNumber){
-	
-    if(imgNumber == 'dropdown1 show'){
-		set_image('img/'+name, 1);
-	}
-	else{
-		set_image('img/'+name, 2);	
-	}
-}
-function set_image(src, no){
-		if(src == "img/#"){
-			$('.img'+no).parent().css('display', 'none');
-		}else{
-			$('.img'+no).attr('src', src);
-			$('.img'+no).parent().css('display', 'grid');
-		}
-		
 
-}
-$('.dropdown-item').click(function(){
-    console.log($(this).parent().parent().attr('class'));
-    insert_img($(this).attr('data'), $(this).parent().parent().attr('class'));
+    // --- Navigation ---
 
-})
-function updateDisplay(){
-	if(sekundy==0 & minuty==0){
-			clearInterval(interval);
-			if(soundEnabled)
-			playsound2();
-	}
-	else
-	sekundy--;
+    function navigate(section) {
+        $('#timer, #settings, #help').hide();
+        $('#' + section).show();
+    }
 
-if(soundEnabled && minuty==0 && sekundy==30) playsound1();
-if(sekundy<0 && minuty!=0){
-		sekundy=59;
-		updateDisplay2();
-	}
-	if(sekundy<10)
-	$('#timer').find('.timer-seconds').text("0"+sekundy);
-	else
-	$('#timer').find('.timer-seconds').text(sekundy);
-}
+    // --- Alert ---
 
-function updateDisplay2(){    
-	minuty--;
-	$('#timer').find('.timer-minutes').text(minuty);
-}
+    function showAlert() {
+        $('.alert').fadeIn(50);
+        setTimeout(function () { $('.alert').fadeOut(); }, 1000);
+    }
 
-function reset(){
-		clearInterval(interval);
-		started=false;
-		$('.start-stop').text(function(index, text){
-				return text.replace("Stop", "Start");  
-			});
-		minuty = $('.input-minuty').val().split(":")[0];
-		sekundy = $('.input-minuty').val().split(":")[1];
-        if(minuty != 0){
-			minuty = minuty.replace(/^0+/, '');
-		}
-		else{
-			minuty = 0;
-		}
-		$('#timer').find('.timer-minutes').text(minuty);
-		$('#timer').find('.timer-seconds').text(sekundy);
-	}
-	
-	function adVocem(){
-		clearInterval(interval);
-		started=false;
-		minuty = minutyAdvocem;
-		sekundy = sekundyAdvocem;
-        if(minuty!= 0){
-			minuty = minuty.replace(/^0+/, '');
-		}
-		else{
-			minuty = 0;
-		}
-		$('#timer').find('.timer-minutes').text(minuty);
-		$('#timer').find('.timer-seconds').text(sekundy);
-	}
-	function change_advocem(){
-			minutyAdvocem = $('.input-minuty-advocem').val().split(":")[0];
-			sekundyAdvocem = $('.input-minuty-advocem').val().split(":")[1];
-	}
-	
-function joker_start_stop(){
-    if(joker_started){
-			clearInterval(intervalJoker);
-			joker_started=false;
-		}
-		else{
-			intervalJoker = setInterval(jokerUpdate, 1000);
-			joker_started=true;
-		}
-}
-function joker_off(){
-    clearInterval(intervalJoker);
-    $('.joker-timer').hide();
-    $('.joker-controls').hide();
-    joker_started = false; 
-}
-    
-		function joker(){
-        if(joker_controls) 
-            $('.joker-controls').show();
-		clearInterval(intervalJoker);
-		$('.joker-timer').show();
-	 minutyJoker = 0;
-	 sekundyJoker = 30;
-		$('#timer').find('.joker-minutes').text(minutyJoker);
-		$('#timer').find('.joker-seconds').text(sekundyJoker);
-			intervalJoker = setInterval(jokerUpdate, 1000);
-            joker_started = true;
-	}
-	
-	function jokerUpdate(){
-		//sekundyJoker = $('#timer').find('.joker-seconds');
-		if(sekundyJoker==0 & minutyJoker==0){
-		clearInterval(intervalJoker);
-		if(soundEnabled)
-		playsound1();
-		$('.joker-timer').hide();
-        $('.joker-controls').hide();
-        joker_started = false;
-	}
-	else{
-		sekundyJoker--;
-			if(sekundyJoker<10)
-	$('#timer').find('.joker-seconds').text("0"+sekundyJoker);
-	else
-	$('#timer').find('.joker-seconds').text(sekundyJoker);
-	}}
-	
-	function playsound1(){
-		if(soundEnabled){
-				$('#30stoend').get(0).load();
-				$('#30stoend').get(0).play();
-		}
-	}
-		function playsound2(){
-			if(soundEnabled){
-				$('#endoftime').get(0).load();
-				$('#endoftime').get(0).play();
-			}
-	}
-	
-	function done(){
-$('.alert').fadeIn(50);
-setTimeout(
-  function() 
-  {
-   $('.alert').fadeOut();
-  }, 1000);
-	}
-	
-	function soundSwitch(){
-		if(soundEnabled)
-		soundEnabled=false;
-		else
-		soundEnabled=true;
-	}
+    // --- Fullscreen ---
 
+    function toggleFullscreen() {
+        if (document.fullscreenElement) {
+            (document.exitFullscreen || document.mozCancelFullScreen ||
+             document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+        } else {
+            var el = document.documentElement;
+            (el.requestFullscreen || el.mozRequestFullScreen ||
+             el.webkitRequestFullscreen || el.msRequestFullscreen).call(el);
+        }
+    }
 
-	var elem = document.documentElement;
+    // --- Event listeners ---
 
-	/* View in fullscreen */
-	function toggleFullscreen() {
-	if(document.fullscreenElement){
-		if (document.exitFullscreen) {
-			document.exitFullscreen();
-		  } else if (document.mozCancelFullScreen) { /* Firefox */
-			document.mozCancelFullScreen();
-		  } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
-			document.webkitExitFullscreen();
-		  } else if (document.msExitFullscreen) { /* IE/Edge */
-			document.msExitFullscreen();
-		  }
-	}
-	else{
-		if (elem.requestFullscreen) {
-			elem.requestFullscreen();
-		  } else if (elem.mozRequestFullScreen) { /* Firefox */
-			elem.mozRequestFullScreen();
-		  } else if (elem.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
-			elem.webkitRequestFullscreen();
-		  } else if (elem.msRequestFullscreen) { /* IE/Edge */
-			elem.msRequestFullscreen();
-		  }
-	}
-	  
-	}
+    $('.start-stop').click(toggleTimer);
+    $('.reset').click(reset);
+    $('.zastosuj-minuty').click(reset);
+    $('.ad-vocem').click(setAdVocem);
+    $('.apply-advocem-time').click(loadAdVocemFromInput);
 
+    $('.joker').click(jokerStart);
+    $('.joker-start-stop').click(jokerToggle);
+    $('.joker-reset').click(jokerStart);
+    $('.joker-off').click(jokerOff);
 
+    $('.sound-switch').click(toggleSound);
+    $('.sound-test1').click(playDingSound);
+    $('.sound-test2').click(playEndSound);
 
+    $('#settings').find(':submit').click(showAlert);
+    $('.zastosuj-teza').click(function () {
+        $('#teza').text($('.input-teza').val());
+    });
 
-	$('.full-screen-btn').click(toggleFullscreen);
+    $('.controls-checkbox').click(function () {
+        showControls = this.checked;
+        $('.timer-controls:not(.joker-controls)').toggle(showControls);
+    });
 
-$('#settings-link').click(function() {
-	//site = "settings";
-	$('#timer').hide();
-	$('#settings').show();
-	$('#help').hide();
-});
+    $('.imgInp').change(function () {
+        var no = $(this).attr('id') === 'imgInp1' ? 1 : 2;
+        readImageFile(this, no);
+    });
 
-$( "#timer-link" ).click(function() {
-	//site = "settings";
-	$( "#timer" ).show();
-	$( "#settings" ).hide();
-	$( "#help" ).hide();
-});
+    $('.dropdown-item').click(function () {
+        var parentClass = $(this).parent().parent().attr('class');
+        var no = parentClass.includes('dropdown1') ? 1 : 2;
+        var imgName = $(this).attr('data');
+        setImage(imgName === '#' ? null : 'img/' + imgName, no);
+    });
 
-$( "#help-link" ).click(function() {
-	//site = "settings";
-	$( "#help" ).show();
-	$( "#settings" ).hide();
-		$( "#timer" ).hide();	
-});
-	})(jQuery);
-	
+    $('.full-screen-btn').click(toggleFullscreen);
+
+    $('#timer-link').click(function () { navigate('timer'); });
+    $('#settings-link').click(function () { navigate('settings'); });
+    $('#help-link').click(function () { navigate('help'); });
+
+    $(window).keyup(function (e) {
+        if ($(e.target).is(':input')) return;
+        switch (e.keyCode) {
+            case 32: e.preventDefault(); toggleTimer(); break;
+            case 49: reset(); break;
+            case 50: setAdVocem(); break;
+            case 74: jokerStart(); break;
+            case 72: jokerToggle(); break;
+            case 75: jokerOff(); break;
+        }
+    });
+
+})(jQuery);
