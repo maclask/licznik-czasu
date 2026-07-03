@@ -29,6 +29,7 @@
     // Session sync
     var onStateChange = function(delta) {};  // no-op until session active
     var applyingState = false;              // prevents echo-loop in applyState
+    var logoSrcs = [null, null];            // tracks active logo srcs independently of DOM visibility
 
     // --- Init ---
 
@@ -39,6 +40,7 @@
     $('.oxford-joker').hide();
     $('#settings').hide();
     $('#help').hide();
+    $('#sharing').hide();
     $('button').focus(function () { this.blur(); });
 
     loadTimeFromInput();
@@ -273,7 +275,7 @@
         lastJokerSecond = 30;
         renderJoker();
         $('.joker-timer').show();
-        if (showControls) $('.joker-controls').show();
+        if (effectiveShowControls()) $('.joker-controls').show();
         jokerInterval = setInterval(jokerTick, 250);
         jokerRunning = true;
         onStateChange({jokerRunning: true, jokerStartedAt: jokerStartedAt, jokerStartSeconds: 30, jokerSeconds: 30});
@@ -303,6 +305,10 @@
         onStateChange({jokerRunning: false});
     }
 
+    function effectiveShowControls() {
+        return isSlaveSession ? slaveShowControls : showControls;
+    }
+
     // --- Sound ---
 
     function playDingSound() {
@@ -324,6 +330,7 @@
     // --- Images ---
 
     function setImage(src, no) {
+        logoSrcs[no - 1] = src || null;
         if (!src) {
             $('.img' + no).parent().css('display', 'none');
         } else {
@@ -347,9 +354,9 @@
     // --- Navigation ---
 
     function navigate(section) {
-        $('#timer, #settings, #help').hide();
+        $('#timer, #settings, #help, #sharing').hide();
         $('#' + section).show();
-        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '' };
+        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '', sharing: 'Udostępnianie' };
         $('#section-title').text(titles[section] || '');
     }
 
@@ -359,7 +366,12 @@
         if (msg) $('.alert-success strong').text(msg);
         else $('.alert-success strong').text('Zrobiono!');
         $('.alert-success').fadeIn(50);
-        setTimeout(function () { $('.alert-success').fadeOut(); }, 1000);
+        setTimeout(function () { $('.alert-success').fadeOut(); }, 5000);
+    }
+
+    function showWarn(msg) {
+        $('.toast-warn').text(msg).fadeIn(50);
+        setTimeout(function() { $('.toast-warn').fadeOut(); }, 3000);
     }
 
     // --- Fullscreen ---
@@ -478,6 +490,7 @@
     $('#timer-link').click(function () { navigate('timer'); });
     $('#settings-link').click(function () { navigate('settings'); });
     $('#help-link').click(function () { navigate('help'); });
+    $('#sharing-link').click(function () { navigate('sharing'); });
 
     $(window).keyup(function (e) {
         if ($(e.target).is(':input')) return;
@@ -494,10 +507,16 @@
     // --- Session (PeerJS) ---
 
     var sessionPeer = null;
-    var sessionConnections = [];  // master: [{conn, mode}, ...]
-    var masterConn = null;        // slave: DataConnection to master
+    var sessionConnections = [];
+    var masterConn = null;
     var isSlaveSession = false;
-    var slaveModeReadonly = false;
+    var slaveShowControls = false;
+    var SESSION_WORDS = [
+        'lew','lis','kot','pies','mysz','kura','owca','koza','krowa','wilk',
+        'dzik','bocian','wrona','sowa','kret','borsuk','byk','mors','kogut',
+        'karp','sum','delfin','pingwin','tygrys','lama','panda','lemur',
+        'gepard','pelikan','sroka'
+    ];
 
     function getFullState() {
         return {
@@ -515,13 +534,14 @@
             jokerSeconds: jokerSeconds,
             currentFormat: currentFormat,
             showControls: showControls,
+            slaveShowControls: slaveShowControls,
             soundEnabled: soundEnabled,
             jokerEnabled: jokerEnabled,
             timerValue: $('.input-minuty').val(),
             adVocemValue: $('.input-minuty-advocem').val(),
             teza: $('.input-teza').val(),
-            logo1: $('.img-grid .img1').attr('src') || null,
-            logo2: $('.img-grid .img2').attr('src') || null
+            logo1: logoSrcs[0],
+            logo2: logoSrcs[1]
         };
     }
 
@@ -543,8 +563,17 @@
         // Checkboxes
         if (state.showControls !== undefined) {
             showControls = state.showControls;
-            $('#customCheck1').prop('checked', showControls);
-            $('.timer-controls:not(.joker-controls)').toggle(showControls);
+            if (!isSlaveSession) {
+                $('#customCheck1').prop('checked', showControls);
+                $('.timer-controls:not(.joker-controls)').toggle(showControls);
+            }
+        }
+        if (state.slaveShowControls !== undefined) {
+            slaveShowControls = state.slaveShowControls;
+            if (isSlaveSession) {
+                $('.timer-controls:not(.joker-controls)').toggle(slaveShowControls);
+                if (jokerRunning) $('.joker-controls').toggle(slaveShowControls);
+            }
         }
         if (state.soundEnabled !== undefined) {
             soundEnabled = state.soundEnabled;
@@ -593,7 +622,7 @@
                 lastJokerSecond = -1;
                 renderJoker();
                 $('.joker-timer').show();
-                if (showControls) $('.joker-controls').show();
+                if (effectiveShowControls()) $('.joker-controls').show();
                 jokerInterval = setInterval(jokerTick, 250);
                 jokerRunning = true;
             } else {
@@ -606,11 +635,10 @@
         applyingState = false;
     }
 
-    // Overwrite placeholder — session sync is now active
     onStateChange = function(delta) {
         if (applyingState) return;
         if (isSlaveSession) {
-            if (!slaveModeReadonly && masterConn) {
+            if (masterConn) {
                 try { masterConn.send({type: 'settings', state: delta}); } catch(e) {}
             }
         } else if (sessionPeer && sessionConnections.length > 0) {
@@ -620,28 +648,52 @@
         }
     };
 
+    $('.session-name-input').on('input', function() {
+        var val = $(this).val();
+        var wasInvalid = $(this).hasClass('is-invalid');
+        var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
+        $(this).toggleClass('is-invalid', invalid);
+        if (invalid && !wasInvalid) showWarn('Dozwolone tylko litery a–z, A–Z i cyfry');
+        $('.session-create-btn').prop('disabled', !(val.length > 0 && !invalid));
+    });
+
+    $('.session-random-btn').click(function() {
+        var name = SESSION_WORDS[Math.floor(Math.random() * SESSION_WORDS.length)];
+        $('.session-name-input').val(name).trigger('input');
+    });
+
     $('.session-create-btn').click(function() {
-        if (sessionPeer) return;
+        var name = $('.session-name-input').val().trim();
+        if (!/^[a-zA-Z0-9]+$/.test(name)) return;
+        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
+
         var $btn = $(this);
         $btn.text('Łączenie…').prop('disabled', true);
-        sessionPeer = new Peer();
+
+        sessionPeer = new Peer(name);
         sessionPeer.on('open', function(id) {
-            var base = window.location.href.split('?')[0];
-            $('.session-link-full').val(base + '?s=' + btoa(id + ':full'));
-            $('.session-link-readonly').val(base + '?s=' + btoa(id + ':readonly'));
+            var link = window.location.origin + window.location.pathname + '?s=' + id;
+            $('.session-link-val').val(link);
             $('.session-links').show();
+            $('#session-qr').empty();
+            new QRCode(document.getElementById('session-qr'), {text: link, width: 128, height: 128});
             $btn.text('Sesja aktywna');
+        });
+        sessionPeer.on('error', function(err) {
+            console.error('[Session] Master error:', err.type);
+            var msg = err.type === 'unavailable-id' ? 'Nazwa zajęta — wybierz inną' : 'Błąd: ' + err.type;
+            $btn.text(msg).prop('disabled', false);
+            sessionPeer = null;
         });
         sessionPeer.on('connection', function(conn) {
             conn.on('open', function() {
-                sessionConnections.push({conn: conn, mode: (conn.metadata && conn.metadata.mode) || 'readonly'});
+                sessionConnections.push({conn: conn});
                 conn.send({type: 'init', state: getFullState()});
-                showAlert('Podłączono sesję (' + sessionConnections.length + ' podłączonych)');
+                showAlert('Podłączono sesję');
             });
             conn.on('data', function(data) {
-                if (data.type === 'settings' && conn.metadata && conn.metadata.mode === 'full') {
+                if (data.type === 'settings') {
                     applyState(data.state);
-                    // relay the same delta to other connections
                     sessionConnections.forEach(function(c) {
                         if (c.conn !== conn) {
                             try { c.conn.send({type: 'state', state: data.state}); } catch(e) {}
@@ -651,49 +703,118 @@
             });
             conn.on('close', function() {
                 sessionConnections = sessionConnections.filter(function(c) { return c.conn !== conn; });
-                showAlert('Odłączono sesję (' + sessionConnections.length + ' podłączonych)');
+                showAlert('Odłączono sesję');
             });
         });
     });
 
     $('.session-copy-btn').click(function() {
-        var val = $(this).data('target') === 'full'
-            ? $('.session-link-full').val()
-            : $('.session-link-readonly').val();
-        navigator.clipboard.writeText(val);
+        navigator.clipboard.writeText($('.session-link-val').val());
     });
 
-    // Auto-join if URL contains ?s=BASE64
+    $('.slave-controls-checkbox').change(function() {
+        slaveShowControls = this.checked;
+        onStateChange({slaveShowControls: slaveShowControls});
+    });
+
+    $('.slave-copy-btn').click(function() {
+        navigator.clipboard.writeText($('.slave-session-link-val').val());
+    });
+
+    $('.slave-disconnect-btn').click(function() {
+        if (!window.confirm('Czy na pewno chcesz rozłączyć sesję?')) return;
+        window.location.replace(window.location.origin + window.location.pathname);
+    });
+
+    $('.session-join-input').on('input', function() {
+        var val = $(this).val();
+        var wasInvalid = $(this).hasClass('is-invalid');
+        var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
+        $(this).toggleClass('is-invalid', invalid);
+        if (invalid && !wasInvalid) showWarn('Dozwolone tylko litery a–z, A–Z i cyfry');
+        $('.session-join-btn').prop('disabled', !(val.length > 0 && !invalid));
+    });
+
+    $('.session-join-btn').click(function() {
+        var name = $('.session-join-input').val().trim();
+        if (!/^[a-zA-Z0-9]+$/.test(name)) return;
+        var $btn = $(this);
+        $btn.text('Sprawdzanie…').prop('disabled', true);
+        $('.session-join-error').hide();
+
+        var done = false;
+        var checkPeer = new Peer();
+
+        checkPeer.on('open', function() {
+            var conn = checkPeer.connect(name, {serialization: 'json'});
+            var timeout = setTimeout(function() {
+                if (done) return;
+                done = true;
+                checkPeer.destroy();
+                $btn.text('Dołącz').prop('disabled', false);
+                $('.session-join-error').text('Brak odpowiedzi — spróbuj ponownie').show();
+            }, 5000);
+            conn.on('open', function() {
+                if (done) return;
+                done = true;
+                clearTimeout(timeout);
+                checkPeer.destroy();
+                window.location.replace(window.location.origin + window.location.pathname + '?s=' + name);
+            });
+        });
+
+        checkPeer.on('error', function(err) {
+            if (done) return;
+            done = true;
+            checkPeer.destroy();
+            $btn.text('Dołącz').prop('disabled', false);
+            var msg = err.type === 'peer-unavailable'
+                ? 'Sesja "' + name + '" nie istnieje'
+                : 'Błąd: ' + err.type;
+            $('.session-join-error').text(msg).show();
+        });
+    });
+
+    // Auto-join if URL contains ?s=sessionName
     (function() {
         var params = new URLSearchParams(window.location.search);
         var s = params.get('s');
-        if (!s) return;
-        var sid, mode;
-        try {
-            var decoded = atob(s);
-            var idx = decoded.lastIndexOf(':');
-            sid = decoded.substring(0, idx);
-            mode = decoded.substring(idx + 1);
-            if (!sid || (mode !== 'full' && mode !== 'readonly')) return;
-        } catch(e) { return; }
+        if (!s || !/^[a-zA-Z0-9]+$/.test(s)) return;
 
         isSlaveSession = true;
-        slaveModeReadonly = (mode === 'readonly');
         $('body').addClass('is-slave');
-        if (slaveModeReadonly) $('body').addClass('slave-readonly');
+        $('.timer-controls').hide();
+
+        var slaveUrl = window.location.href;
+        $('.slave-session-link-val').val(slaveUrl);
+        new QRCode(document.getElementById('slave-qr'), {text: slaveUrl, width: 256, height: 256});
+
+        console.log('[Session] Joining session:', s);
+        $('.session-status').text('Łączenie z sesją…').show();
 
         var peer = new Peer();
-        peer.on('open', function() {
-            masterConn = peer.connect(sid, {metadata: {mode: mode}, reliable: true});
+        peer.on('open', function(myId) {
+            console.log('[Session] Slave peer opened:', myId);
+            masterConn = peer.connect(s, {serialization: 'json'});
+            masterConn.on('open', function() {
+                console.log('[Session] Connected to master!');
+                $('.session-status').hide();
+                showAlert('Połączono z sesją');
+            });
             masterConn.on('data', function(data) {
                 if (data.type === 'init' || data.type === 'state') applyState(data.state);
             });
             masterConn.on('close', function() {
                 $('.session-lost-alert').fadeIn(50);
             });
+            masterConn.on('error', function(err) {
+                console.error('[Session] Conn error:', err);
+                $('.session-status').text('Błąd połączenia: ' + err.type).show();
+            });
         });
-        peer.on('disconnected', function() {
-            $('.session-lost-alert').fadeIn(50);
+        peer.on('error', function(err) {
+            console.error('[Session] Peer error:', err.type);
+            $('.session-status').text('Błąd: ' + err.type).show();
         });
     })();
 

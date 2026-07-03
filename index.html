@@ -16,7 +16,10 @@
       <strong>Zrobiono!</strong>
     </div>
 
+    <div class="alert alert-warning toast-warn"></div>
+
     <div class="alert alert-danger session-lost-alert">Utracono połączenie</div>
+    <div class="alert alert-info session-status" style="display:none"></div>
 
     <div class="jumbotron">
 
@@ -29,6 +32,13 @@
             </li>
             <li class="nav-item" data-toggle="tooltip" title="Ustawienia">
               <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.svg" width="28" height="28" class="icon" alt="Ustawienia"/></a>
+            </li>
+            <li class="nav-item" id="sharing-link-item" data-toggle="tooltip" title="Udostępnianie">
+              <a class="nav-link" id="sharing-link" href="#">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="black" style="width:24px;height:24px" class="icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+                </svg>
+              </a>
             </li>
             <li class="nav-item" data-toggle="tooltip" title="Pomoc">
               <a class="nav-link" id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
@@ -202,34 +212,6 @@
               </div>
             </div>
 
-            <!-- Sesja -->
-            <div class="row no-gutters align-items-start s-row" id="session-section">
-              <div class="col-12 col-md-auto s-label s-label-top">Sesja</div>
-              <div class="col-12 col-md">
-                <button type="button" class="btn btn-secondary btn-sm session-create-btn">Utwórz sesję</button>
-                <div class="session-links mt-2">
-                  <div class="mb-2">
-                    <div class="small text-muted mb-1">Pełne prawa</div>
-                    <div class="input-group input-group-sm">
-                      <input type="text" class="form-control session-link-full" readonly>
-                      <div class="input-group-append">
-                        <button class="btn btn-outline-secondary session-copy-btn" data-target="full" type="button">Kopiuj</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="small text-muted mb-1">Tylko podgląd</div>
-                    <div class="input-group input-group-sm">
-                      <input type="text" class="form-control session-link-readonly" readonly>
-                      <div class="input-group-append">
-                        <button class="btn btn-outline-secondary session-copy-btn" data-target="readonly" type="button">Kopiuj</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <!-- Thumbnails -->
             <div class="s-thumbs">
               <div class="img-container s-thumb-wrap">
@@ -306,6 +288,72 @@
       </div>
       <!--end of help-->
 
+      <div id="sharing">
+        <div class="panel-header">
+          <h2>Udostępnianie</h2>
+        </div>
+        <div class="panel-body">
+
+          <!-- Master: dwie kolumny -->
+          <div class="master-sharing">
+            <div class="row">
+              <div class="col-md-6 sharing-col">
+                <p class="sharing-col-title">Utwórz sesję</p>
+                <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                  <div class="input-group input-group-sm" style="width:auto">
+                    <input type="text" class="form-control session-name-input" placeholder="nazwa sesji" style="width:130px">
+                    <div class="input-group-append">
+                      <button type="button" class="btn btn-outline-secondary session-random-btn">Losuj</button>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm session-create-btn" disabled>Utwórz</button>
+                </div>
+                <div class="session-links mt-2">
+                  <div class="input-group input-group-sm">
+                    <input type="text" class="form-control session-link-val" readonly>
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary session-copy-btn" type="button">Kopiuj</button>
+                    </div>
+                  </div>
+                  <div id="session-qr" class="mt-2 d-flex justify-content-center"></div>
+                </div>
+                <div class="custom-control custom-checkbox mt-2">
+                  <input type="checkbox" class="custom-control-input slave-controls-checkbox" id="slaveControlsCheck">
+                  <label class="custom-control-label" for="slaveControlsCheck">
+                    Pokaż przyciski sterujące na udostępnionej sesji
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-6 sharing-col sharing-col-join">
+                <p class="sharing-col-title">Dołącz do sesji</p>
+                <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                  <input type="text" class="form-control form-control-sm session-join-input"
+                         placeholder="nazwa sesji" style="max-width:150px">
+                  <button type="button" class="btn btn-secondary btn-sm session-join-btn" disabled>Dołącz</button>
+                </div>
+                <small class="session-join-error text-danger d-block mt-1"></small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slave: QR + link -->
+          <div class="slave-sharing">
+            <div id="slave-qr" class="d-flex justify-content-center mb-3"></div>
+            <div class="d-flex justify-content-center">
+              <div class="input-group input-group-sm" style="width:50%">
+                <input type="text" class="form-control slave-session-link-val" readonly>
+                <div class="input-group-append">
+                  <button class="btn btn-outline-secondary slave-copy-btn" type="button">Kopiuj</button>
+                  <button class="btn btn-outline-danger slave-disconnect-btn" type="button">Rozłącz</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <!--end of sharing-->
+
     </div>
     <!--end of jumbotron-->
 
@@ -316,6 +364,7 @@
   <script src="assets/js/jquery3.3.1.min.js"></script>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="assets/js/stoper.js"></script>
 </body>
 </html>

@@ -83,7 +83,8 @@ body {
 
 /* ── Settings & Help layout ──────────────────────────────── */
 #settings,
-#help {
+#help,
+#sharing {
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -266,6 +267,10 @@ body {
   opacity: 0.75;
 }
 
+#sharing-link svg {
+  display: block;
+}
+
 .tooltip {
   left: 10px;
   top: 10px;
@@ -380,11 +385,25 @@ body {
 .session-lost-alert { display: none; }
 .session-links { display: none; }
 
-body.slave-readonly .timer-controls,
-body.slave-readonly .joker-controls,
-body.slave-readonly #settings-link { display: none !important; }
+body.is-slave #settings-link { display: none !important; }
+body.is-slave #sharing .panel-header { text-align: center; }
 
-body.is-slave #session-section { display: none; }
+/* Sharing panel: master vs slave content */
+.master-sharing { display: block; }
+.slave-sharing { display: none; }
+body.is-slave .master-sharing { display: none; }
+body.is-slave .slave-sharing { display: block; }
+
+/* Sharing columns */
+.sharing-col { padding: 0 1.5rem; }
+.sharing-col-title {
+  font-size: 1rem;
+  font-weight: 300;
+  color: #000;
+  margin-bottom: 0.75rem;
+}
+.sharing-col-join { border-left: 1px solid rgba(0, 0, 0, 0.07); padding-left: 3rem; }
+.session-join-error { display: none; }
 
 /* ── Mobile (≤768 px) ───────────────────────────────────── */
 @media (max-width: 768px) {
@@ -434,8 +453,12 @@ body.is-slave #session-section { display: none; }
   }
 
   #settings,
-  #help {
+  #help,
+  #sharing {
     padding: 0;
     align-items: stretch;
   }
+
+  .sharing-col { padding: 0; }
+  .sharing-col-join { border-left: none; border-top: 1px solid rgba(0,0,0,0.07); padding-top: 1rem; margin-top: 1rem; }
 }
