@@ -32,6 +32,7 @@ jobs:
             --exclude=CLAUDE.md
             --exclude=.git/
             --exclude=.gitignore
+            --exclude=dev/
           path: ./
           remote_path: ${{ steps.vars.outputs.target }}
           remote_host: ${{ secrets.VPS_HOST }}
