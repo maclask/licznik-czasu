@@ -376,6 +376,16 @@ body {
   flex: 1;
 }
 
+/* ── Session ────────────────────────────────────────────────── */
+.session-lost-alert { display: none; }
+.session-links { display: none; }
+
+body.slave-readonly .timer-controls,
+body.slave-readonly .joker-controls,
+body.slave-readonly #settings-link { display: none !important; }
+
+body.is-slave #session-section { display: none; }
+
 /* ── Mobile (≤768 px) ───────────────────────────────────── */
 @media (max-width: 768px) {
   .container {

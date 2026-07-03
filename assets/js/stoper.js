@@ -26,6 +26,10 @@
     var bpOvertimeSecs = 15;  // remaining overtime seconds (updated on pause)
     var bpOvertimeStartedAt;
 
+    // Session sync
+    var onStateChange = function(delta) {};  // no-op until session active
+    var applyingState = false;              // prevents echo-loop in applyState
+
     // --- Init ---
 
     $('[data-toggle="tooltip"]').tooltip({ trigger: 'hover' });
@@ -168,6 +172,7 @@
         timerInterval = setInterval(timerTick, 250);
         timerRunning = true;
         $('.start-stop').text('Stop');
+        onStateChange({timerRunning: true, timerStartedAt: timerStartedAt, timerStartSeconds: timerStartSeconds});
     }
 
     function stopTimer() {
@@ -188,6 +193,7 @@
         }
         renderTimer();
         $('.start-stop').text('Start');
+        onStateChange({timerRunning: false, minutes: minutes, seconds: seconds, bpOvertimeRunning: bpOvertimeRunning, bpOvertimeSecs: bpOvertimeSecs});
     }
 
     function toggleTimer() {
@@ -205,6 +211,7 @@
         $('.timer').removeClass('bp-overtime');
         $('.start-stop').text('Start');
         loadTimeFromInput();
+        onStateChange({timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: 15, minutes: minutes, seconds: seconds, timerValue: $('.input-minuty').val()});
     }
 
     function setAdVocem() {
@@ -217,6 +224,7 @@
         minutes = adVocemMinutes;
         seconds = adVocemSeconds;
         renderTimer();
+        onStateChange({timerRunning: false, minutes: minutes, seconds: seconds});
     }
 
     // --- Format ---
@@ -234,6 +242,7 @@
             if ($('.input-minuty').val() === '07:00') $('.input-minuty').val('05:00');
         }
         reset();
+        onStateChange({currentFormat: currentFormat, timerRunning: false, minutes: minutes, seconds: seconds, timerValue: $('.input-minuty').val()});
     }
 
     // --- Joker timer ---
@@ -267,6 +276,7 @@
         if (showControls) $('.joker-controls').show();
         jokerInterval = setInterval(jokerTick, 250);
         jokerRunning = true;
+        onStateChange({jokerRunning: true, jokerStartedAt: jokerStartedAt, jokerStartSeconds: 30, jokerSeconds: 30});
     }
 
     function jokerToggle() {
@@ -282,6 +292,7 @@
             jokerInterval = setInterval(jokerTick, 250);
             jokerRunning = true;
         }
+        onStateChange({jokerRunning: jokerRunning, jokerStartedAt: jokerStartedAt, jokerStartSeconds: jokerStartSeconds, jokerSeconds: jokerSeconds});
     }
 
     function jokerOff() {
@@ -289,6 +300,7 @@
         jokerRunning = false;
         $('.joker-timer').hide();
         $('.joker-controls').hide();
+        onStateChange({jokerRunning: false});
     }
 
     // --- Sound ---
@@ -317,6 +329,11 @@
         } else {
             $('.img' + no).attr('src', src).parent().css('display', 'flex');
         }
+        if (!applyingState) {
+            var d = {};
+            d['logo' + no] = src || null;
+            onStateChange(d);
+        }
     }
 
     function readImageFile(input, no) {
@@ -338,9 +355,11 @@
 
     // --- Alert ---
 
-    function showAlert() {
-        $('.alert').fadeIn(50);
-        setTimeout(function () { $('.alert').fadeOut(); }, 1000);
+    function showAlert(msg) {
+        if (msg) $('.alert-success strong').text(msg);
+        else $('.alert-success strong').text('Zrobiono!');
+        $('.alert-success').fadeIn(50);
+        setTimeout(function () { $('.alert-success').fadeOut(); }, 1000);
     }
 
     // --- Fullscreen ---
@@ -362,25 +381,33 @@
     $('.reset').click(reset);
     $('.input-minuty').change(reset);
     $('.ad-vocem').click(setAdVocem);
-    $('.input-minuty-advocem').change(loadAdVocemFromInput);
+    $('.input-minuty-advocem').change(function() {
+        loadAdVocemFromInput();
+        onStateChange({adVocemValue: $(this).val()});
+    });
 
     $('.joker').click(jokerStart);
     $('.joker-start-stop').click(jokerToggle);
     $('.joker-reset').click(jokerStart);
     $('.joker-off').click(jokerOff);
 
-    $('.sound-switch').click(toggleSound);
+    $('.sound-switch').click(function() {
+        toggleSound();
+        onStateChange({soundEnabled: soundEnabled});
+    });
     $('.sound-test1').click(playDingSound);
     $('.sound-test2').click(playEndSound);
 
     $('#settings').find(':submit').click(showAlert);
     $('.input-teza').on('input', function () {
         $('#teza').text($(this).val());
+        onStateChange({teza: $(this).val()});
     });
 
     $('.controls-checkbox').click(function () {
         showControls = this.checked;
         $('.timer-controls:not(.joker-controls)').toggle(showControls);
+        onStateChange({showControls: showControls});
     });
 
     $('.debate-format').change(function () {
@@ -393,6 +420,7 @@
         if (currentFormat === 'oxford') {
             $('.oxford-joker').toggle(jokerEnabled);
         }
+        onStateChange({jokerEnabled: jokerEnabled});
     });
 
     $('.dropdown-item').click(function () {
@@ -462,5 +490,211 @@
             case 75: if (currentFormat === 'oxford' && jokerEnabled) jokerOff(); break;
         }
     });
+
+    // --- Session (PeerJS) ---
+
+    var sessionPeer = null;
+    var sessionConnections = [];  // master: [{conn, mode}, ...]
+    var masterConn = null;        // slave: DataConnection to master
+    var isSlaveSession = false;
+    var slaveModeReadonly = false;
+
+    function getFullState() {
+        return {
+            timerRunning: timerRunning,
+            timerStartedAt: timerStartedAt,
+            timerStartSeconds: timerStartSeconds,
+            bpOvertimeRunning: bpOvertimeRunning,
+            bpOvertimeSecs: bpOvertimeSecs,
+            bpOvertimeStartedAt: bpOvertimeStartedAt,
+            minutes: minutes,
+            seconds: seconds,
+            jokerRunning: jokerRunning,
+            jokerStartedAt: jokerStartedAt,
+            jokerStartSeconds: jokerStartSeconds,
+            jokerSeconds: jokerSeconds,
+            currentFormat: currentFormat,
+            showControls: showControls,
+            soundEnabled: soundEnabled,
+            jokerEnabled: jokerEnabled,
+            timerValue: $('.input-minuty').val(),
+            adVocemValue: $('.input-minuty-advocem').val(),
+            teza: $('.input-teza').val(),
+            logo1: $('.img-grid .img1').attr('src') || null,
+            logo2: $('.img-grid .img2').attr('src') || null
+        };
+    }
+
+    function applyState(state) {
+        applyingState = true;
+
+        // Format first — applyFormat internally calls reset
+        if (state.currentFormat !== undefined && state.currentFormat !== currentFormat) {
+            currentFormat = state.currentFormat;
+            $('[name="debateFormat"][value="' + currentFormat + '"]').prop('checked', true);
+            applyFormat();
+        }
+
+        // Input values
+        if (state.timerValue) $('.input-minuty').val(state.timerValue);
+        if (state.adVocemValue) { $('.input-minuty-advocem').val(state.adVocemValue); loadAdVocemFromInput(); }
+        if (state.teza !== undefined) { $('.input-teza').val(state.teza); $('#teza').text(state.teza); }
+
+        // Checkboxes
+        if (state.showControls !== undefined) {
+            showControls = state.showControls;
+            $('#customCheck1').prop('checked', showControls);
+            $('.timer-controls:not(.joker-controls)').toggle(showControls);
+        }
+        if (state.soundEnabled !== undefined) {
+            soundEnabled = state.soundEnabled;
+            $('#customCheck2').prop('checked', soundEnabled);
+        }
+        if (state.jokerEnabled !== undefined) {
+            jokerEnabled = state.jokerEnabled;
+            $('#jokerCheck').prop('checked', jokerEnabled);
+            if (currentFormat === 'oxford') $('.oxford-joker').toggle(jokerEnabled);
+        }
+
+        // Logos
+        if (state.logo1 !== undefined) setImage(state.logo1, 1);
+        if (state.logo2 !== undefined) setImage(state.logo2, 2);
+
+        // Timer
+        if (state.timerRunning !== undefined || state.minutes !== undefined) {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            bpOvertimeRunning = state.bpOvertimeRunning || false;
+            bpOvertimeSecs = state.bpOvertimeSecs !== undefined ? state.bpOvertimeSecs : bpOvertimeSecs;
+            bpOvertimeStartedAt = state.bpOvertimeStartedAt;
+            $('.timer').removeClass('bp-overtime');
+            if (bpOvertimeRunning) $('.timer').addClass('bp-overtime');
+            if (state.minutes !== undefined) { minutes = state.minutes; seconds = state.seconds || 0; renderTimer(); }
+            if (state.timerRunning) {
+                timerStartedAt = state.timerStartedAt;
+                timerStartSeconds = state.timerStartSeconds;
+                lastTimerSecond = -1;
+                timerInterval = setInterval(timerTick, 250);
+                timerRunning = true;
+                $('.start-stop').text('Stop');
+            } else {
+                $('.start-stop').text('Start');
+            }
+        }
+
+        // Joker
+        if (state.jokerRunning !== undefined) {
+            clearInterval(jokerInterval);
+            jokerRunning = false;
+            if (state.jokerRunning) {
+                jokerStartedAt = state.jokerStartedAt;
+                jokerStartSeconds = state.jokerStartSeconds;
+                jokerSeconds = state.jokerSeconds;
+                lastJokerSecond = -1;
+                renderJoker();
+                $('.joker-timer').show();
+                if (showControls) $('.joker-controls').show();
+                jokerInterval = setInterval(jokerTick, 250);
+                jokerRunning = true;
+            } else {
+                jokerSeconds = state.jokerSeconds !== undefined ? state.jokerSeconds : jokerSeconds;
+                $('.joker-timer').hide();
+                $('.joker-controls').hide();
+            }
+        }
+
+        applyingState = false;
+    }
+
+    // Overwrite placeholder — session sync is now active
+    onStateChange = function(delta) {
+        if (applyingState) return;
+        if (isSlaveSession) {
+            if (!slaveModeReadonly && masterConn) {
+                try { masterConn.send({type: 'settings', state: delta}); } catch(e) {}
+            }
+        } else if (sessionPeer && sessionConnections.length > 0) {
+            sessionConnections.forEach(function(c) {
+                try { c.conn.send({type: 'state', state: delta}); } catch(e) {}
+            });
+        }
+    };
+
+    $('.session-create-btn').click(function() {
+        if (sessionPeer) return;
+        var $btn = $(this);
+        $btn.text('Łączenie…').prop('disabled', true);
+        sessionPeer = new Peer();
+        sessionPeer.on('open', function(id) {
+            var base = window.location.href.split('?')[0];
+            $('.session-link-full').val(base + '?s=' + btoa(id + ':full'));
+            $('.session-link-readonly').val(base + '?s=' + btoa(id + ':readonly'));
+            $('.session-links').show();
+            $btn.text('Sesja aktywna');
+        });
+        sessionPeer.on('connection', function(conn) {
+            conn.on('open', function() {
+                sessionConnections.push({conn: conn, mode: (conn.metadata && conn.metadata.mode) || 'readonly'});
+                conn.send({type: 'init', state: getFullState()});
+                showAlert('Podłączono sesję (' + sessionConnections.length + ' podłączonych)');
+            });
+            conn.on('data', function(data) {
+                if (data.type === 'settings' && conn.metadata && conn.metadata.mode === 'full') {
+                    applyState(data.state);
+                    // relay the same delta to other connections
+                    sessionConnections.forEach(function(c) {
+                        if (c.conn !== conn) {
+                            try { c.conn.send({type: 'state', state: data.state}); } catch(e) {}
+                        }
+                    });
+                }
+            });
+            conn.on('close', function() {
+                sessionConnections = sessionConnections.filter(function(c) { return c.conn !== conn; });
+                showAlert('Odłączono sesję (' + sessionConnections.length + ' podłączonych)');
+            });
+        });
+    });
+
+    $('.session-copy-btn').click(function() {
+        var val = $(this).data('target') === 'full'
+            ? $('.session-link-full').val()
+            : $('.session-link-readonly').val();
+        navigator.clipboard.writeText(val);
+    });
+
+    // Auto-join if URL contains ?s=BASE64
+    (function() {
+        var params = new URLSearchParams(window.location.search);
+        var s = params.get('s');
+        if (!s) return;
+        var sid, mode;
+        try {
+            var decoded = atob(s);
+            var idx = decoded.lastIndexOf(':');
+            sid = decoded.substring(0, idx);
+            mode = decoded.substring(idx + 1);
+            if (!sid || (mode !== 'full' && mode !== 'readonly')) return;
+        } catch(e) { return; }
+
+        isSlaveSession = true;
+        slaveModeReadonly = (mode === 'readonly');
+        $('body').addClass('is-slave');
+        if (slaveModeReadonly) $('body').addClass('slave-readonly');
+
+        var peer = new Peer();
+        peer.on('open', function() {
+            masterConn = peer.connect(sid, {metadata: {mode: mode}, reliable: true});
+            masterConn.on('data', function(data) {
+                if (data.type === 'init' || data.type === 'state') applyState(data.state);
+            });
+            masterConn.on('close', function() {
+                $('.session-lost-alert').fadeIn(50);
+            });
+        });
+        peer.on('disconnected', function() {
+            $('.session-lost-alert').fadeIn(50);
+        });
+    })();
 
 })(jQuery);
