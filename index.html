@@ -16,6 +16,8 @@
       <strong>Zrobiono!</strong>
     </div>
 
+    <div class="alert alert-danger session-lost-alert">Utracono połączenie</div>
+
     <div class="jumbotron">
 
       <nav class="navbar navbar-expand">
@@ -200,6 +202,34 @@
               </div>
             </div>
 
+            <!-- Sesja -->
+            <div class="row no-gutters align-items-start s-row" id="session-section">
+              <div class="col-12 col-md-auto s-label s-label-top">Sesja</div>
+              <div class="col-12 col-md">
+                <button type="button" class="btn btn-secondary btn-sm session-create-btn">Utwórz sesję</button>
+                <div class="session-links mt-2">
+                  <div class="mb-2">
+                    <div class="small text-muted mb-1">Pełne prawa</div>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control session-link-full" readonly>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-secondary session-copy-btn" data-target="full" type="button">Kopiuj</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="small text-muted mb-1">Tylko podgląd</div>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control session-link-readonly" readonly>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-secondary session-copy-btn" data-target="readonly" type="button">Kopiuj</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Thumbnails -->
             <div class="s-thumbs">
               <div class="img-container s-thumb-wrap">
@@ -285,6 +315,7 @@
   <script src="assets/js/popper.min.js"></script>
   <script src="assets/js/jquery3.3.1.min.js"></script>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="assets/js/stoper.js"></script>
 </body>
 </html>
