@@ -1,167 +1,431 @@
-#timer{
-    font-size: 150px;
-}
-#timer .timer{
-	height: 200px;
-	scale: 100%;
-}
-#teza{
-    text-align: center;
-}
-.alert{
-    position: absolute;
-}
-.jumbotron{
-    background: white !important;
-	/*background: #f3f3f5;*/
-    /*box-shadow: 0 15px 35px rgba(50,50,93,.1), 0 5px 15px rgba(0,0,0,.07);*/
-	-webkit-box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
-	box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
-    height: 80vh;
-    display: flex;
-    align-items: center;
-    margin: auto;
-    min-width: 100%;
-	margin-top: 0;
-	overflow: auto;
-}
-.jumbotron > div{
-    margin: auto;
-}
-.input-minuty, .input-minuty-advocem{
-    width: 100px;
-}
-.icon{
-	opacity: 0.75;
-}
-.tooltip {
-    left: 10px;
-    top: 10px;
-}
-#settings .row{
-    margin-bottom: 30px;
-}
-.dropdown{
-	margin: 5% 0;
-}
-.label-settings{
-    ​​font-weight: 300;
-    //font-size: 24px;
-}
-.border-top{
-    padding-top: 25px;
-}
-.timer-controls button{
-    text-transform: uppercase !important;
-}
-.timer-controls{
-	transition-duration: 4s;
-}
-.joker-controls{
-    margin-top: 20px;
-
-}
-.joker-controls button{
-    border-color: rgb(122, 8, 112) !important;
-    color: rgb(122, 8, 112) !important;
-    
-}
-.joker-controls button:hover{
-    background-color: rgb(122, 8, 112) !important;
-    color: #fff !important;
-}
-.joker-timer{
-    font-size: 80px;
-    color: rgb(122, 8, 112);
-    text-align: center;
-}
-.joker-timer p{
-    font-size: 30px;
-    text-transform: uppercase;
-    margin-bottom: -20px;
-    margin-top: 20px;
-
+:root {
+  --timer-size: clamp(60px, 17vmin, 280px);
 }
 
-.timer, .joker-timer {
-	text-align: center;
+@media (max-width: 768px) {
+  :root {
+    --timer-size: clamp(80px, 25vmin, 200px);
+  }
 }
+@import url('https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,100..900;1,100..900&family=Epilogue:ital,wght@0,100..900;1,100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+html, body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+}
+
 body {
+  background: #f3f3f5;
+}
 
-    /*background: #e9ecef !important;*/
-	background: #f3f3f5;
+/* ── Container ─────────────────────────────────────────── */
+.container {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  overflow: visible;
+  padding-left: 15px;
+  padding-right: 15px;
 }
-.img-grid{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    grid-gap: 1rem;
-    max-width: 500px;
-    margin: auto;;
+
+/* ── White rectangle ────────────────────────────────────── */
+.jumbotron {
+  background: white !important;
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0), 0 20px 60px rgba(0, 0, 0, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  height: 80vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: visible;
+  margin: 0;
+  padding: 1.5rem;
 }
+
+.jumbotron > div {
+  width: 100%;
+}
+
+/* ── Navigation — desktop: floats above the rectangle ───── */
+.jumbotron nav {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+}
+
+/* ── Alert ──────────────────────────────────────────────── */
+.alert {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+
+/* ── Timer ──────────────────────────────────────────────── */
+#timer {
+  font-size: var(--timer-size);
+}
+
+#timer .timer {
+  scale: 100%;
+}
+
+#teza {
+  text-align: center;
+  font-size: clamp(1rem, 2.5vmin, 2rem);
+}
+
+/* ── Settings & Help layout ──────────────────────────────── */
+#settings,
+#help {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 4.5rem;
+}
+
+.panel-header {
+  flex: 0 0 auto;
+  padding: 2rem 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #222;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.4rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+/* Settings rows (Bootstrap-based) */
+.s-row {
+  margin-bottom: 1rem;
+}
+
+.s-label {
+  font-size: 1rem;
+  font-weight: 300;
+  color: #000;
+  white-space: nowrap;
+  padding-right: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .s-label {
+    min-width: 9rem;
+  }
+}
+
+.s-label-top {
+  padding-top: 0.35rem;
+}
+
+.s-format-radios {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.s-btn-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.s-setting-line {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.s-setting-line:last-child {
+  margin-bottom: 0;
+}
+
+.s-check-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  padding-left: 1.5rem;
+}
+
+@media (max-width: 767px) {
+  .s-check-col {
+    padding-left: 0;
+    margin-top: 0.75rem;
+    gap: 0.75rem;
+  }
+}
+
+.input-teza {
+  resize: none;
+  font-size: 1rem;
+}
+
+@media (max-width: 767px) {
+  .s-label {
+    font-weight: 500;
+    white-space: normal;
+    padding-right: 1.5rem;
+    margin-bottom: 0.3rem;
+  }
+  .s-label-top {
+    padding-top: 0;
+  }
+  .s-row > [class*="col-"] + [class*="col-"] {
+    margin-top: 0.5rem;
+  }
+  .s-row > [class*="col-"]:first-child {
+    margin-top: 0;
+  }
+}
+
+/* Logo drop zones */
+.logo-drop-zone {
+  width: 100%;
+  border: 2px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.logo-drop-zone.drag-over {
+  border-color: #6c757d;
+  background: rgba(108, 117, 125, 0.07);
+}
+
+.logo-drop-hint {
+  font-size: 0.75rem;
+  color: #999;
+  margin: 0;
+}
+
+/* Logo thumbnails */
+.s-thumbs {
+  display: flex;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  justify-content: center;
+}
+
+.s-thumb-wrap {
+  max-height: 70px !important;
+  max-width: 110px !important;
+}
+
+.s-thumb-wrap img {
+  max-height: 70px;
+  max-width: 110px;
+}
+
+.oxford-setting {
+  transition: opacity 0.2s;
+}
+
+.oxford-setting.settings-hidden {
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+/* ── Settings inputs ────────────────────────────────────── */
+.input-minuty,
+.input-minuty-advocem {
+  width: 68px;
+  height: auto;
+  padding: 0.25rem 0.4rem;
+  font-size: 1rem;
+}
+
+.s-format-radios {
+  gap: 1.5rem;
+}
+
+.icon {
+  opacity: 0.75;
+}
+
+.tooltip {
+  left: 10px;
+  top: 10px;
+}
+
+.label-settings {
+  font-weight: 300;
+}
+
+.border-top {
+  padding-top: 25px;
+}
+
+/* ── Timer controls ─────────────────────────────────────── */
+.timer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+
+.joker-controls {
+  margin-top: 1rem;
+}
+
+.joker-controls button {
+  color: rgb(122, 8, 112);
+  border-color: rgba(122, 8, 112, 0.25);
+  box-shadow: none;
+}
+
+.joker-controls button:hover {
+  background: rgba(122, 8, 112, 0.08);
+  color: rgb(122, 8, 112);
+  border-color: rgba(122, 8, 112, 0.4);
+  box-shadow: none;
+}
+
+/* ── Joker timer ────────────────────────────────────────── */
+.joker-timer {
+  font-size: calc(var(--timer-size) * 0.6);
+  color: rgb(122, 8, 112);
+  text-align: center;
+}
+
+.joker-timer p {
+  font-size: clamp(0.875rem, 2vmin, 1.5rem);
+  text-transform: uppercase;
+  margin-bottom: -0.2em;
+  margin-top: 0.2em;
+}
+
+.timer,
+.joker-timer {
+  text-align: center;
+}
+
+.timer.bp-overtime {
+  color: #c0392b;
+}
+
+/* ── Logo images ────────────────────────────────────────── */
+.img-grid {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  max-width: 100%;
+}
+
 .img-container {
-    padding: 1rem;
-    display: none; /*js changes it to grid*/
-    place-items: center;
-    max-width: 250px;
-    margin: auto;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  max-height: var(--timer-size);
+  max-width: var(--timer-size);
 }
-.img-container::before {
-    content: "";
-    padding-bottom: 100%;
-    display: block;
-    grid-area: 1 / 1 / 2 / 2;
-  }
-  .img-container img{
-    width: 100%;
-    grid-area: 1 / 1 / 2 / 2;
-  }
-.table td, .table th {
 
-    border-top: none !important;
+.img-container img {
+  max-height: var(--timer-size);
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
-.credits{
-    font-weight: 600;
-    text-align: right;
-    
+
+/* ── Misc ───────────────────────────────────────────────── */
+.table td,
+.table th {
+  border-top: none !important;
 }
-.adv{
+
+.credits {
+  font-weight: 600;
+  text-align: right;
+}
+
+
+/* ── Section title in navbar (mobile only) ──────────────── */
+#section-title {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #222;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+/* ── Mobile (≤768 px) ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .container {
+    padding: 0;
+    max-width: 100%;
     width: 100%;
-    float: left;
-}
-.adv img{
-    float:  left;
-}
-.adv p{
-    margin: 10px;
-}
-.container{
-    min-height: 100%;  /* Fallback for browsers do NOT support vh unit */
-    min-height: 100vh; /* These two lines are counted as one :-)       */
-    display: flex;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+
+  .jumbotron {
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0 !important;
+    overflow: hidden;
     flex-direction: column;
-}
-nav{
-    width: 100%;
-	margin-top: 5%;
-}
-.img-settings img{
-	width: 100px;
-}
-.media{
-	display: flex;
-	align-items: center;
-}
-.media-body{
-	line-height: 0.3rem;
-	padding-left: 0.5rem;
-	color: rgba(1,1,1,0.75);
-}
-.media-body small{
-	font-size: 70%;
-}
-.media-body h4{
-	font-size: 1.2rem;
-	padding: 0;
-	margin: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  /* Nav sits naturally inside the rectangle on mobile */
+  .jumbotron nav {
+    position: static;
+    flex: 0 0 auto;
+  }
+
+  /* Content sections fill remaining height and centre their children */
+  .jumbotron > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+
+  .panel-header {
+    display: none;
+  }
+
+  .panel-body {
+    overflow-y: auto;
+    padding: 1rem;
+  }
+
+  #settings,
+  #help {
+    padding: 0;
+    align-items: stretch;
+  }
 }

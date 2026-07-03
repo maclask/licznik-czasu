@@ -1,277 +1,290 @@
 <!doctype html>
-
 <html>
 <head>
   <title>Licznik czasu</title>
   <link rel="stylesheet" href="assets/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="assets/css/style.css"/>
-  <link href="assets/css/all.css" rel="stylesheet"> 
+  <link rel="stylesheet" href="assets/css/all.css">
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 </head>
 
 <body>
-
   <div class="container">
 
-  <nav class="navbar navbar-expand ">
-<!--
-<a href="#">  
-	<div class="justify-content-start media patron" data-toggle="tooltip" title="Baner zasponsorował Filip Kamiński, zwycięzca licytacji charytatywnej KSM">
-		<img src="img/icon-heart.svg" width="28" height="28" class="icon" alt="Serce"/>
-		<div class="media-body">
-			<small class="title">Wesprzyj fundacje </small>
-			<h4 class="name">Fundacja charytatywna</h4>
-			<small class="description"></small>
-		</div>
-	</div>
-</a>
--->
-<div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
-  <ul class="navbar-nav">
-    <li class="nav-item active" data-toggle="tooltip" title="Licznik">
-      <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.svg" width="28" height="28" class="icon" alt="Licznik"/></a>
-    </li>
-    <li class="nav-item" data-toggle="tooltip" title="Ustawienia">
-      <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.svg" width="28" height="28" class="icon" alt="Ustawienia"/></a>
-    </li>
-    <li class="nav-item" data-toggle="tooltip" title="Pomoc">
-      <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
-    </li>
-    <li class="nav-item" data-toggle="tooltip" title="Pełen ekran">
-      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.svg" width="24" height="24" class="icon" alt="Pełen ekran"/></a>
-    </li>
-    
-  </ul>
-</div>
-</nav>
+    <div class="alert alert-success">
+      <strong>Zrobiono!</strong>
+    </div>
 
+    <div class="jumbotron">
 
-  
-  <div class="alert alert-success">
-    <strong>Zrobiono!</strong>
+      <nav class="navbar navbar-expand">
+        <span id="section-title" class="navbar-text d-md-none"></span>
+        <div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
+          <ul class="navbar-nav">
+            <li class="nav-item active" data-toggle="tooltip" title="Licznik">
+              <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.svg" width="28" height="28" class="icon" alt="Licznik"/></a>
+            </li>
+            <li class="nav-item" data-toggle="tooltip" title="Ustawienia">
+              <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.svg" width="28" height="28" class="icon" alt="Ustawienia"/></a>
+            </li>
+            <li class="nav-item" data-toggle="tooltip" title="Pomoc">
+              <a class="nav-link" id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
+            </li>
+            <li class="nav-item" data-toggle="tooltip" title="Pełen ekran">
+              <a class="nav-link full-screen-btn" href="#"><img src="img/icon-fullscreen.svg" width="24" height="24" class="icon" alt="Pełen ekran"/></a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <div id="timer">
+        <div class="row justify-content-md-center">
+          <h2 id="teza" class="text-uppercase"></h2>
+        </div>
+        <div class="row justify-content-md-center">
+          <div class="col-lg"></div>
+          <div class="col-lg timer">
+            <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
+          </div>
+          <div class="col-lg">
+            <div class="joker-timer">
+              <p>Joker</p>
+              <span class="joker-minutes text-monospace">0</span>:<span class="joker-seconds text-monospace">00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row img-grid justify-content-md-center">
+          <div class="img-container">
+            <img class="img1" src="img/idp.png" alt="logo1"/>
+          </div>
+          <div class="img-container">
+            <img class="img2" src="img/idp.png" alt="logo2"/>
+          </div>
+        </div>
+
+        <div class="row justify-content-md-center">
+          <div class="timer-controls">
+            <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
+            <button type="button" class="btn btn-outline-secondary reset">Reset</button>
+            <button type="button" class="btn btn-outline-secondary ad-vocem oxford-only">Ad vocem</button>
+            <button type="button" class="btn btn-outline-secondary joker oxford-joker">Joker</button>
+          </div>
+        </div>
+        <div class="row justify-content-md-center">
+          <div class="timer-controls joker-controls">
+            <button type="button" class="btn btn-outline-secondary joker-start-stop">Start/stop</button>
+            <button type="button" class="btn btn-outline-secondary joker-reset">Reset</button>
+            <button type="button" class="btn btn-outline-secondary joker-off">Zakończ</button>
+          </div>
+        </div>
+      </div>
+      <!--end of timer-->
+
+      <div id="settings">
+        <div class="panel-header">
+          <h2>Ustawienia</h2>
+        </div>
+
+        <div class="panel-body">
+          <div class="settings-rows">
+
+            <!-- Format debaty -->
+            <div class="row no-gutters align-items-center s-row">
+              <div class="col-12 col-md-auto s-label">Format debaty</div>
+              <div class="col-12 col-md-auto">
+                <div class="s-format-radios">
+                  <div class="custom-control custom-radio">
+                    <input type="radio" id="formatOxford" name="debateFormat" class="custom-control-input debate-format" value="oxford" checked>
+                    <label class="custom-control-label" for="formatOxford">Oksfordzka</label>
+                  </div>
+                  <div class="custom-control custom-radio">
+                    <input type="radio" id="formatBP" name="debateFormat" class="custom-control-input debate-format" value="bp">
+                    <label class="custom-control-label" for="formatBP">Brytyjska Parlamentarna</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Teza -->
+            <div class="row no-gutters align-items-start s-row">
+              <div class="col-12 col-md-auto s-label s-label-top">Teza</div>
+              <div class="col-12 col-md">
+                <textarea class="input-teza form-control" id="teza-input" name="teza" rows="3" placeholder="wpisz tezę debaty…"></textarea>
+              </div>
+            </div>
+
+            <!-- Czas mowy / Ad vocem / Test dźwięku + Checkboxes -->
+            <div class="row no-gutters s-row">
+              <div class="col-12 col-md">
+                <div class="s-setting-line">
+                  <span class="s-label">Czas mowy</span>
+                  <input class="input-minuty form-control" id="minuty" name="minuty" value="05:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                </div>
+                <div class="s-setting-line oxford-setting">
+                  <span class="s-label">Ad vocem</span>
+                  <input class="input-minuty-advocem form-control" id="minuty-advocem" name="minuty-advocem" value="00:30" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                </div>
+                <div class="s-setting-line">
+                  <span class="s-label">Test dźwięku</span>
+                  <div class="s-btn-group">
+                    <button type="button" class="btn btn-secondary btn-sm sound-test1">Czas chroniony</button>
+                    <button type="button" class="btn btn-secondary btn-sm sound-test2">Koniec czasu</button>
+                  </div>
+                </div>
+              </div>
+              <div class="col-12 col-md s-check-col">
+                <div class="custom-control custom-checkbox">
+                  <input type="checkbox" class="custom-control-input controls-checkbox" id="customCheck1" checked>
+                  <label class="custom-control-label" for="customCheck1">Pokaż przyciski</label>
+                </div>
+                <div class="custom-control custom-checkbox oxford-setting">
+                  <input type="checkbox" class="custom-control-input joker-checkbox" id="jokerCheck">
+                  <label class="custom-control-label" for="jokerCheck">Włącz Jokera</label>
+                </div>
+                <div class="custom-control custom-checkbox">
+                  <input type="checkbox" class="custom-control-input sound-switch" id="customCheck2" checked>
+                  <label class="custom-control-label" for="customCheck2">Włącz dźwięki</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Logo 1 -->
+            <div class="row no-gutters align-items-start s-row">
+              <div class="col-12 col-md-auto s-label s-label-top">Logo 1</div>
+              <div class="col-12 col-md">
+                <div class="logo-drop-zone" data-logo-no="1">
+                  <div class="dropdown dropdown1">
+                    <button type="button" class="btn btn-secondary btn-sm dropdown-toggle" id="dropdownMenuButton1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Wybierz z listy</button>
+                    <div class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+                      <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+                      <a class="dropdown-item" data="tld.png" href="#">TLD</a>
+                      <a class="dropdown-item" data="idp.png" href="#">IDP</a>
+                      <a class="dropdown-item" data="g5.jpg" href="#">G5</a>
+                      <a class="dropdown-item" data="WTDO.png" href="#">WTDO</a>
+                      <a class="dropdown-item" data="mpdo.png" href="#">MPDO</a>
+                      <a class="dropdown-item" data="PPDO.png" href="#">PPDO</a>
+                      <a class="dropdown-item" data="ksm.png" href="#">KSM</a>
+                      <a class="dropdown-item" data="ng.png" href="#">Nowy Głos</a>
+                      <a class="dropdown-item" data="#" href="#">brak obrazu</a>
+                    </div>
+                  </div>
+                  <p class="logo-drop-hint">albo przeciągnij grafikę tutaj</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Logo 2 -->
+            <div class="row no-gutters align-items-start s-row">
+              <div class="col-12 col-md-auto s-label s-label-top">Logo 2</div>
+              <div class="col-12 col-md">
+                <div class="logo-drop-zone" data-logo-no="2">
+                  <div class="dropdown dropdown2">
+                    <button type="button" class="btn btn-secondary btn-sm dropdown-toggle" id="dropdownMenuButton2" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Wybierz z listy</button>
+                    <div class="dropdown-menu" aria-labelledby="dropdownMenuButton2">
+                      <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
+                      <a class="dropdown-item" data="tld.png" href="#">TLD</a>
+                      <a class="dropdown-item" data="idp.png" href="#">IDP</a>
+                      <a class="dropdown-item" data="g5.jpg" href="#">G5</a>
+                      <a class="dropdown-item" data="WTDO.png" href="#">WTDO</a>
+                      <a class="dropdown-item" data="mpdo.png" href="#">MPDO</a>
+                      <a class="dropdown-item" data="PPDO.png" href="#">PPDO</a>
+                      <a class="dropdown-item" data="ksm.png" href="#">KSM</a>
+                      <a class="dropdown-item" data="ng.png" href="#">Nowy Głos</a>
+                      <a class="dropdown-item" data="#" href="#">brak obrazu</a>
+                    </div>
+                  </div>
+                  <p class="logo-drop-hint">albo przeciągnij grafikę tutaj</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Thumbnails -->
+            <div class="s-thumbs">
+              <div class="img-container s-thumb-wrap">
+                <img class="img1" src="" alt="logo1">
+              </div>
+              <div class="img-container s-thumb-wrap">
+                <img class="img2" src="" alt="logo2">
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <!--end of panel-body-->
+
+        <audio src="audio/end.mp3" type="audio/mp3" id="endoftime"></audio>
+        <audio src="audio/30s.mp3" type="audio/mp3" id="30stoend"></audio>
+      </div>
+      <!--end of settings-->
+
+      <div id="help">
+        <div class="panel-header">
+          <h2>Pomoc</h2>
+        </div>
+        <div class="panel-body">
+          <p>Jak korzystać z licznika w szybki sposób?</p>
+          <table class="table table-borderless">
+            <thead>
+              <tr>
+                <th>Klawisz</th>
+                <th>Akcja</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>Ustawienie licznika głównego w pozycji startowej</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>Ustawienie licznika ad vocem w pozycji startowej</td>
+              </tr>
+              <tr>
+                <td>Spacja</td>
+                <td>Rozpoczęcia/zapauzowanie liczenia</td>
+              </tr>
+              <tr>
+                <td>j</td>
+                <td>Uruchomienie Jokera</td>
+              </tr>
+              <tr>
+                <td>h</td>
+                <td>Rozpoczęcia/zapauzowanie Jokera</td>
+              </tr>
+              <tr>
+                <td>k</td>
+                <td>Zakończenie Jokera</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="row">
+            <div class="col border-top credits">
+              Repozytorium<br/>
+              <a href="https://github.com/maclask/licznik-czasu">github.com/maclask/licznik-czasu</a><br/>
+              &copy; Maciej Laskowski
+            </div>
+          </div>
+          <div class="row">
+            <div class="col border-top credits">
+              Ikony<br/>
+              &copy; 2018 Steve Schoger
+            </div>
+          </div>
+        </div>
+      </div>
+      <!--end of help-->
+
+    </div>
+    <!--end of jumbotron-->
+
   </div>
-  
+  <!--end of container-->
 
-
-
-  
-<div class="jumbotron" >
-
-<div id="timer">
-  <div class="row justify-content-md-center">
-  <h2 id="teza" class="text-uppercase"></h2>  
-  </div>
-  <div class="row justify-content-md-center">
-  <div class="col-lg"></div>
-    <div class="col-lg timer"><span class="timer-minutes  text-monospace ">0</span>:<span class="timer-seconds text-monospace ">00</span></div>
-    <div class="col-lg"><div class="joker-timer"><p>Joker</p><span class="joker-minutes text-monospace ">0</span>:<span class="joker-seconds text-monospace ">00</span></div></div>
-  </div>
-
-  <div class="row img-grid justify-content-md-center">
-    <div class="img-container">
-      <img class="img1" src="img/idp.jpg" alt="logo1" />
-    </div>
-    <div class="img-container">
-      <img class="img2" src="img/idp.jpg" alt="logo1" />
-    </div>
-  </div>
-
-
-  <div class="row justify-content-md-center">
-    <div class="btn-group timer-controls">
-    <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
-    <button type="button" class="btn btn-outline-secondary reset">Reset</button>
-    <button type="button" class="btn btn-outline-secondary ad-vocem">Ad vocem</button>
-    <button type="button" class="btn btn-outline-secondary joker">Joker</button>
-  </div> 
-  </div>
-  <div class="row justify-content-md-center">
-        <div class="btn-group timer-controls joker-controls">
-        <button type="button" class="btn btn-outline-primary joker-start-stop">Start/stop</button>
-        <button type="button" class="btn btn-outline-primary joker-reset">Reset</button>
-        <button type="button" class="btn btn-outline-primary joker-off">Zakończ</button>
-      </div> 
-  </div>
-</div>
- <!--end of timer-->
-<div id="settings">
- 
-<h2>Ustawienia</h2>
- 
- 
-
- 
-<div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania mowy </label></div>
-​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="05:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
-<div class="col-auto"><input type="submit" class="zastosuj-minuty btn btn-outline-secondary" value="Zastosuj"></div>
-</div>
-
-<div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania ad vocem </label></div>
-​<div class="col-auto"><input class="input-minuty-advocem form-control" name="minuty" value="00:30" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
-<div class="col-auto"><input type="submit" class="apply-advocem-time btn btn-outline-secondary" value="Zastosuj"></div>
-</div>
-    
-<div class="row ajustify-content-md-center">
-​​<div class="col-auto"><label for="teza" class="label-settings">Teza </label></div>
-<div class="col-auto"> <textarea type="text" class="input-teza form-control" name="teza" rows="2" value=""></textarea></div>
-<div class="col-auto"><input type="submit" class="zastosuj-teza btn btn-outline-secondary" value="Zastosuj"></div>
-</div>
-
-<div class="row">
-<div class="col-auto">
-<div class="custom-control custom-checkbox">
-  <input type="checkbox" class="custom-control-input  controls-checkbox" id="customCheck1" checked>
-  <label class="custom-control-label" for="customCheck1">Pokaż menu sterujące</label>
-</div>
-</div>
-</div>
-
-<div class="row">
-<div class="col-auto">
-<div class="custom-control custom-checkbox">
-  <input type="checkbox" class="custom-control-input  sound-switch"  id="customCheck2">
-  <label class="custom-control-label" for="customCheck2">Wyłącz dźwięki</label>
-</div>
-</div>
-</div>
-
-<div class="row">
-​​<div class="col-auto"><label for="sound-test" class="label-settings">Test dźwięku </label></div>
-​​<div class="col-auto"><button class="sound-test1 btn btn-outline-secondary">30s do końca</button></div>
-​​<div class="col-auto"><button class="sound-test2 btn btn-outline-secondary">Koniec czasu</button></div>
-</div>
-
-<div class="row border-top sjustify-content-md-center">
-    ​​<div class="col-lg-6">
-    <form id="form1" runat="server">
-     <div class="custom-file">
-  <input type="file" class="custom-file-input imgInp" id="imgInp1" lang="pl">
-  <label class="custom-file-label" for="customFileLang">Wybierz obraz z dysku</label>
-Lub
-<div class="dropdown1 ">
-  <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-      Wybierz obraz z listy
-  </button>
-<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
-<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-<a class="dropdown-item" data="idp.png" href="#">IDP</a>
-<a class="dropdown-item" data="g5.jpg">G5</a>
-<a class="dropdown-item" data="WTDO.png">WTDO</a>
-<a class="dropdown-item" data="mpdo.png">MPDO</a>
-<a class="dropdown-item" data="ppdo.png">PPDO</a>
-<a class="dropdown-item" data="ksm.png">KSM</a>
-<a class="dropdown-item" data="ng.png">Nowy Głos</a>
-<a class="dropdown-item" data="#">brak obrazu</a>6
-</div>
-</div>
-         
-</div>
-    </form>
-    </div>
-    <div class="col-lg-6">
-    <form id="form2" runat="server">
-           <div class="custom-file">
-  <input type="file" class="custom-file-input imgInp" id="imgInp2" lang="pl">
-  <label class="custom-file-label" for="customFileLang">Wybierz drugi obraz</label>
-               Lub
-<div class="dropdown2 ">
-  <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-      Wybierz obraz z listy
-  </button>
-<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
-<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-<a class="dropdown-item" data="idp.png" href="#">IDP</a>
-<a class="dropdown-item" data="g5.jpg">G5</a>
-<a class="dropdown-item" data="WTDO.png">WTDO</a>
-<a class="dropdown-item" data="mpdo.png">MPDO</a>
-<a class="dropdown-item" data="ppdo.png">PPDO</a>
-<a class="dropdown-item" data="ksm.png">KSM</a>
-<a class="dropdown-item" data="ng.png">Nowy Głos</a>
-<a class="dropdown-item" data="#">brak obrazu</a>6
-</div>
-</div>
-</div>
-    </form>
-    </div>
-</div>
-  <div class="row img-grid justify-content-md-center">
-    <div class="img-container img-settings">
-      <img class="img1" src="img/idp.jpg" alt="logo1" />
-    </div>
-    <div class="img-container img-settings">
-      <img class="img2" src="img/idp.jpg" alt="logo1" />
-    </div>
-  </div>
-
-    <audio src="audio/end.mp3" type="audio/mp3" alt="koniec czasu - dźwięk" id="endoftime"></audio>
-    <audio src="audio/30s.mp3" type="audio/mp3" alt="30s do końca - dźwięk" id="30stoend"></audio>
-
-</div>
- <!--end of settings-->
-<div id="help">
-<h2>Pomoc</h2>
-  <p>Jak korzystać z licznika w szybki sposób?</p>            
-  <table class="table table-borderless">
-    <thead>
-      <tr>
-        <th>Klawisz</th>
-        <th>Akcja</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>1</td>
-        <td>Ustawienie licznika głównego w pozycji startowej</td>
-      </tr>
-      <tr>
-        <td>2</td>
-        <td>Ustawienie licznika ad vocem w pozycji startowej</td>
-      </tr>
-      <tr>
-        <td>Spacja</td>
-        <td>Rozpoczęcia/zapauzowanie liczenia</td>
-      </tr>
-      <tr>
-        <td>j</td>
-        <td>Rozpoczęcia odliczania asynchronicznego zegara Jokera</td>
-      </tr>
-        <tr>
-        <td>h</td>
-        <td>Rozpoczęcia/zapauzowanie Jokera</td>
-      </tr>
-        <tr>
-        <td>k</td>
-        <td>Zakończenie Jokera</td>
-      </tr>
-    </tbody>
-  </table>
-  <div class="row">
-    <div class="col border-top credits">
-     Repozytorium<br/>
-     <a href="https://github.com/maclask/licznik-czasu">github.com/maclask/licznik-czasu</a><br/>
-     &copy; Maciej Laskowski
-    </div>
-	</div>
-	  <div class="row">
-	<div class="col border-top credits">
-     Ikony<br/>
-     &copy; 2018 Steve Schoger
-    </div>
-</div>
-
-</div>
-
-</div>
- <!--end of timer-->
- </div>
-  <!--end of jumbotron-->
- <script src="assets/js/popper.min.js"></script>
- <script src="assets/js/jquery3.3.1.min.js"></script>
- <script src="assets/js/bootstrap.bundle.min.js"></script>
- <script src="assets/js/stoper.js"></script>
+  <script src="assets/js/popper.min.js"></script>
+  <script src="assets/js/jquery3.3.1.min.js"></script>
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/stoper.js"></script>
 </body>
 </html>
