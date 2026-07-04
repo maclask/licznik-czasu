@@ -515,7 +515,6 @@ body.is-slave .master-sharing { display: none; }
 body.is-slave .slave-sharing { display: block; }
 
 /* Sharing columns */
-.sharing-col { padding: 0 1.5rem; }
 .sharing-col-title {
   font-size: 1rem;
   font-weight: 300;
@@ -561,7 +560,7 @@ body.is-slave .slave-sharing { display: block; }
   max-width: 440px;
   margin: 0 auto 1rem;
   aspect-ratio: 16 / 9;
-  background: #fff;
+  background: #fafafa;
   border: 2px solid rgba(0, 0, 0, 0.18);
   border-radius: 14px;
   overflow: hidden;
@@ -864,4 +863,46 @@ body.is-debate #sharing-link-item { display: none !important; }
     max-width: none !important;
     flex: 1;
   }
+}
+
+/* ── Glassmorphism Theme ────────────────────────────────── */
+body.glassmorphic {
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1) 0%, rgba(200, 200, 255, 0.05) 100%), linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  backdrop-filter: blur(10px);
+}
+
+body.glassmorphic .jumbotron {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border-radius: 19px !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+body.glassmorphic .btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #333;
+  backdrop-filter: blur(4px);
+}
+
+body.glassmorphic .btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+body.glassmorphic .btn-primary {
+  background: rgba(102, 126, 234, 0.7);
+  border: 1px solid rgba(102, 126, 234, 0.5);
+  color: white;
+}
+
+body.glassmorphic .btn-primary:hover {
+  background: rgba(102, 126, 234, 0.9);
+}
+
+body.glassmorphic .form-control,
+body.glassmorphic .form-control-sm {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(4px);
 }

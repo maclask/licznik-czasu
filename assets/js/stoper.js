@@ -626,6 +626,16 @@
         }
     });
 
+    // Style theme switcher
+    $('#style-select').change(function () {
+        var theme = $(this).val();
+        if (theme === 'glassmorphic') {
+            $('body').addClass('glassmorphic');
+        } else {
+            $('body').removeClass('glassmorphic');
+        }
+    });
+
     $('.full-screen-btn').click(toggleFullscreen);
 
     $('#timer-link').click(function () { navigate('timer'); });
