@@ -72,11 +72,18 @@ body {
   font-size: var(--timer-size);
 }
 
-#timer .timer {
+#timer .timer,
+.debate-stage .timer {
   scale: 100%;
 }
 
-#teza {
+/* Debate stage reuses the timer clock; give it the same base size */
+.debate-stage .timer {
+  font-size: var(--timer-size);
+}
+
+#teza,
+.teza-text {
   text-align: center;
   font-size: clamp(1rem, 2.5vmin, 2rem);
 }
@@ -513,6 +520,64 @@ body.is-slave .slave-sharing { display: block; }
 }
 .sharing-col-join { border-left: 1px solid rgba(0, 0, 0, 0.07); padding-left: 3rem; }
 .session-join-error { display: none; }
+
+/* ── Debata online ──────────────────────────────────────── */
+#debata {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 2rem 1.5rem;
+}
+
+.debate-setup-body,
+.debate-join-body {
+  padding: 1.4rem 1.5rem;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.debata-video {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto 1rem;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.debata-video:empty { display: none; }
+
+.debata-video .vdo-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.debate-roster-wrap {
+  max-width: 640px;
+  margin: 1.25rem auto 0;
+  width: 100%;
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.roster-name { font-weight: 500; }
+.roster-role { color: #6c757d; font-size: 0.9rem; }
+.roster-side { width: auto; margin-left: auto; }
+
+/* Debate participants only ever need the debate view */
+body.is-debate #settings-link,
+body.is-debate #sharing-link-item { display: none !important; }
 
 /* ── Mobile (≤768 px) ───────────────────────────────────── */
 @media (max-width: 768px) {

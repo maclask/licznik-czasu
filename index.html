@@ -40,6 +40,13 @@
                 </svg>
               </a>
             </li>
+            <li class="nav-item" id="debata-link-item" data-toggle="tooltip" title="Debata online">
+              <a class="nav-link" id="debata-link" href="#">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="black" style="width:26px;height:26px" class="icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h8.25a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H4.5A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+              </a>
+            </li>
             <li class="nav-item" data-toggle="tooltip" title="Pomoc">
               <a class="nav-link" id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
             </li>
@@ -52,7 +59,7 @@
 
       <div id="timer">
         <div class="row justify-content-md-center">
-          <h2 id="teza" class="text-uppercase"></h2>
+          <h2 id="teza" class="text-uppercase teza-text"></h2>
         </div>
         <div class="row justify-content-md-center">
           <div class="col-lg"></div>
@@ -363,6 +370,97 @@
         </div>
       </div>
       <!--end of sharing-->
+
+      <div id="debata">
+
+        <!-- Master: utwórz pokój debaty -->
+        <div class="debate-setup">
+          <div class="panel-header"><h2>Debata online</h2></div>
+          <div class="debate-setup-body">
+            <p class="sharing-col-title">Utwórz pokój debaty</p>
+            <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+              <div class="input-group" style="width:auto">
+                <input type="text" class="form-control debate-name-input" placeholder="nazwa pokoju" style="width:130px">
+                <div class="input-group-append">
+                  <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
+                </div>
+              </div>
+              <button type="button" class="btn btn-secondary debate-create-btn" disabled>Utwórz debatę</button>
+            </div>
+            <div class="debate-links mt-2" style="display:none">
+              <div class="input-group">
+                <input type="text" class="form-control debate-link-val" readonly>
+                <div class="input-group-append">
+                  <button class="btn btn-outline-secondary debate-copy-btn" type="button">Kopiuj</button>
+                </div>
+              </div>
+              <div id="debate-qr" class="mt-2 d-flex justify-content-center"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Uczestnik: formularz dołączania -->
+        <div class="debate-join" style="display:none">
+          <div class="panel-header"><h2>Dołącz do debaty</h2></div>
+          <div class="debate-join-body">
+            <div class="s-setting-line">
+              <span class="s-label">Imię</span>
+              <input type="text" class="form-control debate-join-name" placeholder="Twoje imię" maxlength="40" autocomplete="off">
+            </div>
+            <div class="s-setting-line">
+              <span class="s-label">Rola</span>
+              <select class="form-control debate-join-role" style="width:auto">
+                <option value="debatant">Debatant</option>
+                <option value="sedzia">Sędzia</option>
+                <option value="publika">Publika</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-secondary debate-join-btn">Dołącz</button>
+            <small class="debate-join-error text-danger d-block mt-1"></small>
+          </div>
+        </div>
+
+        <!-- Scena debaty (wideo + zegar + loga + roster) -->
+        <div class="debate-stage" style="display:none">
+          <div class="debata-video"></div>
+
+          <div class="row justify-content-md-center">
+            <h2 class="text-uppercase teza-text"></h2>
+          </div>
+          <div class="row justify-content-md-center">
+            <div class="col-lg"></div>
+            <div class="col-lg timer">
+              <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
+            </div>
+            <div class="col-lg">
+              <div class="joker-timer">
+                <p>Joker</p>
+                <span class="joker-minutes text-monospace">0</span>:<span class="joker-seconds text-monospace">00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="img-grid">
+            <div class="img-container"><img class="img1" src="" alt="logo1"/></div>
+            <div class="img-container"><img class="img2" src="" alt="logo2"/></div>
+            <div class="img-container"><img class="img3" src="" alt="logo3"/></div>
+            <div class="img-container"><img class="img4" src="" alt="logo4"/></div>
+            <div class="img-container"><img class="img5" src="" alt="logo5"/></div>
+            <div class="img-container"><img class="img6" src="" alt="logo6"/></div>
+          </div>
+
+          <div class="row justify-content-md-center">
+            <div class="debate-controls"><!-- Faza 2: przyciski zależne od roli --></div>
+          </div>
+
+          <div class="debate-roster-wrap" style="display:none">
+            <p class="sharing-col-title">Uczestnicy</p>
+            <div class="debate-roster"></div>
+          </div>
+        </div>
+
+      </div>
+      <!--end of debata-->
 
     </div>
     <!--end of jumbotron-->

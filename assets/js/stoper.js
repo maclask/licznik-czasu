@@ -43,6 +43,7 @@
     $('#settings').hide();
     $('#help').hide();
     $('#sharing').hide();
+    $('#debata').hide();
     $('button').focus(function () { this.blur(); });
 
     loadTimeFromInput();
@@ -64,15 +65,16 @@
     }
 
     function renderTimer() {
-        $('#timer').find('.timer-minutes').text(minutes);
-        $('#timer').find('.timer-seconds').text(seconds < 10 ? '0' + seconds : seconds);
+        // Both #timer and the debate stage share the same clock classes
+        $('.timer-minutes').text(minutes);
+        $('.timer-seconds').text(seconds < 10 ? '0' + seconds : seconds);
     }
 
     function renderJoker() {
         var m = Math.floor(jokerSeconds / 60);
         var s = jokerSeconds % 60;
-        $('#timer').find('.joker-minutes').text(m);
-        $('#timer').find('.joker-seconds').text(s < 10 ? '0' + s : s);
+        $('.joker-minutes').text(m);
+        $('.joker-seconds').text(s < 10 ? '0' + s : s);
     }
 
     function popTime() {
@@ -389,9 +391,9 @@
     // --- Navigation ---
 
     function navigate(section) {
-        $('#timer, #settings, #help, #sharing').hide();
+        $('#timer, #settings, #help, #sharing, #debata').hide();
         $('#' + section).show();
-        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '', sharing: 'Udostępnianie' };
+        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '', sharing: 'Udostępnianie', debata: 'Debata online' };
         $('#section-title').text(titles[section] || '');
     }
 
@@ -473,7 +475,7 @@
 
     $('#settings').find(':submit').click(showAlert);
     $('.input-teza').on('input', function () {
-        $('#teza').text($(this).val());
+        $('.teza-text').text($(this).val());
         onStateChange({teza: $(this).val()});
     });
 
@@ -630,6 +632,7 @@
     $('#settings-link').click(function () { navigate('settings'); });
     $('#help-link').click(function () { navigate('help'); });
     $('#sharing-link').click(function () { navigate('sharing'); });
+    $('#debata-link').click(function () { navigate('debata'); });
 
     $(window).keyup(function (e) {
         if ($(e.target).is(':input')) return;
@@ -656,6 +659,13 @@
         'karp','sum','delfin','pingwin','tygrys','lama','panda','lemur',
         'gepard','pelikan','sroka'
     ];
+
+    // Debate (online) state — media via VDO.Ninja, app state via the PeerJS layer above
+    var VDO_BASE = 'https://vdo.ninja/';
+    var debateSessionId = null;   // == PeerJS session id; VDO room is 'licznik' + this
+    var isDebateMaster = false;
+    var debateRoster = [];        // master-side: [{peerId, name, role, side}]
+    var debatePendingJoin = null; // participant: {name, role} queued until masterConn opens
 
     function getFullState() {
         return {
@@ -696,7 +706,7 @@
         // Input values
         if (state.timerValue) $('.input-minuty').val(state.timerValue);
         if (state.adVocemValue) { $('.input-minuty-advocem').val(state.adVocemValue); loadAdVocemFromInput(); }
-        if (state.teza !== undefined) { $('.input-teza').val(state.teza); $('#teza').text(state.teza); }
+        if (state.teza !== undefined) { $('.input-teza').val(state.teza); $('.teza-text').text(state.teza); }
 
         // Checkboxes
         if (state.showControls !== undefined) {
@@ -833,28 +843,34 @@
             $btn.text(msg).prop('disabled', false);
             sessionPeer = null;
         });
-        sessionPeer.on('connection', function(conn) {
-            conn.on('open', function() {
-                sessionConnections.push({conn: conn});
-                conn.send({type: 'init', state: getFullState()});
-                showAlert('Podłączono sesję');
-            });
-            conn.on('data', function(data) {
-                if (data.type === 'settings') {
-                    applyState(data.state);
-                    sessionConnections.forEach(function(c) {
-                        if (c.conn !== conn) {
-                            try { c.conn.send({type: 'state', state: data.state}); } catch(e) {}
-                        }
-                    });
-                }
-            });
-            conn.on('close', function() {
-                sessionConnections = sessionConnections.filter(function(c) { return c.conn !== conn; });
-                showAlert('Odłączono sesję');
-            });
-        });
+        sessionPeer.on('connection', handleMasterConnection);
     });
+
+    // Shared master-side connection handling (plain sharing + online debate)
+    function handleMasterConnection(conn) {
+        conn.on('open', function() {
+            sessionConnections.push({conn: conn});
+            conn.send({type: 'init', state: getFullState()});
+            showAlert('Podłączono sesję');
+        });
+        conn.on('data', function(data) {
+            if (data.type === 'settings') {
+                applyState(data.state);
+                sessionConnections.forEach(function(c) {
+                    if (c.conn !== conn) {
+                        try { c.conn.send({type: 'state', state: data.state}); } catch(e) {}
+                    }
+                });
+            } else if (data.type === 'join') {
+                addRosterEntry(conn.peer, data.name, data.role);
+            }
+        });
+        conn.on('close', function() {
+            sessionConnections = sessionConnections.filter(function(c) { return c.conn !== conn; });
+            removeRosterEntry(conn.peer);
+            showAlert('Odłączono sesję');
+        });
+    }
 
     $('.session-copy-btn').click(function() {
         navigator.clipboard.writeText($('.session-link-val').val());
@@ -924,21 +940,174 @@
         });
     });
 
-    // Auto-join if URL contains ?s=sessionName
+    // --- Debata online (VDO.Ninja) ---
+
+    function vdoRoom() { return 'licznik' + debateSessionId; }
+
+    // Strip VDO.Ninja's own UI so the iframe is a bare video tile — all controls
+    // (camera/mic pick, mute, chat) move to the licznik UI in Faza 2 via postMessage.
+    var VDO_CLEAN = '&cleanoutput&hidemenu&nocursor';
+
+    function buildVdoUrl(role, name) {
+        var room = encodeURIComponent(vdoRoom());
+        // Master + publika only watch the mixed scene (no camera/mic prompt, auto-scales
+        // with the number of active publishers). Publika audio-on-request comes in Faza 2.
+        if (role === 'master' || role === 'publika') return VDO_BASE + '?room=' + room + '&scene' + VDO_CLEAN;
+        // Debatant + sędzia publish camera + microphone as room members
+        return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name) + VDO_CLEAN + '&autostart';
+    }
+
+    function embedVdo(url) {
+        var allow = 'camera; microphone; autoplay; fullscreen; display-capture; picture-in-picture';
+        $('.debata-video').html(
+            '<iframe class="vdo-iframe" allow="' + allow + '" src="' + url + '"></iframe>'
+        );
+    }
+
+    function roleLabel(role) {
+        return role === 'sedzia' ? 'Sędzia' : role === 'publika' ? 'Publika' : 'Debatant';
+    }
+
+    function addRosterEntry(peerId, name, role) {
+        debateRoster = debateRoster.filter(function(e) { return e.peerId !== peerId; });
+        debateRoster.push({ peerId: peerId, name: name, role: role, side: null });
+        renderRoster();
+    }
+
+    function removeRosterEntry(peerId) {
+        debateRoster = debateRoster.filter(function(e) { return e.peerId !== peerId; });
+        renderRoster();
+    }
+
+    function renderRoster() {
+        var $r = $('.debate-roster');
+        if (!$r.length) return;
+        $r.empty();
+        if (!debateRoster.length) {
+            $r.append('<p class="text-muted mb-0">Brak uczestników</p>');
+            return;
+        }
+        debateRoster.forEach(function(e) {
+            var $row = $('<div class="roster-row"></div>');
+            $row.append($('<span class="roster-name"></span>').text(e.name));
+            $row.append($('<span class="roster-role"></span>').text(roleLabel(e.role)));
+            if (e.role === 'debatant') {
+                var $sel = $(
+                    '<select class="form-control form-control-sm roster-side">' +
+                        '<option value="">— strona —</option>' +
+                        '<option value="proposition">Propozycja</option>' +
+                        '<option value="opposition">Opozycja</option>' +
+                    '</select>'
+                );
+                $sel.attr('data-peer', e.peerId).val(e.side || '');
+                $row.append($sel);
+            }
+            $r.append($row);
+        });
+    }
+
+    $(document).on('change', '.roster-side', function() {
+        var peerId = String($(this).data('peer'));
+        var val = $(this).val() || null;
+        debateRoster.forEach(function(e) { if (e.peerId === peerId) e.side = val; });
+    });
+
+    // Master: create a debate room
+    $('.debate-name-input').on('input', function() {
+        $(this).val($(this).val().toLowerCase());
+        var val = $(this).val();
+        var wasInvalid = $(this).hasClass('is-invalid');
+        var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
+        $(this).toggleClass('is-invalid', invalid);
+        if (invalid && !wasInvalid) showWarn('Dozwolone tylko litery a–z, A–Z i cyfry');
+        $('.debate-create-btn').prop('disabled', !(val.length > 0 && !invalid));
+    });
+
+    $('.debate-random-btn').click(function() {
+        var name = SESSION_WORDS[Math.floor(Math.random() * SESSION_WORDS.length)];
+        $('.debate-name-input').val(name).trigger('input');
+    });
+
+    $('.debate-create-btn').click(function() {
+        var name = $('.debate-name-input').val().trim().toLowerCase();
+        if (!/^[a-zA-Z0-9]+$/.test(name)) return;
+        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
+
+        var $btn = $(this);
+        $btn.text('Łączenie…').prop('disabled', true);
+
+        sessionPeer = new Peer(name);
+        sessionPeer.on('open', function(id) {
+            debateSessionId = id;
+            isDebateMaster = true;
+            $('body').addClass('is-debate-master');
+            var link = window.location.origin + window.location.pathname + '?s=' + id + '&d=1';
+            $('.debate-link-val').val(link);
+            $('.debate-links').show();
+            $('#debate-qr').empty();
+            new QRCode(document.getElementById('debate-qr'), {text: link, width: 128, height: 128});
+            embedVdo(buildVdoUrl('master'));
+            $('.debate-stage').show();
+            $('.debate-roster-wrap').show();
+            renderRoster();
+            $btn.text('Debata aktywna');
+        });
+        sessionPeer.on('error', function(err) {
+            console.error('[Debata] Master error:', err.type);
+            var msg = err.type === 'unavailable-id' ? 'Nazwa zajęta — wybierz inną' : 'Błąd: ' + err.type;
+            $btn.text(msg).prop('disabled', false);
+            sessionPeer = null;
+        });
+        sessionPeer.on('connection', handleMasterConnection);
+    });
+
+    $('.debate-copy-btn').click(function() {
+        navigator.clipboard.writeText($('.debate-link-val').val());
+    });
+
+    // Participant: submit name + role, then join VDO room and announce to master
+    $('.debate-join-btn').click(function() {
+        var name = $('.debate-join-name').val().trim();
+        var role = $('.debate-join-role').val();
+        if (!name) { $('.debate-join-error').text('Podaj imię').show(); return; }
+        $('.debate-join-error').hide();
+
+        $('body').addClass('role-' + role);
+        embedVdo(buildVdoUrl(role, name));
+        $('.debate-join').hide();
+        $('.debate-stage').show();
+
+        if (masterConn && masterConn.open) {
+            try { masterConn.send({type: 'join', name: name, role: role}); } catch(e) {}
+        } else {
+            debatePendingJoin = {name: name, role: role};
+        }
+    });
+
+    // Auto-join if URL contains ?s=sessionName (plain viewer or debate participant)
     (function() {
         var params = new URLSearchParams(window.location.search);
         var s = (params.get('s') || '').toLowerCase();
         if (!s || !/^[a-z0-9]+$/.test(s)) return;
+        var isDebate = params.get('d') === '1';
 
         isSlaveSession = true;
         $('body').addClass('is-slave');
         $('.timer-controls').hide();
 
-        var slaveUrl = window.location.href;
-        $('.slave-session-link-val').val(slaveUrl);
-        new QRCode(document.getElementById('slave-qr'), {text: slaveUrl, width: 256, height: 256});
+        if (isDebate) {
+            debateSessionId = s;
+            $('body').addClass('is-debate');
+            navigate('debata');
+            $('.debate-setup').hide();
+            $('.debate-join').show();
+        } else {
+            var slaveUrl = window.location.href;
+            $('.slave-session-link-val').val(slaveUrl);
+            new QRCode(document.getElementById('slave-qr'), {text: slaveUrl, width: 256, height: 256});
+        }
 
-        console.log('[Session] Joining session:', s);
+        console.log('[Session] Joining session:', s, isDebate ? '(debata)' : '');
         $('.session-status').text('Łączenie z sesją…').show();
 
         var peer = new Peer();
@@ -948,7 +1117,11 @@
             masterConn.on('open', function() {
                 console.log('[Session] Connected to master!');
                 $('.session-status').hide();
-                showAlert('Połączono z sesją');
+                if (!isDebate) showAlert('Połączono z sesją');
+                if (debatePendingJoin) {
+                    try { masterConn.send({type: 'join', name: debatePendingJoin.name, role: debatePendingJoin.role}); } catch(e) {}
+                    debatePendingJoin = null;
+                }
             });
             masterConn.on('data', function(data) {
                 if (data.type === 'init' || data.type === 'state') applyState(data.state);
