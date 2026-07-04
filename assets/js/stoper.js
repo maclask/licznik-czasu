@@ -22,6 +22,7 @@
     // BP-specific state
     var bpBell1Rung = false;  // 1 min after start
     var bpBell2Rung = false;  // 1 min before end
+    var isAdVocem = false;
     var bpOvertimeRunning = false;
     var bpOvertimeSecs = 15;  // remaining overtime seconds (updated on pause)
     var bpOvertimeStartedAt;
@@ -30,6 +31,7 @@
     var onStateChange = function(delta) {};  // no-op until session active
     var applyingState = false;              // prevents echo-loop in applyState
     var logoSrcs = [null, null];            // tracks active logo srcs independently of DOM visibility
+    var MAX_LOGOS = 6;
 
     // --- Init ---
 
@@ -139,7 +141,7 @@
         // Format-specific bells
         if (soundEnabled) {
             if (currentFormat === 'oxford') {
-                if (remaining === 30) playDingSound();
+                if (!isAdVocem && remaining === 30) playDingSound();
             } else {
                 // BP: 1 min after start, 1 min before end
                 var elapsedSecs = timerStartSeconds - remaining;
@@ -210,6 +212,7 @@
         bpOvertimeSecs = 15;
         bpBell1Rung = false;
         bpBell2Rung = false;
+        isAdVocem = false;
         $('.timer').removeClass('bp-overtime');
         $('.start-stop').text('Start');
         loadTimeFromInput();
@@ -221,6 +224,7 @@
         clearInterval(timerInterval);
         timerRunning = false;
         bpOvertimeRunning = false;
+        isAdVocem = true;
         $('.timer').removeClass('bp-overtime');
         $('.start-stop').text('Start');
         minutes = adVocemMinutes;
@@ -336,19 +340,50 @@
         } else {
             $('.img' + no).attr('src', src).parent().css('display', 'flex');
         }
-        if (!applyingState) {
-            var d = {};
-            d['logo' + no] = src || null;
-            onStateChange(d);
+        var $slot = $('#logo-slots .logo-slot[data-logo-no="' + no + '"]');
+        if (src) {
+            $slot.find('.logo-slot-preview').attr('src', src);
+            $slot.addClass('logo-slot--active');
+        } else {
+            $slot.removeClass('logo-slot--active');
+            $slot.find('.logo-slot-preview').attr('src', '');
         }
+        var activeCount = logoSrcs.filter(function (s) { return s !== null; }).length;
+        $('.img-grid').attr('data-count', activeCount);
+        if (!applyingState) onStateChange({ logos: logoSrcs.slice() });
     }
 
-    function readImageFile(input, no) {
-        if (input.files && input.files[0]) {
-            var reader = new FileReader();
-            reader.onload = function (e) { setImage(e.target.result, no); };
-            reader.readAsDataURL(input.files[0]);
-        }
+    var DROPDOWN_ITEMS_HTML =
+        '<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>' +
+        '<a class="dropdown-item" data="tld.png" href="#">TLD</a>' +
+        '<a class="dropdown-item" data="idp.png" href="#">IDP</a>' +
+        '<a class="dropdown-item" data="g5.jpg" href="#">G5</a>' +
+        '<a class="dropdown-item" data="WTDO.png" href="#">WTDO</a>' +
+        '<a class="dropdown-item" data="mpdo.png" href="#">MPDO</a>' +
+        '<a class="dropdown-item" data="PPDO.png" href="#">PPDO</a>' +
+        '<a class="dropdown-item" data="ksm.png" href="#">KSM</a>' +
+        '<a class="dropdown-item" data="ng.png" href="#">Nowy Głos</a>' +
+        '<a class="dropdown-item" data="#" href="#">brak obrazu</a>';
+
+    function createSlotHtml(no) {
+        return '<div class="logo-drop-zone logo-slot" data-logo-no="' + no + '">' +
+            '<div class="logo-slot-controls">' +
+              '<div class="dropdown dropdown' + no + '">' +
+                '<button type="button" class="btn btn-secondary btn-sm dropdown-toggle" ' +
+                        'id="dropdownMenuButton' + no + '" data-toggle="dropdown" ' +
+                        'aria-haspopup="true" aria-expanded="false">Wybierz z listy</button>' +
+                '<div class="dropdown-menu" aria-labelledby="dropdownMenuButton' + no + '">' +
+                  DROPDOWN_ITEMS_HTML +
+                '</div>' +
+              '</div>' +
+              '<button type="button" class="btn btn-outline-secondary btn-sm logo-file-btn">Wybierz z dysku</button>' +
+              '<input type="file" accept="image/*" class="logo-file-input d-none">' +
+            '</div>' +
+            '<img class="logo-slot-preview" src="" alt="">' +
+            '<div class="logo-change-overlay">kliknij by zmienić obraz</div>' +
+            '<p class="logo-drop-hint">lub przeciągnij / wklej (Ctrl+V)</p>' +
+            '<button type="button" class="logo-remove-btn" title="Usuń logo">&times;</button>' +
+          '</div>';
     }
 
     // --- Navigation ---
@@ -386,6 +421,32 @@
              el.webkitRequestFullscreen || el.msRequestFullscreen).call(el);
         }
     }
+
+    // --- Time input mask (MM:SS) ---
+
+    function applyTimeMask(input) {
+        $(input).on('input', function() {
+            var raw = $(this).val().replace(/\D/g, '').slice(0, 4);
+            if (raw.length >= 3) {
+                $(this).val(raw.slice(0, 2) + ':' + raw.slice(2));
+            } else {
+                $(this).val(raw);
+            }
+        });
+        $(input).on('blur', function() {
+            var parts = $(this).val().split(':');
+            var mm = Math.min(parseInt(parts[0], 10) || 0, 99);
+            var ss = Math.min(parseInt(parts[1], 10) || 0, 59);
+            $(this).val((mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss);
+            $(this).trigger('change');
+        });
+        $(input).on('keydown', function(e) {
+            if (e.key === 'Enter') $(this).blur();
+        });
+    }
+
+    applyTimeMask('.input-minuty');
+    applyTimeMask('.input-minuty-advocem');
 
     // --- Event listeners ---
 
@@ -435,11 +496,89 @@
         onStateChange({jokerEnabled: jokerEnabled});
     });
 
-    $('.dropdown-item').click(function () {
-        var parentClass = $(this).parent().parent().attr('class');
-        var no = parentClass.includes('dropdown1') ? 1 : 2;
+    $(document).on('click', '.dropdown-item', function () {
+        var no = parseInt($(this).closest('.logo-drop-zone').data('logo-no'));
         var imgName = $(this).attr('data');
         setImage(imgName === '#' ? null : 'img/' + imgName, no);
+    });
+
+    $(document).on('click', '.logo-file-btn', function () {
+        $(this).next('.logo-file-input').trigger('click');
+    });
+
+    $(document).on('change', '.logo-file-input', function () {
+        var no = parseInt($(this).closest('.logo-drop-zone').data('logo-no'));
+        var file = this.files[0];
+        if (file && file.type.startsWith('image/')) {
+            var reader = new FileReader();
+            reader.onload = function (evt) { setImage(evt.target.result, no); };
+            reader.readAsDataURL(file);
+            this.value = '';
+        }
+    });
+
+    $('#logo-add-card').click(function () {
+        var nextNo = logoSrcs.length + 1;
+        if (nextNo > MAX_LOGOS) return;
+        logoSrcs.push(null);
+        $(createSlotHtml(nextNo)).insertBefore(this);
+        if (logoSrcs.length >= MAX_LOGOS) $(this).hide();
+    });
+
+    $(document).on('click', '.logo-change-overlay', function () {
+        var no = parseInt($(this).closest('.logo-drop-zone').data('logo-no'));
+        setImage(null, no);
+    });
+
+    $(document).on('click', '.logo-remove-btn', function () {
+        var $slot = $(this).closest('.logo-drop-zone');
+        var no = parseInt($slot.data('logo-no'));
+        $slot.remove();
+        logoSrcs.splice(no - 1, 1);
+        // Re-index remaining slots in settings
+        $('#logo-slots .logo-slot').each(function (i) {
+            var newNo = i + 1;
+            $(this).attr('data-logo-no', newNo).data('logo-no', newNo);
+            $(this).find('.dropdown').removeClass(function (idx, cls) {
+                return (cls.match(/\bdropdown\d+\b/) || []).join(' ');
+            }).addClass('dropdown' + newNo);
+            $(this).find('[id^="dropdownMenuButton"]').attr('id', 'dropdownMenuButton' + newNo);
+            $(this).find('[aria-labelledby^="dropdownMenuButton"]').attr('aria-labelledby', 'dropdownMenuButton' + newNo);
+        });
+        // Refresh all timer images to match shifted array
+        for (var i = 1; i <= MAX_LOGOS; i++) {
+            var src = logoSrcs[i - 1] || null;
+            if (!src) {
+                $('.img' + i).parent().css('display', 'none');
+            } else {
+                $('.img' + i).attr('src', src).parent().css('display', 'flex');
+            }
+        }
+        $('#logo-add-card').show();
+        if (!applyingState) onStateChange({ logos: logoSrcs.slice() });
+    });
+
+    var pasteTargetNo = 1;
+    $(document).on('mouseenter', '.logo-drop-zone', function () {
+        pasteTargetNo = parseInt($(this).data('logo-no'));
+    });
+
+    $(document).on('paste', function (e) {
+        if (!$('#settings').is(':visible')) return;
+        var items = (e.originalEvent.clipboardData || window.clipboardData || {}).items;
+        if (!items) return;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                var file = items[i].getAsFile();
+                if (!file) continue;
+                var reader = new FileReader();
+                (function (no) {
+                    reader.onload = function (evt) { setImage(evt.target.result, no); };
+                })(pasteTargetNo);
+                reader.readAsDataURL(file);
+                break;
+            }
+        }
     });
 
     $(document).on('dragover', '.logo-drop-zone', function (e) {
@@ -540,8 +679,7 @@
             timerValue: $('.input-minuty').val(),
             adVocemValue: $('.input-minuty-advocem').val(),
             teza: $('.input-teza').val(),
-            logo1: logoSrcs[0],
-            logo2: logoSrcs[1]
+            logos: logoSrcs.slice()
         };
     }
 
@@ -586,6 +724,15 @@
         }
 
         // Logos
+        if (state.logos !== undefined) {
+            while (logoSrcs.length < state.logos.length && logoSrcs.length < MAX_LOGOS) {
+                logoSrcs.push(null);
+                $('#logo-add-card').before(createSlotHtml(logoSrcs.length));
+            }
+            if (logoSrcs.length >= MAX_LOGOS) $('#logo-add-card').hide();
+            state.logos.forEach(function (src, i) { setImage(src, i + 1); });
+        }
+        // Backward compat for old session peers
         if (state.logo1 !== undefined) setImage(state.logo1, 1);
         if (state.logo2 !== undefined) setImage(state.logo2, 2);
 
@@ -649,6 +796,7 @@
     };
 
     $('.session-name-input').on('input', function() {
+        $(this).val($(this).val().toLowerCase());
         var val = $(this).val();
         var wasInvalid = $(this).hasClass('is-invalid');
         var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
@@ -663,7 +811,7 @@
     });
 
     $('.session-create-btn').click(function() {
-        var name = $('.session-name-input').val().trim();
+        var name = $('.session-name-input').val().trim().toLowerCase();
         if (!/^[a-zA-Z0-9]+$/.test(name)) return;
         if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
 
@@ -727,6 +875,7 @@
     });
 
     $('.session-join-input').on('input', function() {
+        $(this).val($(this).val().toLowerCase());
         var val = $(this).val();
         var wasInvalid = $(this).hasClass('is-invalid');
         var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
@@ -736,7 +885,7 @@
     });
 
     $('.session-join-btn').click(function() {
-        var name = $('.session-join-input').val().trim();
+        var name = $('.session-join-input').val().trim().toLowerCase();
         if (!/^[a-zA-Z0-9]+$/.test(name)) return;
         var $btn = $(this);
         $btn.text('Sprawdzanie…').prop('disabled', true);
@@ -778,8 +927,8 @@
     // Auto-join if URL contains ?s=sessionName
     (function() {
         var params = new URLSearchParams(window.location.search);
-        var s = params.get('s');
-        if (!s || !/^[a-zA-Z0-9]+$/.test(s)) return;
+        var s = (params.get('s') || '').toLowerCase();
+        if (!s || !/^[a-z0-9]+$/.test(s)) return;
 
         isSlaveSession = true;
         $('body').addClass('is-slave');
