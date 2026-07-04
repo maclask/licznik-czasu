@@ -573,7 +573,63 @@ body.is-slave .slave-sharing { display: block; }
 
 .roster-name { font-weight: 500; }
 .roster-role { color: #6c757d; font-size: 0.9rem; }
-.roster-side { width: auto; margin-left: auto; }
+.roster-side { width: auto; }
+.roster-row .roster-side,
+.roster-row .roster-mute { margin-left: auto; }
+.roster-row .roster-side ~ .roster-mute,
+.roster-row .roster-signal ~ .roster-side { margin-left: 0; }
+.roster-signal {
+  background: #c0392b;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.roster-signal:hover { background: #a5322299; color: #fff; }
+
+/* Debate control groups — shown per role */
+.debate-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+.debate-self-controls,
+.debate-signal-controls,
+.debate-master-controls {
+  display: none;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+}
+body.role-debatant .debate-self-controls,
+body.role-sedzia .debate-self-controls,
+body.publika-audio .debate-self-controls { display: flex; }
+body.role-debatant .debate-signal-controls { display: flex; }
+body.is-debate-master .debate-master-controls { display: flex; }
+/* Publika (audio-only) has no camera to control */
+body.publika-audio .debate-cam-btn,
+body.publika-audio .debate-cam-select { display: none; }
+
+/* Chat */
+.debate-chat {
+  max-width: 640px;
+  margin: 1.25rem auto 0;
+  width: 100%;
+}
+.debate-chat-log {
+  height: 160px;
+  overflow-y: auto;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #fafafa;
+  font-size: 0.95rem;
+}
+.chat-msg { margin-bottom: 0.2rem; word-break: break-word; }
+.chat-msg b { color: #444; }
 
 /* Debate participants only ever need the debate view */
 body.is-debate #settings-link,

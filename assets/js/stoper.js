@@ -664,8 +664,12 @@
     var VDO_BASE = 'https://vdo.ninja/';
     var debateSessionId = null;   // == PeerJS session id; VDO room is 'licznik' + this
     var isDebateMaster = false;
-    var debateRoster = [];        // master-side: [{peerId, name, role, side}]
+    var debateRoster = [];        // master-side: [{peerId, name, role, side, signal, audioAllowed}]
     var debatePendingJoin = null; // participant: {name, role} queued until masterConn opens
+    var debateIframe = null;      // the live VDO.Ninja <iframe> element (for postMessage)
+    var myDebateRole = null;      // participant's own role: sedzia|debatant|publika|master
+    var myDebateName = '';        // participant's own display name
+    var micOn = true, camOn = true; // participant's own local media state (VDO gives no readback)
 
     function getFullState() {
         return {
@@ -863,6 +867,16 @@
                 });
             } else if (data.type === 'join') {
                 addRosterEntry(conn.peer, data.name, data.role);
+            } else if (data.type === 'chat') {
+                var ce = debateRoster.filter(function(e) { return e.peerId === conn.peer; })[0];
+                broadcastChat(ce ? ce.name : 'Uczestnik', data.msg);
+            } else if (data.type === 'signal') {
+                var se = debateRoster.filter(function(e) { return e.peerId === conn.peer; })[0];
+                if (se) {
+                    se.signal = data.kind;
+                    renderRoster();
+                    showAlert((se.name || 'Uczestnik') + (data.kind === 'advocem' ? ': ad vocem' : ': podnosi rękę'));
+                }
             }
         });
         conn.on('close', function() {
@@ -957,11 +971,104 @@
         return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name) + VDO_CLEAN + '&autostart';
     }
 
+    function isPublisherRole(role) { return role === 'debatant' || role === 'sedzia'; }
+
     function embedVdo(url) {
         var allow = 'camera; microphone; autoplay; fullscreen; display-capture; picture-in-picture';
         $('.debata-video').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' + url + '"></iframe>'
         );
+        debateIframe = $('.debata-video iframe').get(0);
+        if (debateIframe) {
+            debateIframe.onload = function() {
+                // Ask VDO for the device list so we can drive camera/mic pickers from our UI
+                if (isPublisherRole(myDebateRole)) {
+                    postToVdo({ getDeviceList: true });
+                    setTimeout(function() { postToVdo({ getDeviceList: true }); }, 3000);
+                }
+            };
+        }
+    }
+
+    function postToVdo(obj) {
+        if (debateIframe && debateIframe.contentWindow) {
+            try { debateIframe.contentWindow.postMessage(obj, '*'); } catch (e) {}
+        }
+    }
+
+    function setMicBtn(on) {
+        micOn = on;
+        $('.debate-mic-btn').text(on ? 'Wycisz mikrofon' : 'Włącz mikrofon');
+    }
+
+    function populateDevices(list) {
+        // VDO.Ninja's deviceList shape varies; accept a flat array or a grouped object
+        var cams = [], mics = [];
+        if (Array.isArray(list)) {
+            list.forEach(function (d) {
+                if (d.kind === 'videoinput') cams.push(d);
+                else if (d.kind === 'audioinput') mics.push(d);
+            });
+        } else if (list && typeof list === 'object') {
+            cams = list.videoinput || list.video || [];
+            mics = list.audioinput || list.audio || [];
+        }
+        fillDeviceSelect($('.debate-cam-select'), cams, 'Kamera');
+        fillDeviceSelect($('.debate-mic-select'), mics, 'Mikrofon');
+    }
+
+    function fillDeviceSelect($sel, devices, fallback) {
+        if (!devices || devices.length < 2) { $sel.hide(); return; }
+        $sel.empty();
+        devices.forEach(function (d, i) {
+            $('<option></option>').val(i + 1).text(d.label || (fallback + ' ' + (i + 1))).appendTo($sel);
+        });
+        $sel.show();
+    }
+
+    function appendChat(name, msg) {
+        var $log = $('.debate-chat-log');
+        if (!$log.length) return;
+        var $m = $('<div class="chat-msg"></div>');
+        $m.append($('<b></b>').text(name + ': '));
+        $m.append(document.createTextNode(msg));
+        $log.append($m);
+        $log.scrollTop($log.prop('scrollHeight'));
+    }
+
+    function broadcastChat(name, msg) {
+        appendChat(name, msg);
+        sessionConnections.forEach(function (c) {
+            try { c.conn.send({ type: 'chat', name: name, msg: msg }); } catch (e) {}
+        });
+    }
+
+    function sendToPeer(peerId, obj) {
+        sessionConnections.forEach(function (c) {
+            if (c.conn.peer === peerId) { try { c.conn.send(obj); } catch (e) {} }
+        });
+    }
+
+    // Participant: apply a command relayed from the master
+    function handleDebateCmd(data) {
+        if (data.action === 'mute') {
+            postToVdo({ mic: false });
+            setMicBtn(false);
+            showWarn('Prowadzący wyciszył Twój mikrofon');
+        } else if (data.action === 'close') {
+            window.alert('Prowadzący zamknął pokój debaty');
+            window.location.replace(window.location.origin + window.location.pathname);
+        } else if (data.action === 'allowAudio') {
+            embedVdo(VDO_BASE + '?room=' + encodeURIComponent(vdoRoom()) +
+                '&label=' + encodeURIComponent(myDebateName) + '&novideo' + VDO_CLEAN + '&autostart');
+            $('body').addClass('publika-audio');
+            setMicBtn(true);
+            showAlert('Prowadzący pozwolił Ci mówić');
+        } else if (data.action === 'revokeAudio') {
+            embedVdo(buildVdoUrl('publika', myDebateName));
+            $('body').removeClass('publika-audio');
+            showWarn('Prowadzący odebrał Ci głos');
+        }
     }
 
     function roleLabel(role) {
@@ -991,6 +1098,12 @@
             var $row = $('<div class="roster-row"></div>');
             $row.append($('<span class="roster-name"></span>').text(e.name));
             $row.append($('<span class="roster-role"></span>').text(roleLabel(e.role)));
+            if (e.signal) {
+                $('<button type="button" class="btn btn-sm roster-signal"></button>')
+                    .attr('data-peer', e.peerId)
+                    .text(e.signal === 'advocem' ? 'AD VOCEM' : '✋ ręka')
+                    .appendTo($row);
+            }
             if (e.role === 'debatant') {
                 var $sel = $(
                     '<select class="form-control form-control-sm roster-side">' +
@@ -1002,6 +1115,16 @@
                 $sel.attr('data-peer', e.peerId).val(e.side || '');
                 $row.append($sel);
             }
+            if (isDebateMaster) {
+                $('<button type="button" class="btn btn-outline-secondary btn-sm roster-mute">Wycisz</button>')
+                    .attr('data-peer', e.peerId).appendTo($row);
+                if (e.role === 'publika') {
+                    $('<button type="button" class="btn btn-outline-secondary btn-sm roster-allow"></button>')
+                        .attr('data-peer', e.peerId)
+                        .text(e.audioAllowed ? 'Odbierz głos' : 'Pozwól mówić')
+                        .appendTo($row);
+                }
+            }
             $r.append($row);
         });
     }
@@ -1010,6 +1133,26 @@
         var peerId = String($(this).data('peer'));
         var val = $(this).val() || null;
         debateRoster.forEach(function(e) { if (e.peerId === peerId) e.side = val; });
+    });
+
+    $(document).on('click', '.roster-mute', function() {
+        sendToPeer(String($(this).data('peer')), { type: 'cmd', action: 'mute' });
+        showAlert('Wyciszono uczestnika');
+    });
+
+    $(document).on('click', '.roster-allow', function() {
+        var peerId = String($(this).data('peer'));
+        var e = debateRoster.filter(function(x) { return x.peerId === peerId; })[0];
+        if (!e) return;
+        e.audioAllowed = !e.audioAllowed;
+        sendToPeer(peerId, { type: 'cmd', action: e.audioAllowed ? 'allowAudio' : 'revokeAudio' });
+        renderRoster();
+    });
+
+    $(document).on('click', '.roster-signal', function() {
+        var peerId = String($(this).data('peer'));
+        debateRoster.forEach(function(e) { if (e.peerId === peerId) e.signal = null; });
+        renderRoster();
     });
 
     // Master: create a debate room
@@ -1040,6 +1183,8 @@
         sessionPeer.on('open', function(id) {
             debateSessionId = id;
             isDebateMaster = true;
+            myDebateRole = 'master';
+            myDebateName = 'Prowadzący';
             $('body').addClass('is-debate-master');
             var link = window.location.origin + window.location.pathname + '?s=' + id + '&d=1';
             $('.debate-link-val').val(link);
@@ -1072,7 +1217,10 @@
         if (!name) { $('.debate-join-error').text('Podaj imię').show(); return; }
         $('.debate-join-error').hide();
 
+        myDebateRole = role;
+        myDebateName = name;
         $('body').addClass('role-' + role);
+        setMicBtn(true);
         embedVdo(buildVdoUrl(role, name));
         $('.debate-join').hide();
         $('.debate-stage').show();
@@ -1082,6 +1230,86 @@
         } else {
             debatePendingJoin = {name: name, role: role};
         }
+    });
+
+    // Participant self-media controls (drive our own iframe via postMessage)
+    $('.debate-mic-btn').click(function() {
+        setMicBtn(!micOn);
+        postToVdo({ mic: micOn });
+    });
+
+    $('.debate-cam-btn').click(function() {
+        camOn = !camOn;
+        postToVdo({ camera: camOn });
+        $(this).text(camOn ? 'Wyłącz kamerę' : 'Włącz kamerę');
+    });
+
+    $('.debate-cam-select').change(function() {
+        postToVdo({ changeVideoDevice: parseInt($(this).val(), 10) });
+    });
+
+    $('.debate-mic-select').change(function() {
+        postToVdo({ changeAudioDevice: parseInt($(this).val(), 10) });
+    });
+
+    // Debater signals to the master
+    function sendSignal(kind) {
+        if (masterConn && masterConn.open) {
+            try { masterConn.send({ type: 'signal', kind: kind }); } catch (e) {}
+            showAlert(kind === 'advocem' ? 'Zgłoszono ad vocem' : 'Podniesiono rękę');
+        }
+    }
+    $('.debate-hand-btn').click(function() { sendSignal('hand'); });
+    $('.debate-advocem-btn').click(function() { sendSignal('advocem'); });
+
+    // Master room controls
+    $('.debate-muteall-btn').click(function() {
+        sessionConnections.forEach(function(c) {
+            try { c.conn.send({ type: 'cmd', action: 'mute' }); } catch (e) {}
+        });
+        showAlert('Wyciszono wszystkich');
+    });
+
+    $('.debate-close-btn').click(function() {
+        if (!window.confirm('Zamknąć pokój debaty? Wszyscy uczestnicy zostaną rozłączeni.')) return;
+        sessionConnections.forEach(function(c) {
+            try { c.conn.send({ type: 'cmd', action: 'close' }); } catch (e) {}
+        });
+        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
+        sessionConnections = [];
+        debateRoster = [];
+        isDebateMaster = false;
+        $('body').removeClass('is-debate-master');
+        $('.debata-video').empty();
+        debateIframe = null;
+        $('.debate-stage').hide();
+        $('.debate-roster-wrap').hide();
+        $('.debate-links').hide();
+        $('.debate-create-btn').text('Utwórz debatę').prop('disabled', false);
+        showAlert('Pokój zamknięty');
+    });
+
+    // Chat (relayed over the PeerJS mesh so it also reaches scene-only audience)
+    function sendChatMessage() {
+        var msg = $('.debate-chat-input').val().trim();
+        if (!msg) return;
+        $('.debate-chat-input').val('');
+        if (isDebateMaster) {
+            broadcastChat(myDebateName, msg);
+        } else if (masterConn && masterConn.open) {
+            try { masterConn.send({ type: 'chat', msg: msg }); } catch (e) {}
+        }
+    }
+    $('.debate-chat-send').click(sendChatMessage);
+    $('.debate-chat-input').keydown(function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+    });
+
+    // Receive device list back from our own VDO iframe
+    window.addEventListener('message', function(e) {
+        if (!debateIframe || e.source !== debateIframe.contentWindow) return;
+        var d = e.data;
+        if (d && d.deviceList) populateDevices(d.deviceList);
     });
 
     // Auto-join if URL contains ?s=sessionName (plain viewer or debate participant)
@@ -1125,6 +1353,8 @@
             });
             masterConn.on('data', function(data) {
                 if (data.type === 'init' || data.type === 'state') applyState(data.state);
+                else if (data.type === 'chat') appendChat(data.name, data.msg);
+                else if (data.type === 'cmd') handleDebateCmd(data);
             });
             masterConn.on('close', function() {
                 $('.session-lost-alert').fadeIn(50);

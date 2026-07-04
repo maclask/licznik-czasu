@@ -450,12 +450,41 @@
           </div>
 
           <div class="row justify-content-md-center">
-            <div class="debate-controls"><!-- Faza 2: przyciski zależne od roli --></div>
+            <div class="debate-controls">
+              <!-- Debatant / sędzia: własne sterowanie mediami (UI VDO jest ukryte) -->
+              <div class="debate-self-controls">
+                <button type="button" class="btn btn-outline-secondary btn-sm debate-mic-btn">Wycisz mikrofon</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm debate-cam-btn">Wyłącz kamerę</button>
+                <select class="form-control form-control-sm debate-cam-select" style="width:auto;display:none"></select>
+                <select class="form-control form-control-sm debate-mic-select" style="width:auto;display:none"></select>
+              </div>
+              <!-- Debatant: sygnały do prowadzącego -->
+              <div class="debate-signal-controls">
+                <button type="button" class="btn btn-outline-secondary btn-sm debate-hand-btn">Podnieś rękę</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm debate-advocem-btn">Ad vocem</button>
+              </div>
+              <!-- Master: sterowanie pokojem -->
+              <div class="debate-master-controls">
+                <button type="button" class="btn btn-outline-secondary btn-sm debate-muteall-btn">Wycisz wszystkich</button>
+                <button type="button" class="btn btn-outline-danger btn-sm debate-close-btn">Zamknij pokój</button>
+              </div>
+            </div>
           </div>
 
           <div class="debate-roster-wrap" style="display:none">
             <p class="sharing-col-title">Uczestnicy</p>
             <div class="debate-roster"></div>
+          </div>
+
+          <div class="debate-chat">
+            <p class="sharing-col-title">Czat</p>
+            <div class="debate-chat-log"></div>
+            <div class="input-group debate-chat-form">
+              <input type="text" class="form-control debate-chat-input" placeholder="napisz wiadomość…" maxlength="300" autocomplete="off">
+              <div class="input-group-append">
+                <button class="btn btn-outline-secondary debate-chat-send" type="button">Wyślij</button>
+              </div>
+            </div>
           </div>
         </div>
 
