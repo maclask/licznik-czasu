@@ -959,22 +959,26 @@
     function vdoRoom() { return 'licznik' + debateSessionId; }
 
     // Strip VDO.Ninja's own UI so the iframe is a bare video tile — all controls
-    // (camera/mic pick, mute, chat) move to the licznik UI in Faza 2 via postMessage.
-    var VDO_CLEAN = '&cleanoutput&hidemenu&nocursor';
+    // (camera/mic pick, mute, chat) live in the licznik UI via postMessage.
+    // &transparent lets the .debata-video container control the background colour.
+    var VDO_CLEAN = '&cleanoutput&hidemenu&transparent';
 
     function buildVdoUrl(role, name) {
         var room = encodeURIComponent(vdoRoom());
-        // Master + publika only watch the mixed scene (no camera/mic prompt, auto-scales
-        // with the number of active publishers). Publika audio-on-request comes in Faza 2.
+        // Master + publika only watch the mixed scene
         if (role === 'master' || role === 'publika') return VDO_BASE + '?room=' + room + '&scene' + VDO_CLEAN;
-        // Debatant + sędzia publish camera + microphone as room members
-        return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name) + VDO_CLEAN + '&autostart';
+        // Debatant + sędzia publish camera + mic. &webcam picks "Join Room with Camera"
+        // and &autostart skips the entry screen (without them, cleanoutput hides the menu
+        // and getUserMedia never fires → dark iframe, no permission prompt).
+        return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name) + '&webcam&autostart' + VDO_CLEAN;
     }
 
     function isPublisherRole(role) { return role === 'debatant' || role === 'sedzia'; }
 
     function embedVdo(url) {
-        var allow = 'camera; microphone; autoplay; fullscreen; display-capture; picture-in-picture';
+        // Camera/microphone must be delegated to the cross-origin vdo.ninja iframe with
+        // "*" (bare "camera" means 'self' only, which silently blocks getUserMedia there).
+        var allow = 'camera *; microphone *; display-capture *; autoplay; fullscreen; picture-in-picture';
         $('.debata-video').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' + url + '"></iframe>'
         );
@@ -1060,7 +1064,7 @@
             window.location.replace(window.location.origin + window.location.pathname);
         } else if (data.action === 'allowAudio') {
             embedVdo(VDO_BASE + '?room=' + encodeURIComponent(vdoRoom()) +
-                '&label=' + encodeURIComponent(myDebateName) + '&novideo' + VDO_CLEAN + '&autostart');
+                '&label=' + encodeURIComponent(myDebateName) + '&webcam&novideo&autostart' + VDO_CLEAN);
             $('body').addClass('publika-audio');
             setMicBtn(true);
             showAlert('Prowadzący pozwolił Ci mówić');
@@ -1192,8 +1196,10 @@
             $('#debate-qr').empty();
             new QRCode(document.getElementById('debate-qr'), {text: link, width: 128, height: 128});
             embedVdo(buildVdoUrl('master'));
+            $('.debate-empty').hide();
             $('.debate-stage').show();
             $('.debate-roster-wrap').show();
+            $('.debate-created-hint').show();
             renderRoster();
             $btn.text('Debata aktywna');
         });
@@ -1284,7 +1290,9 @@
         debateIframe = null;
         $('.debate-stage').hide();
         $('.debate-roster-wrap').hide();
+        $('.debate-empty').show();
         $('.debate-links').hide();
+        $('.debate-created-hint').hide();
         $('.debate-create-btn').text('Utwórz debatę').prop('disabled', false);
         showAlert('Pokój zamknięty');
     });
@@ -1327,7 +1335,7 @@
             debateSessionId = s;
             $('body').addClass('is-debate');
             navigate('debata');
-            $('.debate-setup').hide();
+            $('.debate-empty').hide();
             $('.debate-join').show();
         } else {
             var slaveUrl = window.location.href;

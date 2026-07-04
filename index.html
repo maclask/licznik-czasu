@@ -351,6 +351,32 @@
                 <small class="session-join-error text-danger d-block mt-1"></small>
               </div>
             </div>
+
+            <!-- Utwórz debatę online (pod tworzeniem sesji) -->
+            <div class="debate-setup">
+              <div class="sharing-col debate-create-col">
+                <p class="sharing-col-title">Utwórz debatę online</p>
+                <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                  <div class="input-group" style="width:auto">
+                    <input type="text" class="form-control debate-name-input" placeholder="nazwa pokoju" style="width:130px">
+                    <div class="input-group-append">
+                      <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-secondary debate-create-btn" disabled>Utwórz debatę</button>
+                </div>
+                <div class="debate-links mt-2" style="display:none">
+                  <div class="input-group">
+                    <input type="text" class="form-control debate-link-val" readonly>
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary debate-copy-btn" type="button">Kopiuj</button>
+                    </div>
+                  </div>
+                  <div id="debate-qr" class="mt-2 d-flex justify-content-center"></div>
+                </div>
+                <p class="debate-created-hint" style="display:none">Debata gotowa — przejdź do zakładki „Debata online".</p>
+              </div>
+            </div>
           </div>
 
           <!-- Slave: QR + link -->
@@ -373,30 +399,10 @@
 
       <div id="debata">
 
-        <!-- Master: utwórz pokój debaty -->
-        <div class="debate-setup">
+        <!-- Stan pusty: debatę tworzy się w zakładce Udostępnianie -->
+        <div class="debate-empty">
           <div class="panel-header"><h2>Debata online</h2></div>
-          <div class="debate-setup-body">
-            <p class="sharing-col-title">Utwórz pokój debaty</p>
-            <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
-              <div class="input-group" style="width:auto">
-                <input type="text" class="form-control debate-name-input" placeholder="nazwa pokoju" style="width:130px">
-                <div class="input-group-append">
-                  <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
-                </div>
-              </div>
-              <button type="button" class="btn btn-secondary debate-create-btn" disabled>Utwórz debatę</button>
-            </div>
-            <div class="debate-links mt-2" style="display:none">
-              <div class="input-group">
-                <input type="text" class="form-control debate-link-val" readonly>
-                <div class="input-group-append">
-                  <button class="btn btn-outline-secondary debate-copy-btn" type="button">Kopiuj</button>
-                </div>
-              </div>
-              <div id="debate-qr" class="mt-2 d-flex justify-content-center"></div>
-            </div>
-          </div>
+          <p class="debate-empty-hint">Aby rozpocząć, utwórz debatę w zakładce „Udostępnianie".</p>
         </div>
 
         <!-- Uczestnik: formularz dołączania -->

@@ -530,7 +530,6 @@ body.is-slave .slave-sharing { display: block; }
   padding: 0 2rem 1.5rem;
 }
 
-.debate-setup-body,
 .debate-join-body {
   padding: 1.4rem 1.5rem;
   max-width: 640px;
@@ -538,13 +537,29 @@ body.is-slave .slave-sharing { display: block; }
   width: 100%;
 }
 
+/* Debate creation lives under the session-creation block in Udostępnianie */
+.debate-create-col {
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+}
+.debate-created-hint { color: #6c757d; margin-top: 0.5rem; }
+
+/* Empty state for the Debata tab before a room exists */
+.debate-empty-hint {
+  text-align: center;
+  color: #6c757d;
+  padding: 1.5rem;
+}
+
 .debata-video {
   width: 100%;
-  max-width: 960px;
+  max-width: 440px;
   margin: 0 auto 1rem;
   aspect-ratio: 16 / 9;
-  background: #000;
-  border-radius: 8px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  border-radius: 14px;
   overflow: hidden;
 }
 
