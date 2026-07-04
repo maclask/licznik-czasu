@@ -23,6 +23,7 @@
     var bpBell1Rung = false;  // 1 min after start
     var bpBell2Rung = false;  // 1 min before end
     var isAdVocem = false;
+    var isPrepTime = false;  // master-set prep countdown — no format bells, no BP overtime
     var bpOvertimeRunning = false;
     var bpOvertimeSecs = 15;  // remaining overtime seconds (updated on pause)
     var bpOvertimeStartedAt;
@@ -119,7 +120,7 @@
             renderTimer();
             if (soundEnabled) playEndSound();
 
-            if (currentFormat === 'bp') {
+            if (currentFormat === 'bp' && !isPrepTime) {
                 bpOvertimeRunning = true;
                 bpOvertimeSecs = 15;
                 bpOvertimeStartedAt = Date.now();
@@ -140,8 +141,8 @@
         minutes = Math.floor(remaining / 60);
         seconds = remaining % 60;
 
-        // Format-specific bells
-        if (soundEnabled) {
+        // Format-specific bells — skipped during prep time (it isn't a protected speech)
+        if (soundEnabled && !isPrepTime) {
             if (currentFormat === 'oxford') {
                 if (!isAdVocem && remaining === 30) playDingSound();
             } else {
@@ -215,10 +216,36 @@
         bpBell1Rung = false;
         bpBell2Rung = false;
         isAdVocem = false;
+        isPrepTime = false;
         $('.timer').removeClass('bp-overtime');
+        $('body').removeClass('is-prep-time');
+        $('.debate-prep-btn').removeClass('active').text('Czas przygotowania');
         $('.start-stop').text('Start');
         loadTimeFromInput();
-        onStateChange({timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: 15, minutes: minutes, seconds: seconds, timerValue: $('.input-minuty').val()});
+        onStateChange({timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: 15, isPrepTime: false, minutes: minutes, seconds: seconds, timerValue: $('.input-minuty').val()});
+    }
+
+    // Master: switch the shared clock to a plain prep-time countdown (default 15:00) —
+    // no protected-time bells, no BP overtime. Resetting (or picking a format) returns
+    // to the normal, configured speech time.
+    function startPrepTime() {
+        var parts = $('.input-prep-time').val().split(':');
+        var m = Math.min(parseInt(parts[0], 10) || 0, 99);
+        var s = Math.min(parseInt(parts[1], 10) || 0, 59);
+        clearInterval(timerInterval);
+        timerRunning = false;
+        bpOvertimeRunning = false;
+        bpOvertimeSecs = 15;
+        bpBell1Rung = false;
+        bpBell2Rung = false;
+        isAdVocem = false;
+        isPrepTime = true;
+        minutes = m; seconds = s;
+        $('.timer').removeClass('bp-overtime');
+        $('body').addClass('is-prep-time');
+        $('.start-stop').text('Start');
+        renderTimer();
+        onStateChange({ timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: 15, isPrepTime: true, minutes: minutes, seconds: seconds });
     }
 
     function setAdVocem() {
@@ -449,6 +476,7 @@
 
     applyTimeMask('.input-minuty');
     applyTimeMask('.input-minuty-advocem');
+    applyTimeMask('.input-prep-time');
 
     // --- Event listeners ---
 
@@ -677,11 +705,14 @@
     var debateRoster = [];        // [{peerId, name, zone, index, signal, speaking}]
     var debatePendingJoin = null; // participant: {name} queued until masterConn opens
     var debateIframe = null;      // the live VDO.Ninja <iframe> element (for postMessage)
+    var previewIframe = null;     // the join-screen preview <iframe> (separate instance, own postMessage channel)
+    var joinCamDeviceIndex = null, joinMicDeviceIndex = null; // device picked on the join screen, carried into the live room
     var myPeerId = null;          // this browser's id in the roster ('__master__' for host)
     var myDebateName = '';        // this browser's own display name
     var myEmbedMode = null;       // 'publish' | 'view' — current VDO iframe mode
     var mySignal = null;          // 'hand' | 'advocem' | null (this browser's raised signal)
     var debateAllowControls = false; // master let positioned participants run the clock
+    var debateEditMode = false;   // master: drag & drop seat re-assignment
     var micOn = true, camOn = true;  // this browser's local media state (VDO gives no readback)
     var streamNames = {};         // master: VDO streamID -> label, for the speaking indicator
     var MASTER_ID = '__master__';
@@ -702,6 +733,7 @@
             jokerStartSeconds: jokerStartSeconds,
             jokerSeconds: jokerSeconds,
             currentFormat: currentFormat,
+            isPrepTime: isPrepTime,
             showControls: showControls,
             slaveShowControls: slaveShowControls,
             soundEnabled: soundEnabled,
@@ -721,6 +753,13 @@
             currentFormat = state.currentFormat;
             $('[name="debateFormat"][value="' + currentFormat + '"]').prop('checked', true);
             applyFormat();
+        }
+
+        if (state.isPrepTime !== undefined) {
+            isPrepTime = state.isPrepTime;
+            $('body').toggleClass('is-prep-time', isPrepTime);
+            $('.debate-prep-btn').toggleClass('active', isPrepTime)
+                .text(isPrepTime ? 'Zakończ czas przygotowania' : 'Czas przygotowania');
         }
 
         // Input values
@@ -889,9 +928,12 @@
                 vacateSlot(conn.peer);
             } else if (data.type === 'chat') {
                 var ce = findEntry(conn.peer);
-                broadcastChat(ce ? ce.name : 'Uczestnik', data.msg);
+                var chatChannel = (data.channel === 'general') ? 'general' : (ce ? ce.zone : 'audience');
+                broadcastChat(ce ? ce.name : 'Uczestnik', data.msg, chatChannel);
             } else if (data.type === 'signal') {
                 setSignal(conn.peer, data.kind);
+            } else if (data.type === 'breakout') {
+                setBreakout(conn.peer, data.on);
             }
         });
         conn.on('close', function() {
@@ -980,17 +1022,45 @@
     // Show only whoever is actually talking, hiding silent-but-published guests.
     var VDO_SPEAKER = '&activespeaker&activespeakerdelay=1500';
 
-    function buildVdoUrl(mode, name) {
+    // A stable, predictable VDO.Ninja stream id per participant (instead of a random one)
+    // so the director can target a specific person with &push/&forward regardless of when
+    // they joined.
+    function pushIdFor(peerId) { return String(peerId).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 64); }
+
+    function breakoutRoomId(zone) {
+        var suffix = zone === 'proposition' ? 'propozycja' : zone === 'opposition' ? 'opozycja' : 'sedziowie';
+        return vdoRoom() + '-bo-' + suffix;
+    }
+
+    function buildVdoUrl(mode, name, peerId) {
         var room = encodeURIComponent(vdoRoom());
         // Publishers (people who took a debater/judge slot) send camera + mic.
         // &webcam picks "Join Room with Camera" and &autostart skips the entry screen
         // (without them, cleanoutput hides the menu and getUserMedia never fires).
         if (mode === 'publish') {
             return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
+                '&push=' + encodeURIComponent(pushIdFor(peerId)) +
                 '&webcam&autostart' + VDO_SPEAKER + VDO_CLEAN;
         }
         // Everyone else (audience / unassigned / master watching) just views the scene.
         return VDO_BASE + '?room=' + room + '&scene' + VDO_SPEAKER + VDO_CLEAN;
+    }
+
+    // A second, invisible iframe that holds director permissions purely so we can send
+    // &forward commands for breakout rooms — kept off-screen so its own control panel
+    // (record/mute/scene buttons) never leaks into our UI. The master's visible iframe
+    // above stays a plain scene viewer / publisher, unchanged.
+    var directorIframe = null;
+    function embedDirector() {
+        if (directorIframe) return;
+        var room = encodeURIComponent(vdoRoom());
+        var $f = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
+            VDO_BASE + '?director=' + room + '&cleanoutput&hidemenu"></iframe>');
+        $('body').append($f);
+        directorIframe = $f.get(0);
+    }
+    function removeDirector() {
+        if (directorIframe) { $(directorIframe).remove(); directorIframe = null; }
     }
 
     // Local self-view for the join screen — lets the user test camera/mic before joining.
@@ -1000,8 +1070,76 @@
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' +
             VDO_BASE + '?webcam&autostart&cleanoutput&transparent"></iframe>'
         );
+        previewIframe = $('.debate-join-preview iframe').get(0);
+        if (previewIframe) {
+            previewIframe.onload = function() {
+                postToFrame(previewIframe, { getDeviceList: true });
+                setTimeout(function() { postToFrame(previewIframe, { getDeviceList: true }); }, 3000);
+            };
+        }
+        startMicMeter();
     }
-    function clearPreview() { $('.debate-join-preview').empty(); }
+    function clearPreview() {
+        $('.debate-join-preview').empty();
+        previewIframe = null;
+        $('.debate-join-cam-select').hide().empty();
+        $('.debate-join-mic-select').hide().empty();
+        stopMicMeter();
+    }
+
+    // Mic level meter — grabbed independently of the VDO iframe (which owns the camera
+    // preview) since a cross-origin iframe won't hand us its audio stream to analyse.
+    var micMeterStream = null, micMeterCtx = null, micMeterRaf = null, micMeterTimeoutId = null;
+    function startMicMeter() {
+        console.log('[Debata] startMicMeter() called');
+        stopMicMeter();
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.log('[Debata] no navigator.mediaDevices.getUserMedia available');
+            $('.debate-join-error').text('Mikrofon: przeglądarka nie udostępnia getUserMedia (kontekst niezabezpieczony?)').show();
+            return;
+        }
+        console.log('[Debata] calling getUserMedia({audio:true})…');
+        micMeterTimeoutId = setTimeout(function() {
+            micMeterTimeoutId = null;
+            console.warn('[Debata] getUserMedia(audio) did not respond within 6s');
+            $('.debate-join-error').text('Mikrofon: przeglądarka nie odpowiada na prośbę o dostęp (sprawdź rozszerzenia blokujące lub ustawienia prywatności systemu)').show();
+        }, 6000);
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+            if (micMeterTimeoutId) { clearTimeout(micMeterTimeoutId); micMeterTimeoutId = null; }
+            console.log('[Debata] mic stream granted', stream);
+            micMeterStream = stream;
+            micMeterCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var source = micMeterCtx.createMediaStreamSource(stream);
+            var analyser = micMeterCtx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            var data = new Uint8Array(analyser.frequencyBinCount);
+            $('.mic-level-meter').show();
+            (function tick() {
+                analyser.getByteTimeDomainData(data);
+                var sum = 0;
+                for (var i = 0; i < data.length; i++) {
+                    var v = (data[i] - 128) / 128;
+                    sum += v * v;
+                }
+                var rms = Math.sqrt(sum / data.length);
+                $('.mic-level-fill').css('width', Math.min(100, Math.round(rms * 250)) + '%');
+                micMeterRaf = requestAnimationFrame(tick);
+            })();
+        }).catch(function(err) {
+            if (micMeterTimeoutId) { clearTimeout(micMeterTimeoutId); micMeterTimeoutId = null; }
+            console.error('[Debata] Mic meter error:', err);
+            $('.debate-join-error').text('Mikrofon: ' + err.name + (err.message ? ' — ' + err.message : '')).show();
+        });
+    }
+    function stopMicMeter() {
+        if (micMeterTimeoutId) { clearTimeout(micMeterTimeoutId); micMeterTimeoutId = null; }
+        if (micMeterRaf) { cancelAnimationFrame(micMeterRaf); micMeterRaf = null; }
+        if (micMeterCtx) { try { micMeterCtx.close(); } catch (e) {} micMeterCtx = null; }
+        if (micMeterStream) { micMeterStream.getTracks().forEach(function(t) { t.stop(); }); micMeterStream = null; }
+        $('.mic-level-meter').hide();
+        $('.mic-level-fill').css('width', '0%');
+    }
 
     function embedVdo(url) {
         // Camera/microphone must be delegated to the cross-origin vdo.ninja iframe with
@@ -1027,19 +1165,20 @@
         }
     }
 
-    function postToVdo(obj) {
-        if (debateIframe && debateIframe.contentWindow) {
-            try { debateIframe.contentWindow.postMessage(obj, '*'); } catch (e) {}
+    function postToFrame(iframe, obj) {
+        if (iframe && iframe.contentWindow) {
+            try { iframe.contentWindow.postMessage(obj, '*'); } catch (e) {}
         }
     }
+    function postToVdo(obj) { postToFrame(debateIframe, obj); }
 
     function setMicBtn(on) {
         micOn = on;
         $('.debate-mic-btn').text(on ? 'Wycisz mikrofon' : 'Włącz mikrofon');
     }
 
-    function populateDevices(list) {
-        // VDO.Ninja's deviceList shape varies; accept a flat array or a grouped object
+    // VDO.Ninja's deviceList shape varies; accept a flat array or a grouped object
+    function splitDeviceList(list) {
         var cams = [], mics = [];
         if (Array.isArray(list)) {
             list.forEach(function (d) {
@@ -1050,8 +1189,33 @@
             cams = list.videoinput || list.video || [];
             mics = list.audioinput || list.audio || [];
         }
-        fillDeviceSelect($('.debate-cam-select'), cams, 'Kamera');
-        fillDeviceSelect($('.debate-mic-select'), mics, 'Mikrofon');
+        return { cams: cams, mics: mics };
+    }
+
+    function populateDevices(list) {
+        var split = splitDeviceList(list);
+        fillDeviceSelect($('.debate-cam-select'), split.cams, 'Kamera');
+        fillDeviceSelect($('.debate-mic-select'), split.mics, 'Mikrofon');
+        applyPreferredDevices();
+    }
+
+    // Carry the device chosen on the join screen over into the live room the first
+    // time its device list arrives.
+    function applyPreferredDevices() {
+        if (joinCamDeviceIndex != null) {
+            $('.debate-cam-select').val(joinCamDeviceIndex);
+            postToVdo({ changeVideoDevice: joinCamDeviceIndex });
+        }
+        if (joinMicDeviceIndex != null) {
+            $('.debate-mic-select').val(joinMicDeviceIndex);
+            postToVdo({ changeAudioDevice: joinMicDeviceIndex });
+        }
+    }
+
+    function populateJoinDevices(list) {
+        var split = splitDeviceList(list);
+        fillDeviceSelect($('.debate-join-cam-select'), split.cams, 'Kamera');
+        fillDeviceSelect($('.debate-join-mic-select'), split.mics, 'Mikrofon');
     }
 
     function fillDeviceSelect($sel, devices, fallback) {
@@ -1063,20 +1227,76 @@
         $sel.show();
     }
 
-    function appendChat(name, msg) {
+    // Chat: a general channel everyone shares, plus one channel per debate zone that only
+    // its current occupants (and the master, while seated there) can see.
+    var chatLogs = {};            // channel -> [{name, msg}]
+    var activeChatIsTeam = false; // false = "Ogólny" tab, true = "Zespół" tab
+
+    function myChatZone() {
+        var e = findEntry(myPeerId);
+        return (e && e.zone) || 'audience';
+    }
+    function currentChatChannel() { return activeChatIsTeam ? myChatZone() : 'general'; }
+
+    function zoneChatLabel(zone) {
+        return zone === 'proposition' ? 'Propozycja' : zone === 'opposition' ? 'Opozycja' :
+            zone === 'judges' ? 'Sędziowie' : 'Widzowie';
+    }
+
+    function renderChatLog() {
         var $log = $('.debate-chat-log');
         if (!$log.length) return;
-        var $m = $('<div class="chat-msg"></div>');
-        $m.append($('<b></b>').text(name + ': '));
-        $m.append(document.createTextNode(msg));
-        $log.append($m);
+        $log.empty();
+        (chatLogs[currentChatChannel()] || []).forEach(function(m) {
+            var $m = $('<div class="chat-msg"></div>');
+            $m.append($('<b></b>').text(m.name + ': '));
+            $m.append(document.createTextNode(m.msg));
+            $log.append($m);
+        });
         $log.scrollTop($log.prop('scrollHeight'));
     }
 
-    function broadcastChat(name, msg) {
-        appendChat(name, msg);
+    // Keep the "Zespół" tab in sync with whatever zone I'm currently seated in.
+    function updateChatTabs() {
+        var zone = myChatZone();
+        $('.debate-chat-tab-team').text(zoneChatLabel(zone)).data('zone', zone);
+        $('.debate-chat-tab-general').toggleClass('active', !activeChatIsTeam);
+        $('.debate-chat-tab-team').toggleClass('active', activeChatIsTeam);
+        $('.debate-chat')
+            .removeClass('debate-chat--general debate-chat--proposition debate-chat--opposition debate-chat--judges debate-chat--audience')
+            .addClass('debate-chat--' + currentChatChannel());
+        renderChatLog();
+        (activeChatIsTeam ? $('.debate-chat-tab-team') : $('.debate-chat-tab-general')).removeClass('has-unread');
+    }
+
+    $(document).on('click', '.debate-chat-tab-general', function() { activeChatIsTeam = false; updateChatTabs(); });
+    $(document).on('click', '.debate-chat-tab-team', function() { activeChatIsTeam = true; updateChatTabs(); });
+
+    function appendChat(name, msg, channel) {
+        channel = channel || 'general';
+        if (!chatLogs[channel]) chatLogs[channel] = [];
+        chatLogs[channel].push({ name: name, msg: msg });
+        if (channel === currentChatChannel()) {
+            renderChatLog();
+        } else if (channel === 'general' || channel === myChatZone()) {
+            (channel === 'general' ? $('.debate-chat-tab-general') : $('.debate-chat-tab-team')).addClass('has-unread');
+        }
+    }
+
+    // Master-side send: 'general' goes to everyone, a team channel only to whoever is
+    // *currently* seated in that zone (checked live, not trusted from the sender).
+    function broadcastChat(name, msg, channel) {
+        channel = channel || 'general';
+        appendChat(name, msg, channel);
         sessionConnections.forEach(function (c) {
-            try { c.conn.send({ type: 'chat', name: name, msg: msg }); } catch (e) {}
+            if (channel === 'general') {
+                try { c.conn.send({ type: 'chat', channel: 'general', name: name, msg: msg }); } catch (e) {}
+                return;
+            }
+            var entry = findEntry(c.conn.peer);
+            if (entry && entry.zone === channel) {
+                try { c.conn.send({ type: 'chat', channel: channel, name: name, msg: msg }); } catch (err) {}
+            }
         });
     }
 
@@ -1107,7 +1327,7 @@
 
     function addRosterEntry(peerId, name) {
         debateRoster = debateRoster.filter(function(e) { return e.peerId !== peerId; });
-        debateRoster.push({ peerId: peerId, name: name, zone: 'audience', index: -1, signal: null, speaking: false });
+        debateRoster.push({ peerId: peerId, name: name, zone: 'audience', index: -1, signal: null, speaking: false, breakout: false });
         renderDebate();
     }
 
@@ -1125,13 +1345,37 @@
         if (taken) return;
         var e = findEntry(peerId);
         if (!e) return;
+        if (e.zone !== zone) resetBreakout(e);
         e.zone = zone; e.index = index;
         renderDebate();
     }
 
     function vacateSlot(peerId) {
         var e = findEntry(peerId);
-        if (e) { e.zone = 'audience'; e.index = -1; renderDebate(); }
+        if (e) { resetBreakout(e); e.zone = 'audience'; e.index = -1; renderDebate(); }
+    }
+
+    // Breakout rooms: only debaters/judges (never audience) may use them, and only for
+    // whichever zone they're currently seated in. Leaving the seat (or being moved to a
+    // different one) always pulls them back to the main room first.
+    function doForward(entry) {
+        if (!entry) return;
+        var dest = entry.breakout ? breakoutRoomId(entry.zone) : vdoRoom();
+        postToFrame(directorIframe, { action: 'forward', target: pushIdFor(entry.peerId), value: dest });
+    }
+    function resetBreakout(entry) {
+        if (entry && entry.breakout) { entry.breakout = false; doForward(entry); }
+    }
+    function setBreakout(peerId, on) {
+        var e = findEntry(peerId);
+        if (!e || e.zone === 'audience') return;
+        e.breakout = !!on;
+        doForward(e);
+        renderDebate();
+    }
+    function requestBreakout(on) {
+        if (isDebateMaster) setBreakout(MASTER_ID, on);
+        else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'breakout', on: on }); } catch (e) {} }
     }
 
     function setSignal(peerId, kind) {
@@ -1162,7 +1406,7 @@
     // Master broadcasts a slim roster so every participant renders the same zones
     function broadcastRoster() {
         var slim = debateRoster.map(function(e) {
-            return { peerId: e.peerId, name: e.name, zone: e.zone, index: e.index, signal: e.signal, speaking: e.speaking };
+            return { peerId: e.peerId, name: e.name, zone: e.zone, index: e.index, signal: e.signal, speaking: e.speaking, breakout: !!e.breakout };
         });
         sessionConnections.forEach(function(c) {
             try { c.conn.send({ type: 'roster', roster: slim }); } catch (e) {}
@@ -1173,11 +1417,22 @@
         return debateRoster.filter(function(e) { return e.zone === zone && e.index === index; })[0];
     }
 
+    // While I'm in a breakout room, everyone who isn't in that same room with me is someone
+    // I can no longer see/hear over VDO — dim them so the UI doesn't lie about who's "here".
+    function isDimmedForMe(entry) {
+        var me = findEntry(myPeerId);
+        if (!me || !me.breakout || !entry) return false;
+        return !(entry.zone === me.zone && entry.breakout);
+    }
+
     function slotEl(entry, zone, index) {
         var mine = entry && entry.peerId === myPeerId;
+        var draggable = isDebateMaster && debateEditMode && !!entry;
         var cls = 'slot' + (entry ? '' : ' slot--empty') + (mine ? ' slot--me' : '') +
-            (entry && entry.signal ? ' slot--signal' : '');
-        var $s = $('<div class="' + cls + '"></div>');
+            (entry && entry.signal ? ' slot--signal' : '') + (draggable ? ' slot--draggable' : '') +
+            (isDimmedForMe(entry) ? ' slot--dimmed' : '');
+        var $s = $('<div class="' + cls + '"></div>').attr('data-zone', zone).attr('data-index', index);
+        if (draggable) $s.attr('draggable', 'true').attr('data-peer', entry.peerId);
         if (!entry) {
             var $plus = $('<button type="button" class="slot-avatar slot-plus">+</button>')
                 .attr('data-zone', zone).attr('data-index', index);
@@ -1192,6 +1447,7 @@
         $s.append($av);
         var $n = $('<div class="slot-name"></div>').text(entry.name);
         if (entry.speaking) $n.append(' ').append($('<span class="slot-mic" title="Mówi">🎤</span>'));
+        if (entry.breakout) $n.append(' ').append($('<span class="badge badge-secondary roster-breakout-badge"></span>').text('Narada'));
         $s.append($n);
         return $s;
     }
@@ -1216,9 +1472,70 @@
                 .text(e.name ? e.name.trim().charAt(0).toUpperCase() : '');
             if (e.peerId === myPeerId) $d.addClass('aud-dot--me');
             if (e.speaking) $d.addClass('aud-dot--speaking');
+            if (isDimmedForMe(e)) $d.addClass('aud-dot--dimmed');
+            if (isDebateMaster && debateEditMode) {
+                $d.addClass('aud-dot--draggable').attr('draggable', 'true').attr('data-peer', e.peerId);
+            }
             $aud.append($d);
         });
+
+        updateChatTabs();
+        updateBreakoutButton();
     }
+
+    // Master edit mode: drag a seated slot (or an audience dot) onto another slot to move/swap,
+    // or onto the audience list to send someone back to the audience.
+    function moveToSlot(peerId, zone, index) {
+        var mover = findEntry(peerId);
+        if (!mover) return;
+        var occ = occupant(zone, index);
+        if (occ && occ.peerId !== peerId) {
+            resetBreakout(occ);
+            occ.zone = mover.zone; occ.index = mover.index;
+        }
+        if (mover.zone !== zone) resetBreakout(mover);
+        mover.zone = zone; mover.index = index;
+        renderDebate();
+    }
+
+    $(document).on('dragstart', '.slot--draggable, .aud-dot--draggable', function(e) {
+        if (!isDebateMaster || !debateEditMode) { e.preventDefault(); return; }
+        e.originalEvent.dataTransfer.setData('text/plain', $(this).data('peer'));
+        e.originalEvent.dataTransfer.effectAllowed = 'move';
+    });
+    $(document).on('dragover', '.slot[data-zone], .slot-list[data-zone="audience"]', function(e) {
+        if (!isDebateMaster || !debateEditMode) return;
+        e.preventDefault();
+        e.originalEvent.dataTransfer.dropEffect = 'move';
+    });
+    $(document).on('dragenter', '.slot[data-zone], .slot-list[data-zone="audience"]', function() {
+        if (isDebateMaster && debateEditMode) $(this).addClass('slot--dragover');
+    });
+    $(document).on('dragleave', '.slot[data-zone], .slot-list[data-zone="audience"]', function() {
+        $(this).removeClass('slot--dragover');
+    });
+    $(document).on('drop', '.slot[data-zone]', function(e) {
+        if (!isDebateMaster || !debateEditMode) return;
+        e.preventDefault();
+        $(this).removeClass('slot--dragover');
+        var peerId = e.originalEvent.dataTransfer.getData('text/plain');
+        moveToSlot(peerId, $(this).data('zone'), parseInt($(this).data('index'), 10));
+    });
+    $(document).on('drop', '.slot-list[data-zone="audience"]', function(e) {
+        if (!isDebateMaster || !debateEditMode) return;
+        e.preventDefault();
+        $(this).removeClass('slot--dragover');
+        var peerId = e.originalEvent.dataTransfer.getData('text/plain');
+        vacateSlot(peerId);
+    });
+
+    $('.debate-editmode-btn').click(function() {
+        debateEditMode = !debateEditMode;
+        $(this).toggleClass('active', debateEditMode)
+            .text(debateEditMode ? 'Zakończ edycję miejsc' : 'Edytuj przypisanie miejsc');
+        $('body').toggleClass('is-debate-edit', debateEditMode);
+        renderDebate();
+    });
 
     // Master-only management list: per-person mute
     function renderMasterRoster() {
@@ -1239,6 +1556,11 @@
                     .text(e.signal === 'advocem' ? 'AD VOCEM' : '✋ ręka')
                     .appendTo($row);
             }
+            if (e.breakout) {
+                $('<span class="badge badge-secondary roster-breakout-badge"></span>').text('Narada').appendTo($row);
+                $('<button type="button" class="btn btn-outline-secondary btn-sm roster-recall">Wróć</button>')
+                    .attr('data-peer', e.peerId).appendTo($row);
+            }
             if (e.peerId !== MASTER_ID) {
                 $('<button type="button" class="btn btn-outline-secondary btn-sm roster-mute">Wycisz</button>')
                     .attr('data-peer', e.peerId).appendTo($row);
@@ -1246,6 +1568,10 @@
             $r.append($row);
         });
     }
+
+    $(document).on('click', '.roster-recall', function() {
+        setBreakout(String($(this).data('peer')), false);
+    });
 
     function zoneLabel(zone) {
         return zone === 'proposition' ? 'Propozycja' : zone === 'opposition' ? 'Opozycja' :
@@ -1276,7 +1602,7 @@
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
-            embedVdo(buildVdoUrl(mode, myDebateName));
+            embedVdo(buildVdoUrl(mode, myDebateName, myPeerId));
             $('body').toggleClass('is-publishing', mode === 'publish');
             if (mode === 'publish') { setMicBtn(true); camOn = true; $('.debate-cam-btn').text('Wyłącz kamerę'); }
         }
@@ -1325,8 +1651,9 @@
             debateSessionId = id;
             isDebateMaster = true;
             myPeerId = MASTER_ID;
-            myDebateName = 'Prowadzący';
-            debateRoster = [{ peerId: MASTER_ID, name: myDebateName, zone: 'audience', index: -1, signal: null, speaking: false }];
+            myDebateName = $('.debate-master-name-input').val().trim() || 'Prowadzący';
+            debateRoster = [{ peerId: MASTER_ID, name: myDebateName, zone: 'audience', index: -1, signal: null, speaking: false, breakout: false }];
+            embedDirector();
             $('body').addClass('is-debate-master');
             var link = window.location.origin + window.location.pathname + '?s=' + id + '&d=1';
             $('.debate-link-val').val(link);
@@ -1358,6 +1685,16 @@
     $('.debate-preview-btn').click(function() {
         embedPreview();
         $(this).text('Podgląd włączony');
+    });
+
+    // Join screen: pick a device — switches the live preview and carries over into the room
+    $('.debate-join-cam-select').change(function() {
+        joinCamDeviceIndex = parseInt($(this).val(), 10);
+        postToFrame(previewIframe, { changeVideoDevice: joinCamDeviceIndex });
+    });
+    $('.debate-join-mic-select').change(function() {
+        joinMicDeviceIndex = parseInt($(this).val(), 10);
+        postToFrame(previewIframe, { changeAudioDevice: joinMicDeviceIndex });
     });
 
     // Participant: submit name, join as audience, announce to master
@@ -1410,6 +1747,18 @@
     $('.debate-hand-btn').click(function() { toggleSignal('hand'); });
     $('.debate-advocem-btn').click(function() { toggleSignal('advocem'); });
 
+    // Debater/judge: step into (or back out of) their team's breakout room
+    function updateBreakoutButton() {
+        var me = findEntry(myPeerId);
+        var inBreakout = !!(me && me.breakout);
+        $('.debate-breakout-btn').toggleClass('active', inBreakout)
+            .text(inBreakout ? 'Wróć do pokoju głównego' : 'Pokój narad');
+    }
+    $('.debate-breakout-btn').click(function() {
+        var me = findEntry(myPeerId);
+        requestBreakout(!(me && me.breakout));
+    });
+
     // Master: let positioned participants control the clock
     $('.debate-allow-controls-btn').click(function() {
         debateAllowControls = !debateAllowControls;
@@ -1418,6 +1767,16 @@
         sessionConnections.forEach(function(c) {
             try { c.conn.send({ type: 'cmd', action: 'allowControls', on: debateAllowControls }); } catch (e) {}
         });
+    });
+
+    // Master: toggle the shared clock between prep time and the normal, configured speech time
+    $('.debate-prep-btn').click(function() {
+        if (isPrepTime) {
+            reset();
+        } else {
+            startPrepTime();
+            $(this).addClass('active').text('Zakończ czas przygotowania');
+        }
     });
 
     // Master room controls
@@ -1443,6 +1802,7 @@
         $('body').removeClass('is-debate-master is-publishing');
         $('.debata-video').empty();
         debateIframe = null;
+        removeDirector();
         $('.debate-stage').hide();
         $('.debate-roster-wrap').hide();
         $('.debate-empty').show();
@@ -1457,10 +1817,11 @@
         var msg = $('.debate-chat-input').val().trim();
         if (!msg) return;
         $('.debate-chat-input').val('');
+        var channel = currentChatChannel();
         if (isDebateMaster) {
-            broadcastChat(myDebateName, msg);
+            broadcastChat(myDebateName, msg, channel);
         } else if (masterConn && masterConn.open) {
-            try { masterConn.send({ type: 'chat', msg: msg }); } catch (e) {}
+            try { masterConn.send({ type: 'chat', channel: channel, msg: msg }); } catch (e) {}
         }
     }
     $('.debate-chat-send').click(sendChatMessage);
@@ -1468,16 +1829,20 @@
         if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
     });
 
-    // Receive data back from our own VDO iframe
+    // Receive data back from our own VDO iframe(s) — the live room iframe and, on the
+    // join screen, the separate preview iframe (each is its own postMessage channel).
     window.addEventListener('message', function(e) {
-        if (!debateIframe || e.source !== debateIframe.contentWindow) return;
         var d = e.data;
         if (!d) return;
-        if (d.deviceList) populateDevices(d.deviceList);
-        // Speaking indicator (master only): map loud streams to names
-        if (d.action === 'guest-connected' && d.streamID) streamNames[d.streamID] = (d.value && d.value.label) || '';
-        if (d.action === 'guest-disconnected' && d.streamID) delete streamNames[d.streamID];
-        if (d.loudness !== undefined) handleLoudness(d.loudness);
+        if (debateIframe && e.source === debateIframe.contentWindow) {
+            if (d.deviceList) populateDevices(d.deviceList);
+            // Speaking indicator (master only): map loud streams to names
+            if (d.action === 'guest-connected' && d.streamID) streamNames[d.streamID] = (d.value && d.value.label) || '';
+            if (d.action === 'guest-disconnected' && d.streamID) delete streamNames[d.streamID];
+            if (d.loudness !== undefined) handleLoudness(d.loudness);
+        } else if (previewIframe && e.source === previewIframe.contentWindow) {
+            if (d.deviceList) populateJoinDevices(d.deviceList);
+        }
     });
 
     // Best-effort talk detection from VDO loudness — thresholds/shape need live tuning
@@ -1549,7 +1914,7 @@
             });
             masterConn.on('data', function(data) {
                 if (data.type === 'init' || data.type === 'state') applyState(data.state);
-                else if (data.type === 'chat') appendChat(data.name, data.msg);
+                else if (data.type === 'chat') appendChat(data.name, data.msg, data.channel);
                 else if (data.type === 'cmd') handleDebateCmd(data);
                 else if (data.type === 'roster') { debateRoster = data.roster || []; renderZones(); updateMyEmbed(); }
                 else if (data.type === 'speaking') {

@@ -576,6 +576,17 @@ body.is-slave .slave-sharing { display: block; }
 }
 
 /* ── Debate stage: 3-column layout ──────────────────────── */
+.debate-teza {
+  margin: 2rem 0 2.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #222;
+}
+.debate-teza:empty::before {
+  content: 'Debata';
+  color: #999;
+}
+
 .debate-grid {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) minmax(0, 2.2fr) minmax(140px, 1fr);
@@ -740,6 +751,18 @@ body.is-debate-master .debate-master-controls { display: flex; }
 .slot--signal .slot-name .slot-mic { display: none; }
 .aud-dot--speaking { border-color: #2a7; box-shadow: 0 0 0 2px rgba(34,170,119,0.3); }
 
+/* Breakout rooms: dim everyone I can no longer hear/see over VDO from a breakout room */
+.slot--dimmed, .aud-dot--dimmed { opacity: 0.3; filter: grayscale(1); }
+.debate-breakout-btn.active { background: #6c757d; border-color: #6c757d; color: #fff; }
+.roster-breakout-badge { margin-right: 0.35rem; }
+
+/* Master edit mode: drag & drop seat re-assignment */
+.debate-editmode-btn.active { background: #2a7; border-color: #2a7; color: #fff; }
+.slot--draggable, .aud-dot--draggable { cursor: grab; }
+.slot--draggable:active, .aud-dot--draggable:active { cursor: grabbing; }
+body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
+.slot--dragover { outline: 2px dashed #2a7 !important; outline-offset: 2px; }
+
 /* Join-screen camera/mic preview */
 .debate-join-hint { color: #6c757d; margin: 0.75rem 0 0.5rem; }
 .debate-join-preview {
@@ -751,14 +774,60 @@ body.is-debate-master .debate-master-controls { display: flex; }
   background: #fff;
   margin-bottom: 0.5rem;
 }
+.vdo-director-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
+
+/* Prep time: label the clock so it's obviously not a protected speech timer */
+body.is-prep-time .timer { position: relative; }
+body.is-prep-time .timer::before {
+  content: 'Czas przygotowania';
+  position: absolute;
+  top: -1.4rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #c0392b;
+}
+.debate-prep-btn.active { background: #c0392b; border-color: #c0392b; color: #fff; }
+
 .debate-join-preview:empty { display: none; }
 .debate-join-preview .vdo-iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+.mic-level-meter {
+  width: 100%;
+  max-width: 360px;
+  height: 8px;
+  border-radius: 4px;
+  background: #e9ecef;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+.mic-level-fill {
+  height: 100%;
+  width: 0%;
+  background: #2a7;
+  border-radius: 4px;
+  transition: width 60ms linear;
+}
 
 /* Chat */
 .debate-chat {
   max-width: 640px;
   margin: 1.25rem auto 0;
   width: 100%;
+}
+.debate-chat-tabs { display: flex; gap: 0.35rem; margin-bottom: 0.4rem; }
+.debate-chat-tab { position: relative; }
+.debate-chat-tab.active { background: #6c757d; border-color: #6c757d; color: #fff; }
+.debate-chat-tab.has-unread::after {
+  content: '';
+  position: absolute;
+  top: 2px; right: 2px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #c0392b;
 }
 .debate-chat-log {
   height: 160px;
@@ -769,9 +838,16 @@ body.is-debate-master .debate-master-controls { display: flex; }
   margin-bottom: 0.5rem;
   background: #fafafa;
   font-size: 0.95rem;
+  transition: background-color 150ms ease;
 }
 .chat-msg { margin-bottom: 0.2rem; word-break: break-word; }
 .chat-msg b { color: #444; }
+
+/* Light tint per chat channel — general stays neutral, each team gets its own hue */
+.debate-chat--proposition .debate-chat-log { background: #eaf3ff; }
+.debate-chat--opposition .debate-chat-log { background: #fdecea; }
+.debate-chat--judges .debate-chat-log { background: #f2eaff; }
+.debate-chat--audience .debate-chat-log { background: #eafaf0; }
 
 /* Debate participants only ever need the debate view */
 body.is-debate #settings-link,
@@ -867,8 +943,7 @@ body.is-debate #sharing-link-item { display: none !important; }
 
 /* ── Glassmorphism Theme ────────────────────────────────── */
 body.glassmorphic {
-  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1) 0%, rgba(200, 200, 255, 0.05) 100%), linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  backdrop-filter: blur(10px);
+ background: radial-gradient(#fff,#c6d1d9);
 }
 
 body.glassmorphic .jumbotron {
@@ -880,10 +955,13 @@ body.glassmorphic .jumbotron {
 }
 
 body.glassmorphic .btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
   color: #333;
   backdrop-filter: blur(4px);
+  border-radius: 7px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5.5px);
+  -webkit-backdrop-filter: blur(5.5px);
+  border: 1px solid rgba(255, 255, 255, 0.21);
 }
 
 body.glassmorphic .btn:hover {
