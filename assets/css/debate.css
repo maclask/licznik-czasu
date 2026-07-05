@@ -251,6 +251,12 @@ body.is-debate-master .debate-master-controls { display: flex; }
 .slot-mic { font-size: 0.85rem; }
 .slot--signal .slot-name .slot-mic { display: none; }
 .aud-dot--speaking { border-color: #2a7; box-shadow: 0 0 0 2px rgba(34,170,119,0.3); }
+.aud-dot--comaster { box-shadow: 0 0 0 2px rgba(23,162,184,0.5); }
+
+/* Comaster failover: succession badge (primary) / honorary badge (former master) */
+.comaster-badge { margin-right: 0.35rem; }
+.comaster-hint { display: none; color: #6c757d; text-align: center; margin: 0.5rem 0 0; font-size: 0.9rem; }
+body.is-comaster-primary .comaster-hint { display: block; }
 
 /* Breakout rooms: dim everyone I can no longer hear/see over VDO from a breakout room */
 .slot--dimmed, .aud-dot--dimmed { opacity: 0.3; filter: grayscale(1); }
