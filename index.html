@@ -4,7 +4,7 @@
   <title>Licznik czasu</title>
   <link rel="stylesheet" href="assets/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="assets/css/style.css"/>
-  <link rel="stylesheet" href="assets/css/all.css">
+  <link rel="stylesheet" href="assets/css/debate.css"/>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 </head>
@@ -40,8 +40,8 @@
                 </svg>
               </a>
             </li>
-            <li class="nav-item" id="debata-link-item" data-toggle="tooltip" title="Debata online">
-              <a class="nav-link" id="debata-link" href="#">
+            <li class="nav-item" id="debate-link-item" data-toggle="tooltip" title="Debata online">
+              <a class="nav-link" id="debate-link" href="#">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="black" style="width:26px;height:26px" class="icon">
                   <path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h8.25a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H4.5A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
                 </svg>
@@ -59,7 +59,7 @@
 
       <div id="timer">
         <div class="row justify-content-md-center">
-          <h2 id="teza" class="text-uppercase teza-text"></h2>
+          <h2 id="motion" class="text-uppercase motion-text"></h2>
         </div>
         <div class="row justify-content-md-center">
           <div class="col-lg"></div>
@@ -109,7 +109,7 @@
         <div class="panel-body">
           <div class="settings-rows">
 
-            <!-- Format debaty -->
+            <!-- Debate format -->
             <div class="row no-gutters align-items-center s-row">
               <div class="col-12 col-md-auto s-label">Format debaty</div>
               <div class="col-12 col-md-auto">
@@ -126,24 +126,24 @@
               </div>
             </div>
 
-            <!-- Teza -->
+            <!-- Motion -->
             <div class="row no-gutters align-items-start s-row">
               <div class="col-12 col-md-auto s-label s-label-top">Teza</div>
               <div class="col-12 col-md">
-                <textarea class="input-teza form-control" id="teza-input" name="teza" rows="3" placeholder="wpisz tezę debaty…"></textarea>
+                <textarea class="input-motion form-control" id="motion-input" name="motion" rows="3" placeholder="wpisz tezę debaty…"></textarea>
               </div>
             </div>
 
-            <!-- Czas mowy / Ad vocem / Test dźwięku + Checkboxes -->
+            <!-- Speech time / Ad vocem / Sound test + Checkboxes -->
             <div class="row no-gutters s-row">
               <div class="col-12 col-md">
                 <div class="s-setting-line">
                   <span class="s-label">Czas mowy</span>
-                  <input class="input-minuty form-control" id="minuty" name="minuty" value="05:00" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                  <input class="input-minutes form-control" id="minutes" name="minutes" value="05:00" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
                 </div>
                 <div class="s-setting-line oxford-setting">
                   <span class="s-label">Ad vocem</span>
-                  <input class="input-minuty-advocem form-control" id="minuty-advocem" name="minuty-advocem" value="00:30" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                  <input class="input-minutes-advocem form-control" id="minutes-advocem" name="minutes-advocem" value="00:30" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
                 </div>
                 <div class="s-setting-line">
                   <span class="s-label">Test dźwięku</span>
@@ -169,7 +169,7 @@
               </div>
             </div>
 
-            <!-- Loga -->
+            <!-- Logos -->
             <div class="row no-gutters align-items-start s-row">
               <div class="col-12 col-md-auto s-label s-label-top">Loga</div>
               <div class="col-12 col-md">
@@ -239,7 +239,7 @@
               </div>
             </div>
 
-            <!-- Styl interfejsu -->
+            <!-- Interface style -->
             <div class="row no-gutters align-items-center s-row">
               <div class="col-12 col-md-auto s-label">Styl</div>
               <div class="col-12 col-md-auto">
@@ -322,7 +322,7 @@
         </div>
         <div class="panel-body">
 
-          <!-- Master: dwie kolumny -->
+          <!-- Master: two columns -->
           <div class="master-sharing">
             <div class="row">
               <div class="col-md-6 sharing-col">
@@ -363,7 +363,7 @@
               </div>
             </div>
 
-            <!-- Utwórz debatę online (pod tworzeniem sesji) -->
+            <!-- Create online debate (below session creation) -->
             <div class="debate-setup">
               <div class="sharing-col debate-create-col">
                 <p class="sharing-col-title">Utwórz debatę online</p>
@@ -409,15 +409,15 @@
       </div>
       <!--end of sharing-->
 
-      <div id="debata">
+      <div id="debate">
 
-        <!-- Stan pusty: debatę tworzy się w zakładce Udostępnianie -->
+        <!-- Empty state: the debate is created in the Sharing tab -->
         <div class="debate-empty">
           <div class="panel-header"><h2>Debata online</h2></div>
           <p class="debate-empty-hint">Aby rozpocząć, utwórz debatę w zakładce „Udostępnianie".</p>
         </div>
 
-        <!-- Uczestnik: formularz dołączania (imię + test kamery/mikrofonu) -->
+        <!-- Participant: join form (name + camera/mic test) -->
         <div class="debate-join" style="display:none">
           <div class="panel-header"><h2>Dołącz do debaty</h2></div>
           <div class="debate-join-body">
@@ -440,12 +440,12 @@
           </div>
         </div>
 
-        <!-- Scena debaty: układ 3-kolumnowy -->
+        <!-- Debate stage: 3-column layout -->
         <div class="debate-stage" style="display:none">
-          <h2 class="text-uppercase teza-text debate-teza"></h2>
+          <h2 class="text-uppercase motion-text debate-motion"></h2>
           <div class="debate-grid">
 
-            <!-- LEWA: propozycja / sędziowie / widzowie -->
+            <!-- LEFT: proposition / judges / audience -->
             <div class="debate-side debate-side-left">
               <div class="debate-zone">
                 <h3 class="debate-zone-title">Propozycja</h3>
@@ -461,9 +461,9 @@
               </div>
             </div>
 
-            <!-- ŚRODEK: wideo, zegar, loga, sterowanie licznikiem -->
+            <!-- CENTER: video, clock, logos, timer controls -->
             <div class="debate-center">
-              <div class="debata-video"></div>
+              <div class="debate-video"></div>
               <div class="debate-clock-row">
                 <div class="timer">
                   <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
@@ -494,7 +494,7 @@
               </div>
             </div>
 
-            <!-- PRAWA: opozycja / czat -->
+            <!-- RIGHT: opposition / chat -->
             <div class="debate-side debate-side-right">
               <div class="debate-zone">
                 <h3 class="debate-zone-title">Opozycja</h3>
@@ -518,7 +518,7 @@
 
           </div>
 
-          <!-- DOLNY pasek: media / sygnały / sterowanie pokojem -->
+          <!-- BOTTOM bar: media / signals / room controls -->
           <div class="debate-controls">
             <div class="debate-self-controls">
               <button type="button" class="btn btn-outline-secondary btn-sm debate-mic-btn">Wycisz mikrofon</button>
@@ -541,7 +541,7 @@
             </div>
           </div>
 
-          <!-- Panel zarządzania uczestnikami (tylko prowadzący) -->
+          <!-- Participant management panel (master only) -->
           <div class="debate-roster-wrap" style="display:none">
             <p class="sharing-col-title">Zarządzanie uczestnikami</p>
             <div class="debate-roster"></div>
@@ -549,7 +549,7 @@
         </div>
 
       </div>
-      <!--end of debata-->
+      <!--end of debate-->
 
     </div>
     <!--end of jumbotron-->
@@ -557,11 +557,14 @@
   </div>
   <!--end of container-->
 
-  <script src="assets/js/popper.min.js"></script>
   <script src="assets/js/jquery3.3.1.min.js"></script>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script src="assets/js/stoper.js"></script>
+  <!-- Load order matters: app.js defines the shared App namespace, stopwatch.js
+       fills App.core, online.js overrides App.onStateChange and uses App.core. -->
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/stopwatch.js"></script>
+  <script src="assets/js/online.js"></script>
 </body>
 </html>
