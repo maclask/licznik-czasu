@@ -624,8 +624,10 @@
             setMicBtn(false);
             App.core.showWarn('Prowadzący wyciszył Twój mikrofon');
         } else if (data.action === 'close') {
-            window.alert('Prowadzący zamknął pokój debaty');
-            window.location.replace(window.location.origin + window.location.pathname);
+            App.core.showWarn('Prowadzący zamknął pokój debaty');
+            setTimeout(function() {
+                window.location.replace(window.location.origin + window.location.pathname);
+            }, 5000);
         } else if (data.action === 'allowControls') {
             debateAllowControls = !!data.on;
             updateControlsVisibility();
