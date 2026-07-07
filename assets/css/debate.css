@@ -6,7 +6,11 @@
 .session-lost-alert { display: none; }
 .session-links { display: none; }
 
-body.is-slave #settings-link { display: none !important; }
+body.is-slave #settings-link {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: grayscale(1);
+}
 body.is-slave #sharing .panel-header { text-align: center; }
 
 /* Sharing panel: master vs slave content */
@@ -395,8 +399,11 @@ body.is-prep-time .timer::before {
 .debate-chat--audience .debate-chat-log { background: #eafaf0; }
 
 /* Debate participants only ever need the debate view */
-body.is-debate #settings-link,
-body.is-debate #sharing-link-item { display: none !important; }
+body.is-debate #sharing-link-item {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: grayscale(1);
+}
 
 /* ── Mobile (≤768 px) ───────────────────────────────────── */
 @media (max-width: 768px) {

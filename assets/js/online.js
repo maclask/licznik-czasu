@@ -337,7 +337,8 @@
     // Strip VDO.Ninja's own UI so the iframe is a bare video tile — all controls
     // (camera/mic pick, mute, chat) live in the app's own UI via postMessage.
     // &transparent lets the .debate-video container control the background colour.
-    var VDO_CLEAN = '&cleanoutput&hidemenu&transparent';
+    // &cover crops the feed to fill the tile instead of letterboxing/pillarboxing it.
+    var VDO_CLEAN = '&cleanoutput&hidemenu&transparent&cover';
     // Show only whoever is actually talking, hiding silent-but-published guests.
     var VDO_SPEAKER = '&activespeaker&activespeakerdelay=1500';
 
@@ -386,7 +387,7 @@
         var allow = 'camera *; microphone *; autoplay; fullscreen; picture-in-picture';
         $('.debate-join-preview').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' +
-            VDO_BASE + '?webcam&autostart&cleanoutput&transparent"></iframe>'
+            VDO_BASE + '?webcam&autostart&cleanoutput&transparent&cover"></iframe>'
         );
         previewIframe = $('.debate-join-preview iframe').get(0);
         if (previewIframe) {
@@ -1743,6 +1744,12 @@
                     }
                 }, function() {
                     $('.session-status').text('Nie udało się połączyć z pokojem debaty').show();
+                    setTimeout(function() {
+                        $('.session-status').text('Odświeżanie strony…');
+                        setTimeout(function() {
+                            window.location.replace(window.location.origin + window.location.pathname);
+                        }, 3000);
+                    }, 5000);
                 });
             } else {
                 var conn = myPeer.connect(s, {serialization: 'json'});
