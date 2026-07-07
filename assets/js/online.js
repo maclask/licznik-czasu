@@ -32,6 +32,14 @@
     var micOn = true, camOn = true;  // this browser's local media state (VDO gives no readback)
     var waitingRoomOn = false;    // master: new joiners wait for approval before seeing the room
     var ZONE_SLOTS = { proposition: 4, opposition: 4, og: 2, oo: 2, cg: 2, co: 2, judges: 3 };
+    var DYNAMIC_ZONES = { judges: true }; // grows past its base slot count: always one spare empty slot beyond who's seated
+
+    function zoneSlotCount(zone) {
+        var base = ZONE_SLOTS[zone] || 0;
+        if (!DYNAMIC_ZONES[zone]) return base;
+        var occupied = debateRoster.filter(function(e) { return e.zone === zone; }).length;
+        return Math.max(base, occupied + 1);
+    }
 
     // --- Comaster failover ---
     // The "live" room moves through an ever-increasing sequence of PeerJS ids:
@@ -744,7 +752,7 @@
 
     // Authoritative (master-side) slot assignment — moves a person, vacating their old slot
     function assignSlot(clientId, zone, index) {
-        if (!ZONE_SLOTS[zone] || index < 0 || index >= ZONE_SLOTS[zone]) return;
+        if (!ZONE_SLOTS[zone] || index < 0 || index >= zoneSlotCount(zone)) return;
         var taken = debateRoster.some(function(e) {
             return e.zone === zone && e.index === index && e.clientId !== clientId;
         });
@@ -851,11 +859,12 @@
             (isDimmedForMe(entry) ? ' slot--dimmed' : '');
         var $s = $('<div class="' + cls + '"></div>').attr('data-zone', zone).attr('data-index', index);
         if (draggable) $s.attr('draggable', 'true').attr('data-client', entry.clientId);
+        var isChiefJudge = zone === 'judges' && index === 0;
         if (!entry) {
             var $plus = $('<button type="button" class="slot-avatar slot-plus">+</button>')
                 .attr('data-zone', zone).attr('data-index', index);
             $s.append($plus);
-            $s.append($('<div class="slot-name"></div>').text('—'));
+            $s.append($('<div class="slot-name"></div>').text(isChiefJudge ? 'Sędzia główny' : '—'));
             return $s;
         }
         var badge = entry.signal ? (entry.signal === 'advocem' ? 'AV' : '✋') :
@@ -864,6 +873,7 @@
         if (mine) { $av.addClass('slot-avatar--me').attr('title', 'Kliknij, aby wrócić do widzów'); }
         $s.append($av);
         var $n = $('<div class="slot-name"></div>').text(entry.name);
+        if (isChiefJudge) $n.append(' ').append($('<span class="badge badge-dark chief-judge-badge" title="Sędzia główny"></span>').text('SG'));
         if (entry.speaking) $n.append(' ').append($('<span class="slot-mic" title="Mówi">🎤</span>'));
         if (entry.breakout) $n.append(' ').append($('<span class="badge badge-secondary roster-breakout-badge"></span>').text('Narada'));
         if (entry.comaster === 'primary') $n.append(' ').append($('<span class="badge badge-info comaster-badge" title="Wyznaczony następca mastera"></span>').text('Co-master'));
@@ -874,7 +884,7 @@
     function fillZone(zone) {
         var $list = $('.slot-list[data-zone="' + zone + '"]');
         $list.empty();
-        for (var i = 0; i < ZONE_SLOTS[zone]; i++) $list.append(slotEl(occupant(zone, i) || null, zone, i));
+        for (var i = 0; i < zoneSlotCount(zone); i++) $list.append(slotEl(occupant(zone, i) || null, zone, i));
     }
 
     function renderZones() {

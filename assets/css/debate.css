@@ -294,6 +294,9 @@ body.is-comaster-primary .comaster-hint { display: block; }
 .debate-breakout-btn.active { background: #6c757d; border-color: #6c757d; color: #fff; }
 .roster-breakout-badge { margin-right: 0.35rem; }
 
+/* Chief judge: first judges slot */
+.chief-judge-badge { margin-left: 0.35rem; }
+
 /* Master edit mode: drag & drop seat re-assignment */
 .debate-editmode-btn.active { background: #2a7; border-color: #2a7; color: #fff; }
 .slot--draggable, .aud-dot--draggable { cursor: grab; }
