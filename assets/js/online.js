@@ -2,7 +2,7 @@
     // --- Session (PeerJS) ---
 
     var sessionPeer = null;
-    var sessionConnections = [];
+    var sessionConnections = {};  // peerId -> DataConnection, one live conn per peer
     var masterConn = null;
     // isSlaveSession + slaveShowControls now live on App.state (see app.js)
     var SESSION_WORDS = [
@@ -16,23 +16,22 @@
     var VDO_BASE = 'https://vdo.ninja/';
     var debateSessionId = null;   // == PeerJS session id; VDO room is 'debate' + this
     var isDebateMaster = false;
-    var debateRoster = [];        // [{peerId, name, zone, index, signal, speaking}]
+    var debateRoster = [];        // [{clientId, peerId, pushId, name, role, zone, index, ...}] — identity = clientId
     var debatePendingJoin = null; // participant: {name} queued until masterConn opens
+    var expelledClientIds = {};   // clientId -> 'kick' | 'rejected', refused re-admission until the room resets
     var debateIframe = null;      // the live VDO.Ninja <iframe> element (for postMessage)
     var previewIframe = null;     // the join-screen preview <iframe> (separate instance, own postMessage channel)
     var joinCamDeviceIndex = null, joinMicDeviceIndex = null; // device picked on the join screen, carried into the live room
-    var myPeerId = null;          // this browser's id in the roster ('__master__' for host)
-    var myPushId = null;          // this browser's stable VDO push id — never renamed on promotion,
-                                   // unlike myPeerId (see "Comaster failover" below)
+    var myPushId = null;          // this browser's stable VDO push id — fixed for the whole debate
+                                   // (participants: PeerJS id at join; master: clientId)
     var myDebateName = '';        // this browser's own display name
     var myEmbedMode = null;       // 'publish' | 'view' — current VDO iframe mode
     var mySignal = null;          // 'hand' | 'advocem' | null (this browser's raised signal)
     var debateAllowControls = false; // master let positioned participants run the clock
     var debateEditMode = false;   // master: drag & drop seat re-assignment
     var micOn = true, camOn = true;  // this browser's local media state (VDO gives no readback)
-    var streamNames = {};         // master: VDO streamID -> label, for the speaking indicator
-    var MASTER_ID = '__master__';
-    var ZONE_SLOTS = { proposition: 4, opposition: 4, judges: 3 };
+    var waitingRoomOn = false;    // master: new joiners wait for approval before seeing the room
+    var ZONE_SLOTS = { proposition: 4, opposition: 4, og: 2, oo: 2, cg: 2, co: 2, judges: 3 };
 
     // --- Comaster failover ---
     // The "live" room moves through an ever-increasing sequence of PeerJS ids:
@@ -50,6 +49,16 @@
 
     function genName(n) {
         return n === 0 ? debateSessionId : (debateSessionId + '-backup' + n);
+    }
+
+    // PeerJS drops its signaling-server socket (separate from any individual peer
+    // connection) on ordinary network blips; left alone the Peer sits "disconnected"
+    // forever and silently refuses both new outgoing connect() calls and incoming
+    // ones — starving the entire failover cascade of the one thing it depends on.
+    function keepSignalingAlive(peer) {
+        peer.on('disconnected', function() {
+            if (!peer.destroyed) peer.reconnect();
+        });
     }
 
     var WAS_MASTER_KEY = 'licznik:was-master';
@@ -72,24 +81,59 @@
         } catch (e) { return false; }
     }
 
-    // A stable per-browser id, independent of the ephemeral PeerJS peerId (which is
-    // random on every page load) and of the display name (which the user can change on
-    // rejoin). Lets the master recognise "this is the same browser reconnecting" and
-    // drop its old roster entry immediately — instead of waiting for PeerJS to notice
-    // the old connection actually died, which after an abrupt reload/refresh can lag
-    // well behind the new connection being established, leaving a stale duplicate.
+    // A stable per-tab id, independent of the ephemeral PeerJS peerId (which is random
+    // on every page load) and of the display name (which the user can change on
+    // rejoin). Lets the master recognise "this is the same tab reconnecting" and drop
+    // its old roster entry immediately — instead of waiting for PeerJS to notice the
+    // old connection actually died, which after an abrupt reload/refresh can lag well
+    // behind the new connection being established, leaving a stale duplicate.
+    // sessionStorage (not localStorage) is deliberate: it still survives a same-tab
+    // reload, but two tabs opened independently (typing/pasting the join link twice)
+    // get distinct ids instead of fighting the master over one roster entry.
     var CLIENT_ID_KEY = 'licznik:client-id';
+    var volatileClientId = null;  // fallback when sessionStorage is unavailable — stable per page load
     function getClientId() {
         try {
-            var id = localStorage.getItem(CLIENT_ID_KEY);
+            var id = sessionStorage.getItem(CLIENT_ID_KEY);
             if (!id) {
                 id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2);
-                localStorage.setItem(CLIENT_ID_KEY, id);
+                sessionStorage.setItem(CLIENT_ID_KEY, id);
             }
             return id;
         } catch (e) {
-            return null;
+            if (!volatileClientId) volatileClientId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+            return volatileClientId;
         }
+    }
+    var myClientId = getClientId();   // this tab's roster identity (stable across reloads)
+
+    function findEntry(clientId) {
+        return debateRoster.filter(function(e) { return e.clientId === clientId; })[0];
+    }
+    function findEntryByPeer(peerId) {
+        if (peerId == null) return undefined;
+        return debateRoster.filter(function(e) { return e.peerId === peerId; })[0];
+    }
+    function myEntry() { return findEntry(myClientId); }
+
+    function eachConn(fn) {
+        Object.keys(sessionConnections).forEach(function(peerId) {
+            fn(sessionConnections[peerId], peerId);
+        });
+    }
+    function safeSend(conn, obj) {
+        try { conn.send(obj); } catch (e) {}
+    }
+    function sendToPeer(peerId, obj) {
+        var conn = peerId != null ? sessionConnections[peerId] : null;
+        if (conn) safeSend(conn, obj);
+    }
+    // May this connection see room broadcasts? Not while waiting for admission — and
+    // an entry-less connection (connected, join not processed yet) only when the
+    // waiting room is off.
+    function connAdmitted(peerId) {
+        var entry = findEntryByPeer(peerId);
+        return entry ? !entry.pending : !waitingRoomOn;
     }
 
     App.onStateChange = function(delta) {
@@ -98,22 +142,43 @@
             if (masterConn) {
                 try { masterConn.send({type: 'settings', state: delta}); } catch(e) {}
             }
-        } else if (sessionPeer && sessionConnections.length > 0) {
-            sessionConnections.forEach(function(c) {
-                try { c.conn.send({type: 'state', state: delta}); } catch(e) {}
-            });
+        } else if (sessionPeer) {
+            eachConn(function(c, peerId) { if (connAdmitted(peerId)) safeSend(c, {type: 'state', state: delta}); });
         }
     };
 
-    $('.session-name-input').on('input', function() {
-        $(this).val($(this).val().toLowerCase());
-        var val = $(this).val();
-        var wasInvalid = $(this).hasClass('is-invalid');
-        var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
-        $(this).toggleClass('is-invalid', invalid);
-        if (invalid && !wasInvalid) App.core.showWarn('Dozwolone tylko litery a–z, A–Z i cyfry');
-        $('.session-create-btn').prop('disabled', !(val.length > 0 && !invalid));
-    });
+    // One shared validator for every room-name input (create session / join / create debate)
+    function bindRoomNameInput($input, $btn) {
+        $input.on('input', function() {
+            $(this).val($(this).val().toLowerCase());
+            var val = $(this).val();
+            var wasInvalid = $(this).hasClass('is-invalid');
+            var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
+            $(this).toggleClass('is-invalid', invalid);
+            if (invalid && !wasInvalid) App.core.showWarn('Dozwolone tylko litery a–z, A–Z i cyfry');
+            $btn.prop('disabled', !(val.length > 0 && !invalid));
+        });
+    }
+    bindRoomNameInput($('.session-name-input'), $('.session-create-btn'));
+    bindRoomNameInput($('.session-join-input'), $('.session-join-btn'));
+    bindRoomNameInput($('.debate-name-input'), $('.debate-create-btn'));
+
+    // Shared PeerJS hub creation (plain sharing + online debate): the connect cycle,
+    // button feedback and error handling are identical — only the on-open setup differs.
+    function createHub(name, $btn, onOpen) {
+        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
+        $btn.text('Łączenie…').prop('disabled', true);
+        sessionPeer = new Peer(name);
+        keepSignalingAlive(sessionPeer);
+        sessionPeer.on('open', onOpen);
+        sessionPeer.on('error', function(err) {
+            console.error('[Session] Master error:', err.type);
+            var msg = err.type === 'unavailable-id' ? 'Nazwa zajęta — wybierz inną' : 'Błąd: ' + err.type;
+            $btn.text(msg).prop('disabled', false);
+            sessionPeer = null;
+        });
+        sessionPeer.on('connection', handleMasterConnection);
+    }
 
     $('.session-random-btn').click(function() {
         var name = SESSION_WORDS[Math.floor(Math.random() * SESSION_WORDS.length)];
@@ -123,13 +188,8 @@
     $('.session-create-btn').click(function() {
         var name = $('.session-name-input').val().trim().toLowerCase();
         if (!/^[a-zA-Z0-9]+$/.test(name)) return;
-        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
-
         var $btn = $(this);
-        $btn.text('Łączenie…').prop('disabled', true);
-
-        sessionPeer = new Peer(name);
-        sessionPeer.on('open', function(id) {
+        createHub(name, $btn, function(id) {
             var link = window.location.origin + window.location.pathname + '?s=' + id;
             $('.session-link-val').val(link);
             $('.session-links').show();
@@ -137,53 +197,69 @@
             new QRCode(document.getElementById('session-qr'), {text: link, width: 128, height: 128});
             $btn.text('Sesja aktywna');
         });
-        sessionPeer.on('error', function(err) {
-            console.error('[Session] Master error:', err.type);
-            var msg = err.type === 'unavailable-id' ? 'Nazwa zajęta — wybierz inną' : 'Błąd: ' + err.type;
-            $btn.text(msg).prop('disabled', false);
-            sessionPeer = null;
-        });
-        sessionPeer.on('connection', handleMasterConnection);
     });
 
     // Shared master-side connection handling (plain sharing + online debate)
     function handleMasterConnection(conn) {
         conn.on('open', function() {
-            sessionConnections.push({conn: conn});
-            conn.send({type: 'init', state: App.core.getFullState()});
+            var old = sessionConnections[conn.peer];
+            if (old && old !== conn) { try { old.close(); } catch (e) {} }
+            sessionConnections[conn.peer] = conn;
+            // A brand-new joiner with the waiting room on has no roster entry yet, so
+            // connAdmitted() falls back to "admitted iff waiting room is off" — keep
+            // the clock state out of their hands until they're actually let in.
+            if (connAdmitted(conn.peer)) {
+                conn.send({type: 'init', state: App.core.getFullState()});
+            }
             // A reconnecting participant (post-failover) never re-sends {type:'join'},
             // so this is the only place it gets a fresh roster — a brand-new joiner
             // gets a second, complete one moments later once addRosterEntry runs.
-            if (debateRoster.length) conn.send({ type: 'roster', roster: slimRoster() });
+            // With the waiting room on, an unknown peer gets nothing until admitted.
+            if (debateRoster.length && connAdmitted(conn.peer)) {
+                conn.send({ type: 'roster', roster: slimRoster() });
+            }
             App.core.showAlert('Podłączono sesję');
         });
         conn.on('data', function(data) {
+            var sender = findEntryByPeer(conn.peer);
+            // Someone still in the waiting room can't touch the clock, seats or chat
+            if (sender && sender.pending && data.type !== 'join') return;
             if (data.type === 'settings') {
                 App.core.applyState(data.state);
-                sessionConnections.forEach(function(c) {
-                    if (c.conn !== conn) {
-                        try { c.conn.send({type: 'state', state: data.state}); } catch(e) {}
-                    }
+                eachConn(function(c, peerId) {
+                    if (c !== conn && connAdmitted(peerId)) safeSend(c, {type: 'state', state: data.state});
                 });
             } else if (data.type === 'join') {
+                // A kicked/rejected clientId gets the same refusal replayed instead of
+                // being silently re-admitted — otherwise "Usuń" is enforced by nothing
+                // but the removed client's own goodwill (it would just reconnect and
+                // rejoin with the same clientId).
+                if (expelledClientIds[data.clientId]) {
+                    sendToPeer(conn.peer, { type: 'cmd', action: expelledClientIds[data.clientId] });
+                    return;
+                }
                 addRosterEntry(conn.peer, data.name, data.wasMaster, data.clientId);
             } else if (data.type === 'takeSlot') {
-                assignSlot(conn.peer, data.zone, data.index);
+                if (sender) assignSlot(sender.clientId, data.zone, data.index);
             } else if (data.type === 'leaveSlot') {
-                vacateSlot(conn.peer);
+                if (sender) vacateSlot(sender.clientId);
             } else if (data.type === 'chat') {
-                var ce = findEntry(conn.peer);
-                var chatChannel = (data.channel === 'general') ? 'general' : (ce ? ce.zone : 'audience');
-                broadcastChat(ce ? ce.name : 'Uczestnik', data.msg, chatChannel);
+                if (!sender) return; // no roster entry yet (or already removed) — nothing to attribute the message to
+                var chatChannel = (data.channel === 'general') ? 'general' : sender.zone;
+                broadcastChat(sender.name, data.msg, chatChannel);
             } else if (data.type === 'signal') {
-                setSignal(conn.peer, data.kind);
+                if (sender) setSignal(sender.clientId, data.kind);
             } else if (data.type === 'breakout') {
-                setBreakout(conn.peer, data.on);
+                if (sender) setBreakout(sender.clientId, data.on);
             }
         });
         conn.on('close', function() {
-            sessionConnections = sessionConnections.filter(function(c) { return c.conn !== conn; });
-            removeRosterEntry(conn.peer);
+            // A superseded connection (same peer reconnected, or we closed it ourselves
+            // while evicting a stale entry) is not ours to clean up.
+            if (sessionConnections[conn.peer] !== conn) return;
+            delete sessionConnections[conn.peer];
+            var e = findEntryByPeer(conn.peer);
+            if (e) removeRosterEntry(e.clientId);
             App.core.showAlert('Odłączono sesję');
         });
     }
@@ -204,16 +280,6 @@
     $('.slave-disconnect-btn').click(function() {
         if (!window.confirm('Czy na pewno chcesz rozłączyć sesję?')) return;
         window.location.replace(window.location.origin + window.location.pathname);
-    });
-
-    $('.session-join-input').on('input', function() {
-        $(this).val($(this).val().toLowerCase());
-        var val = $(this).val();
-        var wasInvalid = $(this).hasClass('is-invalid');
-        var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
-        $(this).toggleClass('is-invalid', invalid);
-        if (invalid && !wasInvalid) App.core.showWarn('Dozwolone tylko litery a–z, A–Z i cyfry');
-        $('.session-join-btn').prop('disabled', !(val.length > 0 && !invalid));
     });
 
     $('.session-join-btn').click(function() {
@@ -273,8 +339,7 @@
     function pushIdFor(peerId) { return String(peerId).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 64); }
 
     function breakoutRoomId(zone) {
-        var suffix = zone === 'proposition' ? 'proposition' : zone === 'opposition' ? 'opposition' : 'judges';
-        return vdoRoom() + '-bo-' + suffix;
+        return vdoRoom() + '-bo-' + zone;
     }
 
     function buildVdoUrl(mode, name, pushId) {
@@ -478,13 +543,15 @@
     var activeChatIsTeam = false; // false = "Ogólny" tab, true = "Zespół" tab
 
     function myChatZone() {
-        var e = findEntry(myPeerId);
+        var e = myEntry();
         return (e && e.zone) || 'audience';
     }
     function currentChatChannel() { return activeChatIsTeam ? myChatZone() : 'general'; }
 
     function zoneChatLabel(zone) {
         return zone === 'proposition' ? 'Propozycja' : zone === 'opposition' ? 'Opozycja' :
+            zone === 'og' ? 'Otwierający rząd' : zone === 'oo' ? 'Otwierająca opozycja' :
+            zone === 'cg' ? 'Zamykający rząd' : zone === 'co' ? 'Zamykająca opozycja' :
             zone === 'judges' ? 'Sędziowie' : 'Widzowie';
     }
 
@@ -508,7 +575,7 @@
         $('.debate-chat-tab-general').toggleClass('active', !activeChatIsTeam);
         $('.debate-chat-tab-team').toggleClass('active', activeChatIsTeam);
         $('.debate-chat')
-            .removeClass('debate-chat--general debate-chat--proposition debate-chat--opposition debate-chat--judges debate-chat--audience')
+            .removeClass('debate-chat--general debate-chat--proposition debate-chat--opposition debate-chat--og debate-chat--oo debate-chat--cg debate-chat--co debate-chat--judges debate-chat--audience')
             .addClass('debate-chat--' + currentChatChannel());
         renderChatLog();
         (activeChatIsTeam ? $('.debate-chat-tab-team') : $('.debate-chat-tab-general')).removeClass('has-unread');
@@ -528,26 +595,17 @@
         }
     }
 
-    // Master-side send: 'general' goes to everyone, a team channel only to whoever is
-    // *currently* seated in that zone (checked live, not trusted from the sender).
+    // Master-side send: 'general' goes to everyone admitted, a team channel only to
+    // whoever is *currently* seated in that zone (checked live, not trusted from the sender).
     function broadcastChat(name, msg, channel) {
         channel = channel || 'general';
         appendChat(name, msg, channel);
-        sessionConnections.forEach(function (c) {
-            if (channel === 'general') {
-                try { c.conn.send({ type: 'chat', channel: 'general', name: name, msg: msg }); } catch (e) {}
-                return;
+        eachConn(function (conn, peerId) {
+            if (!connAdmitted(peerId)) return;
+            var entry = findEntryByPeer(peerId);
+            if (channel === 'general' || (entry && entry.zone === channel)) {
+                safeSend(conn, { type: 'chat', channel: channel, name: name, msg: msg });
             }
-            var entry = findEntry(c.conn.peer);
-            if (entry && entry.zone === channel) {
-                try { c.conn.send({ type: 'chat', channel: channel, name: name, msg: msg }); } catch (err) {}
-            }
-        });
-    }
-
-    function sendToPeer(peerId, obj) {
-        sessionConnections.forEach(function (c) {
-            if (c.conn.peer === peerId) { try { c.conn.send(obj); } catch (e) {} }
         });
     }
 
@@ -563,52 +621,85 @@
         } else if (data.action === 'allowControls') {
             debateAllowControls = !!data.on;
             updateControlsVisibility();
+        } else if (data.action === 'waiting') {
+            // Waiting room: pull back anything already revealed and park on the hold screen
+            $('.debate-stage').hide();
+            $('.debate-video').empty();
+            debateIframe = null;
+            myEmbedMode = null;
+            $('.debate-waiting-hint').text('Prowadzący włączył poczekalnię — czekasz na wpuszczenie…');
+            $('.debate-waiting').show();
+        } else if (data.action === 'rejected') {
+            window.alert('Prowadzący nie wpuścił Cię do pokoju debaty');
+            window.location.replace(window.location.origin + window.location.pathname);
+        } else if (data.action === 'kick') {
+            window.alert('Prowadzący usunął Cię z pokoju debaty');
+            window.location.replace(window.location.origin + window.location.pathname);
         }
     }
 
-    function findEntry(peerId) {
-        return debateRoster.filter(function(e) { return e.peerId === peerId; })[0];
-    }
-
     function addRosterEntry(peerId, name, wasMaster, clientId) {
+        clientId = clientId || peerId;  // client couldn't mint an id — peerId is the best we have
         // A rejoin after a page refresh gets a brand-new PeerJS peerId, but the same
         // persistent clientId — drop any old entry (and its now-stale connection, which
         // PeerJS may not notice is actually dead for a while yet) for the same browser
         // right away, instead of leaving a duplicate on the list until WebRTC's own
-        // disconnect detection eventually catches up.
-        var stale = clientId ? debateRoster.filter(function(e) { return e.clientId === clientId && e.peerId !== peerId; }) : [];
-        debateRoster = debateRoster.filter(function(e) { return e.peerId !== peerId && (!clientId || e.clientId !== clientId); });
+        // disconnect detection eventually catches up. The master's own entry is never
+        // evicted, even by a join from the same browser (a second tab).
+        var stale = debateRoster.filter(function(e) {
+            return e.role !== 'master' && e.clientId === clientId && e.peerId !== peerId;
+        });
+        debateRoster = debateRoster.filter(function(e) {
+            return e.role === 'master' || (e.clientId !== clientId && e.peerId !== peerId);
+        });
         stale.forEach(function(e) {
-            var staleConn = sessionConnections.filter(function(c) { return c.conn.peer === e.peerId; })[0];
+            var staleConn = sessionConnections[e.peerId];
             if (staleConn) {
-                sessionConnections = sessionConnections.filter(function(c) { return c !== staleConn; });
-                try { staleConn.conn.close(); } catch (err) {}
+                delete sessionConnections[e.peerId];
+                try { staleConn.close(); } catch (err) {}
             }
         });
-        debateRoster.push({
-            // pushId is fixed at the peerId this participant joined with, and — unlike
-            // peerId — is never renamed on promotion, so their existing VDO stream (and
-            // any &forward targeting it) keeps working with no re-embed. See TODO.md.
-            peerId: peerId, pushId: peerId, clientId: clientId || null, name: name, zone: 'audience', index: -1,
-            signal: null, speaking: false, breakout: false,
-            joinSeq: nextJoinSeq++, comaster: null, honorary: !!wasMaster
-        });
+        var entry = {
+            // pushId is fixed at the peerId this participant joined with and never changes
+            // afterwards (not even on promotion to master), so their VDO stream (and any
+            // &forward targeting it) keeps working with no re-embed. See TODO.md.
+            clientId: clientId, peerId: peerId, pushId: peerId, name: name, role: null,
+            zone: 'audience', index: -1, signal: null, speaking: false, breakout: false,
+            joinSeq: nextJoinSeq++, comaster: null, honorary: !!wasMaster,
+            pending: waitingRoomOn
+        };
+        // Same browser rejoining (e.g. after an accidental F5): give back their seat,
+        // raised signal, queue seniority — and their admission, so they skip the
+        // waiting room they already passed through.
+        var prev = stale[0];
+        if (prev) {
+            entry.joinSeq = prev.joinSeq;
+            entry.signal = prev.signal;
+            entry.pending = prev.pending && waitingRoomOn;
+            if (prev.zone !== 'audience' && !occupant(prev.zone, prev.index)) {
+                entry.zone = prev.zone;
+                entry.index = prev.index;
+            }
+        }
+        debateRoster.push(entry);
         syncPrimaryComaster();
         renderDebate();
+        if (entry.pending) sendToPeer(peerId, { type: 'cmd', action: 'waiting' });
     }
 
-    function removeRosterEntry(peerId) {
-        debateRoster = debateRoster.filter(function(e) { return e.peerId !== peerId; });
+    function removeRosterEntry(clientId) {
+        debateRoster = debateRoster.filter(function(e) { return e.clientId !== clientId; });
         syncPrimaryComaster();
         renderDebate();
     }
 
     // Succession queue for who becomes master next: pure function over the already-
-    // replicated roster, ordered by join order, excluding the master itself and
-    // anyone honorary (a former/outgoing master — never re-enters the queue).
+    // replicated roster, ordered by join order, excluding the master itself, anyone
+    // honorary (a former/outgoing master — never re-enters the queue) and anyone
+    // still stuck in the waiting room.
     function computeQueue() {
         return debateRoster
-            .filter(function(e) { return e.peerId !== MASTER_ID && !e.honorary; })
+            .filter(function(e) { return e.role !== 'master' && !e.honorary && !e.pending; })
             .sort(function(a, b) { return a.joinSeq - b.joinSeq; });
     }
 
@@ -618,7 +709,7 @@
     // honorary comaster than none: it's a rare edge case, not the default path.
     function computeFallbackQueue() {
         return debateRoster
-            .filter(function(e) { return e.peerId !== MASTER_ID; })
+            .filter(function(e) { return e.role !== 'master' && !e.pending; })
             .sort(function(a, b) { return a.joinSeq - b.joinSeq; });
     }
 
@@ -642,31 +733,31 @@
     // Master: manually override who the primary comaster is, ahead of the default
     // join-order assignment. Same as above — the roster broadcast that renderDebate()
     // triggers is what actually informs both the old and new comaster.
-    function designateComaster(peerId) {
-        var target = findEntry(peerId);
-        if (!target || target.honorary || target.peerId === MASTER_ID) return;
+    function designateComaster(clientId) {
+        var target = findEntry(clientId);
+        if (!target || target.honorary || target.pending || target.role === 'master') return;
         var current = debateRoster.filter(function(e) { return e.comaster === 'primary'; })[0];
-        if (current && current.peerId !== peerId) current.comaster = null;
+        if (current && current.clientId !== clientId) current.comaster = null;
         target.comaster = 'primary';
         renderDebate();
     }
 
     // Authoritative (master-side) slot assignment — moves a person, vacating their old slot
-    function assignSlot(peerId, zone, index) {
+    function assignSlot(clientId, zone, index) {
         if (!ZONE_SLOTS[zone] || index < 0 || index >= ZONE_SLOTS[zone]) return;
         var taken = debateRoster.some(function(e) {
-            return e.zone === zone && e.index === index && e.peerId !== peerId;
+            return e.zone === zone && e.index === index && e.clientId !== clientId;
         });
         if (taken) return;
-        var e = findEntry(peerId);
+        var e = findEntry(clientId);
         if (!e) return;
         if (e.zone !== zone) resetBreakout(e);
         e.zone = zone; e.index = index;
         renderDebate();
     }
 
-    function vacateSlot(peerId) {
-        var e = findEntry(peerId);
+    function vacateSlot(clientId) {
+        var e = findEntry(clientId);
         if (e) { resetBreakout(e); e.zone = 'audience'; e.index = -1; renderDebate(); }
     }
 
@@ -681,20 +772,20 @@
     function resetBreakout(entry) {
         if (entry && entry.breakout) { entry.breakout = false; doForward(entry); }
     }
-    function setBreakout(peerId, on) {
-        var e = findEntry(peerId);
+    function setBreakout(clientId, on) {
+        var e = findEntry(clientId);
         if (!e || e.zone === 'audience') return;
         e.breakout = !!on;
         doForward(e);
         renderDebate();
     }
     function requestBreakout(on) {
-        if (isDebateMaster) setBreakout(MASTER_ID, on);
+        if (isDebateMaster) setBreakout(myClientId, on);
         else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'breakout', on: on }); } catch (e) {} }
     }
 
-    function setSignal(peerId, kind) {
-        var e = findEntry(peerId);
+    function setSignal(clientId, kind) {
+        var e = findEntry(clientId);
         if (!e) return;
         e.signal = kind || null;
         renderDebate();
@@ -703,11 +794,11 @@
 
     // Called locally (master) or relayed to master (participant)
     function requestSlot(zone, index) {
-        if (isDebateMaster) assignSlot(MASTER_ID, zone, index);
+        if (isDebateMaster) assignSlot(myClientId, zone, index);
         else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'takeSlot', zone: zone, index: index }); } catch (e) {} }
     }
     function requestLeave() {
-        if (isDebateMaster) vacateSlot(MASTER_ID);
+        if (isDebateMaster) vacateSlot(myClientId);
         else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'leaveSlot' }); } catch (e) {} }
     }
 
@@ -718,22 +809,25 @@
         updateMyEmbed();
     }
 
-    // Slim roster shape sent over the wire (everyone renders the same zones from this)
+    // Slim roster shape sent over the wire (everyone renders the same zones from this).
+    // Waiting-room entries stay master-local until admitted.
     function slimRoster() {
-        return debateRoster.map(function(e) {
+        return debateRoster.filter(function(e) { return !e.pending; }).map(function(e) {
             return {
-                peerId: e.peerId, pushId: e.pushId, name: e.name, zone: e.zone, index: e.index, signal: e.signal,
+                clientId: e.clientId, peerId: e.peerId, pushId: e.pushId, name: e.name,
+                role: e.role || null, zone: e.zone, index: e.index, signal: e.signal,
                 speaking: e.speaking, breakout: !!e.breakout,
                 joinSeq: e.joinSeq, comaster: e.comaster || null, honorary: !!e.honorary
             };
         });
     }
 
-    // Master broadcasts a slim roster so every participant renders the same zones
+    // Master broadcasts a slim roster so every admitted participant renders the same zones
     function broadcastRoster() {
         var slim = slimRoster();
-        sessionConnections.forEach(function(c) {
-            try { c.conn.send({ type: 'roster', roster: slim }); } catch (e) {}
+        eachConn(function(conn, peerId) {
+            if (!connAdmitted(peerId)) return;
+            safeSend(conn, { type: 'roster', roster: slim });
         });
     }
 
@@ -744,19 +838,19 @@
     // While I'm in a breakout room, everyone who isn't in that same room with me is someone
     // I can no longer see/hear over VDO — dim them so the UI doesn't lie about who's "here".
     function isDimmedForMe(entry) {
-        var me = findEntry(myPeerId);
+        var me = myEntry();
         if (!me || !me.breakout || !entry) return false;
         return !(entry.zone === me.zone && entry.breakout);
     }
 
     function slotEl(entry, zone, index) {
-        var mine = entry && entry.peerId === myPeerId;
+        var mine = entry && entry.clientId === myClientId;
         var draggable = isDebateMaster && debateEditMode && !!entry;
         var cls = 'slot' + (entry ? '' : ' slot--empty') + (mine ? ' slot--me' : '') +
             (entry && entry.signal ? ' slot--signal' : '') + (draggable ? ' slot--draggable' : '') +
             (isDimmedForMe(entry) ? ' slot--dimmed' : '');
         var $s = $('<div class="' + cls + '"></div>').attr('data-zone', zone).attr('data-index', index);
-        if (draggable) $s.attr('draggable', 'true').attr('data-peer', entry.peerId);
+        if (draggable) $s.attr('draggable', 'true').attr('data-client', entry.clientId);
         if (!entry) {
             var $plus = $('<button type="button" class="slot-avatar slot-plus">+</button>')
                 .attr('data-zone', zone).attr('data-index', index);
@@ -786,21 +880,25 @@
     function renderZones() {
         fillZone('proposition');
         fillZone('opposition');
+        fillZone('og');
+        fillZone('oo');
+        fillZone('cg');
+        fillZone('co');
         fillZone('judges');
 
         var $aud = $('.slot-list[data-zone="audience"]');
         $aud.empty();
-        var aud = debateRoster.filter(function(e) { return e.zone === 'audience'; });
+        var aud = debateRoster.filter(function(e) { return e.zone === 'audience' && !e.pending; });
         if (!aud.length) { $aud.append('<span class="aud-empty text-muted">—</span>'); }
         aud.forEach(function(e) {
             var $d = $('<div class="aud-dot"></div>').attr('title', e.name)
                 .text(e.name ? e.name.trim().charAt(0).toUpperCase() : '');
-            if (e.peerId === myPeerId) $d.addClass('aud-dot--me');
+            if (e.clientId === myClientId) $d.addClass('aud-dot--me');
             if (e.speaking) $d.addClass('aud-dot--speaking');
             if (e.comaster === 'primary') $d.addClass('aud-dot--comaster');
             if (isDimmedForMe(e)) $d.addClass('aud-dot--dimmed');
             if (isDebateMaster && debateEditMode) {
-                $d.addClass('aud-dot--draggable').attr('draggable', 'true').attr('data-peer', e.peerId);
+                $d.addClass('aud-dot--draggable').attr('draggable', 'true').attr('data-client', e.clientId);
             }
             $aud.append($d);
         });
@@ -811,11 +909,11 @@
 
     // Master edit mode: drag a seated slot (or an audience dot) onto another slot to move/swap,
     // or onto the audience list to send someone back to the audience.
-    function moveToSlot(peerId, zone, index) {
-        var mover = findEntry(peerId);
+    function moveToSlot(clientId, zone, index) {
+        var mover = findEntry(clientId);
         if (!mover) return;
         var occ = occupant(zone, index);
-        if (occ && occ.peerId !== peerId) {
+        if (occ && occ.clientId !== clientId) {
             resetBreakout(occ);
             occ.zone = mover.zone; occ.index = mover.index;
         }
@@ -826,7 +924,7 @@
 
     $(document).on('dragstart', '.slot--draggable, .aud-dot--draggable', function(e) {
         if (!isDebateMaster || !debateEditMode) { e.preventDefault(); return; }
-        e.originalEvent.dataTransfer.setData('text/plain', $(this).data('peer'));
+        e.originalEvent.dataTransfer.setData('text/plain', $(this).data('client'));
         e.originalEvent.dataTransfer.effectAllowed = 'move';
     });
     $(document).on('dragover', '.slot[data-zone], .slot-list[data-zone="audience"]', function(e) {
@@ -844,15 +942,15 @@
         if (!isDebateMaster || !debateEditMode) return;
         e.preventDefault();
         $(this).removeClass('slot--dragover');
-        var peerId = e.originalEvent.dataTransfer.getData('text/plain');
-        moveToSlot(peerId, $(this).data('zone'), parseInt($(this).data('index'), 10));
+        var clientId = e.originalEvent.dataTransfer.getData('text/plain');
+        moveToSlot(clientId, $(this).data('zone'), parseInt($(this).data('index'), 10));
     });
     $(document).on('drop', '.slot-list[data-zone="audience"]', function(e) {
         if (!isDebateMaster || !debateEditMode) return;
         e.preventDefault();
         $(this).removeClass('slot--dragover');
-        var peerId = e.originalEvent.dataTransfer.getData('text/plain');
-        vacateSlot(peerId);
+        var clientId = e.originalEvent.dataTransfer.getData('text/plain');
+        vacateSlot(clientId);
     });
 
     $('.debate-editmode-btn').click(function() {
@@ -874,8 +972,17 @@
         }
         debateRoster.forEach(function(e) {
             var $row = $('<div class="roster-row"></div>');
-            $row.append($('<span class="roster-name"></span>').text(e.name + (e.peerId === MASTER_ID ? ' (Ty)' : '')));
+            $row.append($('<span class="roster-name"></span>').text(e.name + (e.role === 'master' ? ' (Ty)' : '')));
             $row.append($('<span class="roster-role"></span>').text(zoneLabel(e.zone)));
+            if (e.pending) {
+                $('<span class="badge badge-warning roster-pending-badge" title="Czeka na wpuszczenie"></span>').text('Poczekalnia').appendTo($row);
+                $('<button type="button" class="btn btn-outline-primary btn-sm roster-admit">Wpuść</button>')
+                    .attr('data-client', e.clientId).appendTo($row);
+                $('<button type="button" class="btn btn-outline-danger btn-sm roster-reject">Odrzuć</button>')
+                    .attr('data-client', e.clientId).appendTo($row);
+                $r.append($row);
+                return;
+            }
             if (e.comaster === 'primary') {
                 $('<span class="badge badge-info comaster-badge" title="Wyznaczony następca mastera"></span>').text('Co-master').appendTo($row);
             }
@@ -884,36 +991,76 @@
             }
             if (e.signal) {
                 $('<button type="button" class="btn btn-sm roster-signal"></button>')
-                    .attr('data-peer', e.peerId)
+                    .attr('data-client', e.clientId)
                     .text(e.signal === 'advocem' ? 'AD VOCEM' : '✋ ręka')
                     .appendTo($row);
             }
             if (e.breakout) {
                 $('<span class="badge badge-secondary roster-breakout-badge"></span>').text('Narada').appendTo($row);
                 $('<button type="button" class="btn btn-outline-secondary btn-sm roster-recall">Wróć</button>')
-                    .attr('data-peer', e.peerId).appendTo($row);
+                    .attr('data-client', e.clientId).appendTo($row);
             }
-            if (e.peerId !== MASTER_ID) {
+            if (e.role !== 'master') {
                 $('<button type="button" class="btn btn-outline-secondary btn-sm roster-mute">Wycisz</button>')
-                    .attr('data-peer', e.peerId).appendTo($row);
+                    .attr('data-client', e.clientId).appendTo($row);
                 if (e.comaster === 'primary') {
                     $('<button type="button" class="btn btn-outline-primary btn-sm roster-promote">Uczyń masterem</button>')
-                        .attr('data-peer', e.peerId).appendTo($row);
+                        .attr('data-client', e.clientId).appendTo($row);
                 } else if (!e.honorary) {
                     $('<button type="button" class="btn btn-outline-secondary btn-sm roster-designate-comaster">Ustaw jako co-master</button>')
-                        .attr('data-peer', e.peerId).appendTo($row);
+                        .attr('data-client', e.clientId).appendTo($row);
                 }
+                $('<button type="button" class="btn btn-outline-danger btn-sm roster-kick">Usuń</button>')
+                    .attr('data-client', e.clientId).appendTo($row);
             }
             $r.append($row);
         });
     }
 
+    // Master: push a participant out of the room (reject = still in the waiting room,
+    // kick = already admitted). The cmd is sent first; the conn is closed a moment
+    // later so the message has time to flush before the channel goes down.
+    function expelParticipant(clientId, action) {
+        var e = findEntry(clientId);
+        if (!e || e.role === 'master') return;
+        expelledClientIds[clientId] = action;
+        sendToPeer(e.peerId, { type: 'cmd', action: action });
+        var peerId = e.peerId;
+        setTimeout(function() {
+            var conn = sessionConnections[peerId];
+            if (conn) {
+                delete sessionConnections[peerId];
+                try { conn.close(); } catch (err) {}
+            }
+        }, 1000);
+        removeRosterEntry(clientId);
+    }
+
+    $(document).on('click', '.roster-admit', function() {
+        var e = findEntry(String($(this).data('client')));
+        if (!e || !e.pending) return;
+        e.pending = false;
+        syncPrimaryComaster();
+        renderDebate();
+        sendToPeer(e.peerId, { type: 'init', state: App.core.getFullState() });
+        App.core.showAlert('Wpuszczono: ' + e.name);
+    });
+    $(document).on('click', '.roster-reject', function() {
+        expelParticipant(String($(this).data('client')), 'rejected');
+    });
+    $(document).on('click', '.roster-kick', function() {
+        if (!window.confirm('Usunąć uczestnika z pokoju?')) return;
+        expelParticipant(String($(this).data('client')), 'kick');
+    });
+
     $(document).on('click', '.roster-recall', function() {
-        setBreakout(String($(this).data('peer')), false);
+        setBreakout(String($(this).data('client')), false);
     });
 
     function zoneLabel(zone) {
         return zone === 'proposition' ? 'Propozycja' : zone === 'opposition' ? 'Opozycja' :
+            zone === 'og' ? 'OG' : zone === 'oo' ? 'OO' :
+            zone === 'cg' ? 'CG' : zone === 'co' ? 'CO' :
             zone === 'judges' ? 'Sędzia' : 'Widz';
     }
 
@@ -927,17 +1074,23 @@
     });
 
     $(document).on('click', '.roster-mute', function() {
-        sendToPeer(String($(this).data('peer')), { type: 'cmd', action: 'mute' });
+        var e = findEntry(String($(this).data('client')));
+        if (!e) return;
+        sendToPeer(e.peerId, { type: 'cmd', action: 'mute' });
         App.core.showAlert('Wyciszono uczestnika');
     });
 
     $(document).on('click', '.roster-signal', function() {
-        setSignal(String($(this).data('peer')), null);
+        var clientId = String($(this).data('client'));
+        setSignal(clientId, null);
+        // Clearing our own signal from the admin panel (the master can be seated too)
+        // bypasses toggleSignal, which is the only other place mySignal is written.
+        if (clientId === myClientId) { mySignal = null; updateSignalButtons(); }
     });
 
     // Switch our own VDO iframe between publishing (took a slot) and viewing the scene
     function updateMyEmbed() {
-        var me = findEntry(myPeerId);
+        var me = myEntry();
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
@@ -962,16 +1115,6 @@
     }
 
     // Master: create a debate room
-    $('.debate-name-input').on('input', function() {
-        $(this).val($(this).val().toLowerCase());
-        var val = $(this).val();
-        var wasInvalid = $(this).hasClass('is-invalid');
-        var invalid = val.length > 0 && !/^[a-zA-Z0-9]+$/.test(val);
-        $(this).toggleClass('is-invalid', invalid);
-        if (invalid && !wasInvalid) App.core.showWarn('Dozwolone tylko litery a–z, A–Z i cyfry');
-        $('.debate-create-btn').prop('disabled', !(val.length > 0 && !invalid));
-    });
-
     $('.debate-random-btn').click(function() {
         var name = SESSION_WORDS[Math.floor(Math.random() * SESSION_WORDS.length)];
         $('.debate-name-input').val(name).trigger('input');
@@ -980,42 +1123,31 @@
     $('.debate-create-btn').click(function() {
         var name = $('.debate-name-input').val().trim().toLowerCase();
         if (!/^[a-zA-Z0-9]+$/.test(name)) return;
-        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
-
         var $btn = $(this);
-        $btn.text('Łączenie…').prop('disabled', true);
-
-        sessionPeer = new Peer(name);
-        sessionPeer.on('open', function(id) {
+        createHub(name, $btn, function(id) {
             debateSessionId = id;
             isDebateMaster = true;
-            myPeerId = MASTER_ID;
-            myPushId = MASTER_ID;
+            myPushId = myClientId;   // the master publishes under its stable clientId
             myGeneration = 0;
+            nextJoinSeq = 1;
+            expelledClientIds = {};
             myDebateName = $('.debate-master-name-input').val().trim() || 'Prowadzący';
             markWasMaster(id);
             debateRoster = [{
-                peerId: MASTER_ID, pushId: MASTER_ID, name: myDebateName, zone: 'audience', index: -1,
+                clientId: myClientId, peerId: null, pushId: myClientId, name: myDebateName,
+                role: 'master', zone: 'audience', index: -1,
                 signal: null, speaking: false, breakout: false,
-                joinSeq: 0, comaster: null, honorary: false
+                joinSeq: 0, comaster: null, honorary: false, pending: false
             }];
             embedDirector();
             $('body').addClass('is-debate-master');
             $('.debate-empty').hide();
             $('.debate-stage').show();
-            $('.debate-roster-wrap').show();
             updateShareLinks();
             myEmbedMode = null;
             renderDebate(); // seeds the scene iframe via updateMyEmbed
             $btn.text('Debata aktywna');
         });
-        sessionPeer.on('error', function(err) {
-            console.error('[Debata] Master error:', err.type);
-            var msg = err.type === 'unavailable-id' ? 'Nazwa zajęta — wybierz inną' : 'Błąd: ' + err.type;
-            $btn.text(msg).prop('disabled', false);
-            sessionPeer = null;
-        });
-        sessionPeer.on('connection', handleMasterConnection);
     });
 
     $('.debate-copy-btn').click(function() {
@@ -1038,7 +1170,9 @@
         postToFrame(previewIframe, { changeAudioDevice: joinMicDeviceIndex });
     });
 
-    // Participant: submit name, join as audience, announce to master
+    // Participant: submit name, announce to master. The stage is revealed by the first
+    // roster broadcast — which the master only sends once we're in (immediately, unless
+    // the waiting room is on, in which case a {cmd:'waiting'} arrives instead).
     $('.debate-join-btn').click(function() {
         var name = $('.debate-join-name').val().trim();
         if (!name) { $('.debate-join-error').text('Podaj imię').show(); return; }
@@ -1047,9 +1181,9 @@
         myDebateName = name;
         clearPreview();
         $('.debate-join').hide();
-        $('.debate-stage').show();
+        $('.debate-waiting-hint').text('Dołączanie…');
+        $('.debate-waiting').show();
         myEmbedMode = null;
-        updateMyEmbed(); // audience → scene viewer
 
         sendJoinMessage(name);
     });
@@ -1077,7 +1211,7 @@
     // Debater signals — click again to cancel (toggle)
     function toggleSignal(kind) {
         mySignal = (mySignal === kind) ? null : kind;
-        if (isDebateMaster) setSignal(MASTER_ID, mySignal);
+        if (isDebateMaster) setSignal(myClientId, mySignal);
         else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'signal', kind: mySignal }); } catch (e) {} }
         updateSignalButtons();
     }
@@ -1086,24 +1220,48 @@
 
     // Debater/judge: step into (or back out of) their team's breakout room
     function updateBreakoutButton() {
-        var me = findEntry(myPeerId);
+        var me = myEntry();
         var inBreakout = !!(me && me.breakout);
         $('.debate-breakout-btn').toggleClass('active', inBreakout)
             .text(inBreakout ? 'Wróć do pokoju głównego' : 'Pokój narad');
     }
     $('.debate-breakout-btn').click(function() {
-        var me = findEntry(myPeerId);
+        var me = myEntry();
         requestBreakout(!(me && me.breakout));
     });
 
     // Master: let positioned participants control the clock
-    $('.debate-allow-controls-btn').click(function() {
-        debateAllowControls = !debateAllowControls;
-        $(this).toggleClass('active', debateAllowControls)
-            .text(debateAllowControls ? 'Zablokuj sterowanie zegarem' : 'Pozwól sterować zegarem');
-        sessionConnections.forEach(function(c) {
-            try { c.conn.send({ type: 'cmd', action: 'allowControls', on: debateAllowControls }); } catch (e) {}
+    $('.debate-allow-controls-checkbox').change(function() {
+        debateAllowControls = this.checked;
+        eachConn(function(c) {
+            safeSend(c, { type: 'cmd', action: 'allowControls', on: debateAllowControls });
         });
+    });
+
+    // Participant: leave the debate room entirely (the master uses "Zamknij pokój" instead)
+    $('.debate-leave-btn').click(function() {
+        if (!window.confirm('Czy na pewno chcesz opuścić pokój debaty?')) return;
+        window.location.replace(window.location.origin + window.location.pathname);
+    });
+
+    // Master: waiting room — new joiners need explicit approval. Turning it off
+    // admits everyone still waiting.
+    $('.debate-waitroom-btn').click(function() {
+        waitingRoomOn = !waitingRoomOn;
+        $(this).toggleClass('active', waitingRoomOn)
+            .text(waitingRoomOn ? 'Wyłącz poczekalnię' : 'Włącz poczekalnię');
+        if (!waitingRoomOn) {
+            var admitted = [];
+            debateRoster.forEach(function(e) {
+                if (e.pending) { e.pending = false; admitted.push(e); }
+            });
+            if (admitted.length) {
+                syncPrimaryComaster();
+                renderDebate();
+                admitted.forEach(function(e) { sendToPeer(e.peerId, { type: 'init', state: App.core.getFullState() }); });
+            }
+        }
+        App.core.showAlert(waitingRoomOn ? 'Poczekalnia włączona' : 'Poczekalnia wyłączona');
     });
 
     // Master: toggle the shared clock between prep time and the normal, configured speech time
@@ -1118,34 +1276,40 @@
 
     // Master room controls
     $('.debate-muteall-btn').click(function() {
-        sessionConnections.forEach(function(c) {
-            try { c.conn.send({ type: 'cmd', action: 'mute' }); } catch (e) {}
-        });
+        eachConn(function(c) { safeSend(c, { type: 'cmd', action: 'mute' }); });
         App.core.showAlert('Wyciszono wszystkich');
     });
 
     $('.debate-close-btn').click(function() {
         if (!window.confirm('Zamknąć pokój debaty? Wszyscy uczestnicy zostaną rozłączeni.')) return;
-        sessionConnections.forEach(function(c) {
-            try { c.conn.send({ type: 'cmd', action: 'close' }); } catch (e) {}
-        });
-        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
-        if (backupPeer) { backupPeer.destroy(); backupPeer = null; }
-        sessionConnections = [];
+        eachConn(function(c) { safeSend(c, { type: 'cmd', action: 'close' }); });
+        // Give the 'close' command a moment to actually flush over the data channel
+        // before tearing down the hub — destroying it immediately can sever the
+        // channel before the message arrives, and a comaster who never saw it treats
+        // the drop as a crash and promotes itself, quietly resurrecting the room.
+        var peerToDestroy = sessionPeer, backupToDestroy = backupPeer;
+        sessionPeer = null;
+        backupPeer = null;
+        setTimeout(function() {
+            if (peerToDestroy) peerToDestroy.destroy();
+            if (backupToDestroy) backupToDestroy.destroy();
+        }, 1000);
+        sessionConnections = {};
         debateRoster = [];
+        expelledClientIds = {};
         isDebateMaster = false;
         isPrimaryComaster = false;
-        myPeerId = null;
         myPushId = null;
         myGeneration = 0;
         myEmbedMode = null;
-        streamNames = {};
+        waitingRoomOn = false;
+        $('.debate-waitroom-btn').removeClass('active').text('Włącz poczekalnię');
         $('body').removeClass('is-debate-master is-publishing is-comaster-primary');
         $('.debate-video').empty();
         debateIframe = null;
         removeDirector();
         $('.debate-stage').hide();
-        $('.debate-roster-wrap').hide();
+        $('.debate-roster-modal').modal('hide');
         $('.debate-empty').show();
         $('.debate-links').hide();
         $('.debate-created-hint').hide();
@@ -1177,22 +1341,22 @@
         if (!d) return;
         if (debateIframe && e.source === debateIframe.contentWindow) {
             if (d.deviceList) populateDevices(d.deviceList);
-            // Speaking indicator (master only): map loud streams to names
-            if (d.action === 'guest-connected' && d.streamID) streamNames[d.streamID] = (d.value && d.value.label) || '';
-            if (d.action === 'guest-disconnected' && d.streamID) delete streamNames[d.streamID];
             if (d.loudness !== undefined) handleLoudness(d.loudness);
         } else if (previewIframe && e.source === previewIframe.contentWindow) {
             if (d.deviceList) populateJoinDevices(d.deviceList);
         }
     });
 
-    // Best-effort talk detection from VDO loudness — thresholds/shape need live tuning
+    // Best-effort talk detection from VDO loudness — thresholds/shape need live tuning.
+    // Every publisher's VDO streamID is our own deterministic pushIdFor(pushId) (we
+    // always set &push), so loud streams map straight onto roster entries — no name
+    // matching, which used to conflate two participants sharing a display name.
     function handleLoudness(loud) {
         if (!isDebateMaster) return;
         var THRESH = 5;
-        var speaking = {};
+        var loudIds = {};
         var consider = function(streamID, level) {
-            if (level != null && level > THRESH && streamNames[streamID]) speaking[streamNames[streamID]] = true;
+            if (streamID && level != null && level > THRESH) loudIds[streamID] = true;
         };
         if (Array.isArray(loud)) {
             loud.forEach(function(x) { consider(x.streamID || x.id, x.loudness != null ? x.loudness : x.level); });
@@ -1201,15 +1365,16 @@
         }
         var changed = false;
         debateRoster.forEach(function(e) {
-            var sp = !!speaking[e.name];
+            var sp = !!loudIds[pushIdFor(e.pushId)];
             if (sp !== !!e.speaking) { e.speaking = sp; changed = true; }
         });
         if (changed) { renderZones(); broadcastSpeaking(); }
     }
     function broadcastSpeaking() {
-        var names = debateRoster.filter(function(e) { return e.speaking; }).map(function(e) { return e.name; });
-        sessionConnections.forEach(function(c) {
-            try { c.conn.send({ type: 'speaking', names: names }); } catch (e) {}
+        var ids = debateRoster.filter(function(e) { return e.speaking; }).map(function(e) { return e.pushId; });
+        eachConn(function(c, peerId) {
+            if (!connAdmitted(peerId)) return;
+            safeSend(c, { type: 'speaking', pushIds: ids });
         });
     }
 
@@ -1229,14 +1394,26 @@
 
     // Create/destroy the standby PeerJS hub at genName(myGeneration + 1). Called from
     // handleSlaveData whenever a roster broadcast shows my own entry's comaster status
-    // has changed. Connections landing on it are handled exactly like connections
+    // has changed. A connection landing on it is itself proof of failover (see below),
+    // so it promotes us to master first and is then handled exactly like a connection
     // landing on the primary sessionPeer.
     function setComasterHosting(on) {
         isPrimaryComaster = on;
         $('body').toggleClass('is-comaster-primary', on);
         if (on && !backupPeer) {
             backupPeer = new Peer(genName(myGeneration + 1));
-            backupPeer.on('connection', handleMasterConnection);
+            keepSignalingAlive(backupPeer);
+            backupPeer.on('connection', function(conn) {
+                // Someone only reaches us here after their previous generation was
+                // unreachable (peer-unavailable or a full timeout) — for them that IS
+                // proof of failover, even if we haven't noticed our own masterConn drop
+                // yet (our retry/promotion timer is a separate 5s clock). Promote before
+                // servicing the connection so it's met by an actual master — otherwise
+                // it gets adopted, added to our local roster, and then silently stranded
+                // with no broadcastRoster (that only fires once isDebateMaster is true).
+                if (!isDebateMaster) promoteSelfToMaster(null);
+                handleMasterConnection(conn);
+            });
             backupPeer.on('error', function(err) {
                 console.error('[Comaster] backup hub error:', err.type);
             });
@@ -1275,15 +1452,21 @@
         if (source && source.roster) debateRoster = source.roster;
         if (source && source.state) App.core.applyState(source.state);
 
-        // Drop the old master's own entry — on a crash it was never removed (nobody's
+        // Drop the dead ex-master's entry — on a crash it was never removed (nobody's
         // 'close' handler ever fires for the master's own roster slot, only for
         // incoming participant connections), so without this it would linger as a
-        // stale, unremovable duplicate MASTER_ID entry once I rename myself to it below.
-        debateRoster = debateRoster.filter(function(e) { return e.peerId !== MASTER_ID; });
+        // stale, unremovable entry next to the newly-promoted one.
+        debateRoster = debateRoster.filter(function(e) { return e.role !== 'master'; });
 
-        var me = findEntry(myPeerId);
-        if (me) { me.peerId = MASTER_ID; me.comaster = null; me.honorary = false; }
-        myPeerId = MASTER_ID;
+        // A non-master client never runs addRosterEntry, so nextJoinSeq is still stuck
+        // at its initial 1 — without recomputing it from the inherited roster, the next
+        // person to join here would look senior to everyone already seated.
+        nextJoinSeq = debateRoster.reduce(function(max, e) { return Math.max(max, e.joinSeq + 1); }, 1);
+
+        // Taking over is just flipping the role field on my own (clientId-keyed) entry —
+        // peerId and pushId stay untouched, so my VDO stream and seat survive as-is.
+        var me = myEntry();
+        if (me) { me.role = 'master'; me.peerId = null; me.comaster = null; me.honorary = false; }
         myGeneration += 1;
         isDebateMaster = true;
         App.state.isSlaveSession = false;
@@ -1298,9 +1481,17 @@
         embedDirector();
         updateShareLinks();
         $('body').addClass('is-debate-master').removeClass('is-comaster-primary');
-        $('.debate-roster-wrap').show();
         App.core.showAlert('Zostałeś nowym prowadzącym debaty');
         renderDebate();
+
+        // getLoudness was only ever requested by the *previous* master's own iframe
+        // (in embedVdo's onload); ours never asked, and updateMyEmbed() above only
+        // re-embeds on a mode change — which usually doesn't happen here — so the
+        // speaking indicator would otherwise go dark for the rest of the debate.
+        if (debateIframe) {
+            postToVdo({ getLoudness: true });
+            setTimeout(function() { postToVdo({ getLoudness: true }); }, 3000);
+        }
     }
 
     // Master: hand off the role to a specific comaster without leaving the room —
@@ -1310,29 +1501,35 @@
     // own seat and rejoins fresh afterward — exactly like a returning-after-crash master
     // — so it's granted honorary comaster status by the same wasMaster mechanism instead
     // of a special-cased transplant.
-    function handoffMasterTo(peerId) {
+    function handoffMasterTo(clientId) {
         if (!window.confirm('Przekazać rolę mastera temu uczestnikowi?')) return;
-        var target = findEntry(peerId);
+        var target = findEntry(clientId);
         if (!target) return;
 
-        var rosterForHandoff = debateRoster.filter(function(e) { return e.peerId !== MASTER_ID; });
-        sendToPeer(peerId, { type: 'promoteToMaster', state: App.core.getFullState(), roster: rosterForHandoff });
+        var rosterForHandoff = debateRoster.filter(function(e) { return e.role !== 'master'; });
+        sendToPeer(target.peerId, { type: 'promoteToMaster', state: App.core.getFullState(), roster: rosterForHandoff });
         markWasMaster(debateSessionId);
 
-        if (sessionPeer) { sessionPeer.destroy(); sessionPeer = null; }
-        sessionConnections = [];
+        // Same flush concern as closing the room: destroying our hub the instant after
+        // send() can sever the channel before 'promoteToMaster' actually reaches the
+        // target, in which case they'd fall back to noticing the crash on their own —
+        // give the message a moment to land first.
+        var peerToDestroy = sessionPeer;
+        sessionPeer = null;
+        setTimeout(function() { if (peerToDestroy) peerToDestroy.destroy(); }, 1000);
+        sessionConnections = {};
         isDebateMaster = false;
         App.state.isSlaveSession = true;
         removeDirector();
         $('body').removeClass('is-debate-master');
-        $('.debate-roster-wrap').hide();
+        $('.debate-roster-modal').modal('hide');
         App.core.showAlert('Przekazano rolę prowadzącego');
 
         var name = myDebateName;
         var fromGen = myGeneration;
         myPeer = new Peer();
+        keepSignalingAlive(myPeer);
         myPeer.on('open', function(id) {
-            myPeerId = id;
             myPushId = id;
             connectToRoom(fromGen, function(gen, conn) {
                 attachMasterConn(conn, gen, 'Połączono ponownie z prowadzącym');
@@ -1359,7 +1556,13 @@
             cb(ok, conn);
         }
         function onPeerError(err) {
-            if (err.type === 'peer-unavailable') finish(false);
+            // 'error' is emitted on the shared Peer, not per-connection, so a
+            // still-in-flight error from an earlier, already-abandoned probe (its own
+            // timeout can fire before the signaling server actually reports the id as
+            // unavailable) can otherwise land here and fast-fail an unrelated, possibly
+            // about-to-succeed attempt. PeerJS puts the id in the message text — that's
+            // the only way to tell the two apart.
+            if (err.type === 'peer-unavailable' && String(err.message || '').indexOf(targetId) !== -1) finish(false);
         }
         myPeer.on('error', onPeerError);
         var conn = myPeer.connect(targetId, { serialization: 'json' });
@@ -1391,11 +1594,13 @@
     }
 
     // Wire up a newly (re)established connection to the master/comaster hub.
-    function attachMasterConn(conn, gen, toast) {
+    // `onLost` overrides the debate-mode reconnect cascade — the plain sharing
+    // session passes its own simpler "session lost" handler here.
+    function attachMasterConn(conn, gen, toast, onLost) {
         myGeneration = gen;
         masterConn = conn;
         masterConn.on('data', handleSlaveData);
-        masterConn.on('close', handleMasterConnLost);
+        masterConn.on('close', onLost || handleMasterConnLost);
         if (toast) App.core.showAlert(toast);
     }
 
@@ -1404,6 +1609,15 @@
     // the host is actually gone — before treating it as a real failover. Only then does
     // the primary comaster promote itself (it already hosts the next generation as a
     // standby); everyone else instead searches forward for wherever the room now lives.
+    // After any reconnect, tell the (possibly new) master who we are. addRosterEntry
+    // treats a same-clientId rejoin as "welcome back" (restores seat/seniority if still
+    // free), so this is always safe — and it's the only way a freshly-promoted comaster,
+    // whose mirrored roster never carried our entry while we were still in the waiting
+    // room (slimRoster() deliberately omits pending entries), learns we exist at all.
+    function resendJoinAfterReconnect() {
+        if (!isDebateMaster && myDebateName) sendJoinMessage(myDebateName);
+    }
+
     function handleMasterConnLost() {
         // Already master via another path (e.g. this is our own pre-promotion
         // masterConn closing as a side effect of a manual handoff) — irrelevant now.
@@ -1411,10 +1625,15 @@
         App.core.showWarn('Utracono połączenie z prowadzącym — próba przełączenia…');
         var fromGen = myGeneration;
         tryConnect(genName(fromGen), 5000, function(ok, conn) {
-            if (ok) { attachMasterConn(conn, fromGen, 'Połączono ponownie z prowadzącym'); return; }
+            if (ok) {
+                attachMasterConn(conn, fromGen, 'Połączono ponownie z prowadzącym');
+                resendJoinAfterReconnect();
+                return;
+            }
             if (isPrimaryComaster) { promoteSelfToMaster(null); return; }
             probeForward(fromGen + 1, fromGen + 10, function(gen, conn2) {
                 attachMasterConn(conn2, gen, 'Połączono ponownie z prowadzącym');
+                resendJoinAfterReconnect();
             }, function() {
                 $('.session-lost-alert').fadeIn(50);
             });
@@ -1422,10 +1641,10 @@
     }
 
     $(document).on('click', '.roster-promote', function() {
-        handoffMasterTo(String($(this).data('peer')));
+        handoffMasterTo(String($(this).data('client')));
     });
     $(document).on('click', '.roster-designate-comaster', function() {
-        designateComaster(String($(this).data('peer')));
+        designateComaster(String($(this).data('client')));
     });
 
     // Slave-side dispatch of data arriving over masterConn — factored out so it can
@@ -1437,18 +1656,31 @@
         else if (data.type === 'promoteToMaster') { promoteSelfToMaster({ state: data.state, roster: data.roster }); }
         else if (data.type === 'roster') {
             debateRoster = data.roster || [];
+            // The first roster that actually contains us doubles as the admission
+            // signal: only then leave the hold screen for the stage (a roster without
+            // our entry can arrive in between — e.g. broadcast for someone else's join
+            // while ours is still in flight).
+            if ($('.debate-waiting').is(':visible') && myEntry()) {
+                $('.debate-waiting').hide();
+                $('.debate-stage').show();
+            }
             renderZones();
             updateMyEmbed();
+            var me = myEntry();
+            // The master can clear a raised hand/ad-vocem from the management panel —
+            // without resyncing from our own roster entry, our toggle button would stay
+            // lit and the next click would re-send the same (already-cleared) value.
+            mySignal = me ? me.signal : null;
+            updateSignalButtons();
             // Whether I should be hosting the standby hub is derived from my own entry
             // in every roster broadcast, not a separate point-to-point message — right
             // after a promotion the designated comaster usually isn't even connected
             // yet, so a one-shot message sent at that instant could silently miss them.
-            var me = findEntry(myPeerId);
             var shouldHost = !!(me && me.comaster === 'primary');
             if (shouldHost !== isPrimaryComaster) setComasterHosting(shouldHost);
         }
         else if (data.type === 'speaking') {
-            debateRoster.forEach(function(e) { e.speaking = data.names.indexOf(e.name) !== -1; });
+            debateRoster.forEach(function(e) { e.speaking = (data.pushIds || []).indexOf(e.pushId) !== -1; });
             renderZones();
         }
     }
@@ -1480,9 +1712,9 @@
         $('.session-status').text('Łączenie z sesją…').show();
 
         myPeer = new Peer();
+        keepSignalingAlive(myPeer);
         myPeer.on('open', function(myId) {
             console.log('[Session] Slave peer opened:', myId);
-            myPeerId = myId;
             myPushId = myId;
 
             if (isDebate) {
@@ -1501,19 +1733,18 @@
                     $('.session-status').text('Nie udało się połączyć z pokojem debaty').show();
                 });
             } else {
-                masterConn = myPeer.connect(s, {serialization: 'json'});
-                masterConn.on('open', function() {
+                var conn = myPeer.connect(s, {serialization: 'json'});
+                conn.on('open', function() {
                     console.log('[Session] Connected to master!');
                     $('.session-status').hide();
                     App.core.showAlert('Połączono z sesją');
                 });
-                masterConn.on('data', handleSlaveData);
-                masterConn.on('close', function() {
-                    $('.session-lost-alert').fadeIn(50);
-                });
-                masterConn.on('error', function(err) {
+                conn.on('error', function(err) {
                     console.error('[Session] Conn error:', err);
                     $('.session-status').text('Błąd połączenia: ' + err.type).show();
+                });
+                attachMasterConn(conn, 0, null, function() {
+                    $('.session-lost-alert').fadeIn(50);
                 });
             }
         });

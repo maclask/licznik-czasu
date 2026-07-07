@@ -388,16 +388,30 @@
           </div>
         </div>
 
+        <!-- Participant: hold screen while joining / waiting for admission -->
+        <div class="debate-waiting" style="display:none">
+          <div class="panel-header"><h2>Debata online</h2></div>
+          <p class="debate-waiting-hint">Dołączanie…</p>
+        </div>
+
         <!-- Debate stage: 3-column layout -->
         <div class="debate-stage" style="display:none">
           <h2 class="text-uppercase motion-text debate-motion"></h2>
           <div class="debate-grid">
 
-            <!-- LEFT: proposition / judges / audience -->
+            <!-- LEFT: proposition (oxford) / government (bp) / judges / audience -->
             <div class="debate-side debate-side-left">
-              <div class="debate-zone">
+              <div class="debate-zone oxford-only">
                 <h3 class="debate-zone-title">Propozycja</h3>
                 <div class="slot-list" data-zone="proposition" data-slots="4"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Otwierający rząd (OG)</h3>
+                <div class="slot-list" data-zone="og" data-slots="2"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Zamykający rząd (CG)</h3>
+                <div class="slot-list" data-zone="cg" data-slots="2"></div>
               </div>
               <div class="debate-zone">
                 <h3 class="debate-zone-title">Sędziowie</h3>
@@ -442,11 +456,19 @@
               </div>
             </div>
 
-            <!-- RIGHT: opposition / chat -->
+            <!-- RIGHT: opposition (oxford) / opposition benches (bp) / chat -->
             <div class="debate-side debate-side-right">
-              <div class="debate-zone">
+              <div class="debate-zone oxford-only">
                 <h3 class="debate-zone-title">Opozycja</h3>
                 <div class="slot-list" data-zone="opposition" data-slots="4"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Otwierająca opozycja (OO)</h3>
+                <div class="slot-list" data-zone="oo" data-slots="2"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Zamykająca opozycja (CO)</h3>
+                <div class="slot-list" data-zone="co" data-slots="2"></div>
               </div>
               <div class="debate-chat">
                 <h3 class="debate-zone-title">Czat</h3>
@@ -466,35 +488,55 @@
 
           </div>
 
-          <!-- BOTTOM bar: media / signals / room controls -->
+          <!-- BOTTOM bar: media / signals / room controls, grouped into 3 columns -->
           <div class="debate-controls">
-            <div class="debate-self-controls">
+            <div class="debate-control-col debate-self-controls">
+              <h4 class="debate-control-col-title">Audio / wideo</h4>
+              <select class="form-control form-control-sm debate-mic-select" style="display:none"></select>
+              <select class="form-control form-control-sm debate-cam-select" style="display:none"></select>
               <button type="button" class="btn btn-outline-secondary btn-sm debate-mic-btn">Wycisz mikrofon</button>
               <button type="button" class="btn btn-outline-secondary btn-sm debate-cam-btn">Wyłącz kamerę</button>
-              <select class="form-control form-control-sm debate-cam-select" style="width:auto;display:none"></select>
-              <select class="form-control form-control-sm debate-mic-select" style="width:auto;display:none"></select>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-leave-btn">Opuść pokój</button>
             </div>
-            <div class="debate-signal-controls">
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-hand-btn">Podnieś rękę</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-advocem-btn">Ad vocem</button>
+            <div class="debate-control-col debate-signal-controls">
+              <h4 class="debate-control-col-title">Zgłoszenia</h4>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-hand-btn">✋ Podnieś rękę</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-advocem-btn">🗣️ Ad vocem</button>
               <button type="button" class="btn btn-outline-secondary btn-sm debate-breakout-btn">Pokój narad</button>
             </div>
-            <div class="debate-master-controls">
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-editmode-btn">Edytuj przypisanie miejsc</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-allow-controls-btn">Pozwól sterować zegarem</button>
+            <div class="debate-control-col debate-master-controls">
+              <h4 class="debate-control-col-title">Prowadzenie</h4>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-roster-btn" data-toggle="modal" data-target="#debate-roster-modal">Zarządzanie uczestnikami</button>
               <button type="button" class="btn btn-outline-secondary btn-sm debate-muteall-btn">Wycisz wszystkich</button>
-              <input type="text" class="form-control form-control-sm input-prep-time" style="width:70px;display:inline-block" value="15:00" maxlength="5" title="Czas przygotowania">
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-prep-btn">Czas przygotowania</button>
+              <div class="custom-control custom-checkbox">
+                <input type="checkbox" class="custom-control-input debate-allow-controls-checkbox" id="debateAllowControlsCheck">
+                <label class="custom-control-label" for="debateAllowControlsCheck">Pozwól sterować zegarem</label>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-waitroom-btn">Włącz poczekalnię</button>
+              <div class="debate-prep-control">
+                <input type="text" class="form-control form-control-sm input-prep-time" value="15:00" maxlength="5" title="Czas przygotowania">
+                <button type="button" class="btn btn-outline-secondary btn-sm debate-prep-btn">Czas przygotowania</button>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-editmode-btn">Edytuj przypisanie miejsc</button>
               <button type="button" class="btn btn-outline-danger btn-sm debate-close-btn">Zamknij pokój</button>
             </div>
           </div>
 
           <p class="comaster-hint">Jesteś wyznaczonym następcą (co-master) — w razie problemu z połączeniem prowadzącego automatycznie przejmiesz jego rolę.</p>
 
-          <!-- Participant management panel (master only) -->
-          <div class="debate-roster-wrap" style="display:none">
-            <p class="sharing-col-title">Zarządzanie uczestnikami</p>
-            <div class="debate-roster"></div>
+          <!-- Participant management dialog (master only) -->
+          <div class="modal debate-roster-modal" id="debate-roster-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Zarządzanie uczestnikami</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Zamknij"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                  <div class="debate-roster"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

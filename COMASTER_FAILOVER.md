@@ -27,23 +27,33 @@ jako stały standby. Dzięki temu:
 
 ```
 RosterEntry {
-  peerId,      // tożsamość w rosterze / routing komend; zmienia się na MASTER_ID przy awansie
+  clientId,    // TOŻSAMOŚĆ wpisu — trwały identyfikator przeglądarki (localStorage);
+               // wszystkie operacje na rosterze (findEntry, assignSlot, …) adresują po nim
+  peerId,      // czysty adres transportowy PeerJS (routing wiadomości); master: null
   pushId,      // stabilny identyfikator VDO.Ninja — NIGDY nie zmieniany przy awansie
-               // (naprawia realny bug: promowany, wcześniej zasiadający comaster
-               //  zachowuje działający strumień/&forward zamiast dostać martwe push-id)
+               // (promowany, wcześniej zasiadający comaster zachowuje działający
+               //  strumień/&forward zamiast dostać martwe push-id)
+  role,        // 'master' | null — awans to zmiana TEGO pola, żadnych przemianowań
   name, zone, index, signal, speaking, breakout,   // istniejące pola
-  joinSeq,     // int, nadany raz przy dołączeniu (licznik master-only)
+  joinSeq,     // int, nadany raz przy dołączeniu (licznik master-only);
+               // zachowywany przy ponownym dołączeniu tej samej przeglądarki (clientId)
   comaster,    // 'primary' | null — dokładnie jeden wpis naraz
   honorary,    // bool, sticky — były/zdymisjonowany master; nigdy nie wraca do kolejki
+  pending,     // bool, master-only — czeka w poczekalni; niewidoczny w slimRoster()
 }
 ```
+
+Nie ma już sentinela `'__master__'`: rola mastera to zwykłe pole `role`, a
+`peerId` nigdy nie jest przepisywany. Dzięki temu przy awansie nic nie trzeba
+filtrować po specjalnym id, a `pushId` przestaje być wyjątkiem — po prostu nic
+się nie zmienia.
 
 ## Kolejka sukcesji i wyznaczanie comastera
 
 ```
 function computeQueue():
     return debateRoster
-        .filter(e => e.peerId != MASTER_ID and not e.honorary)
+        .filter(e => e.role != 'master' and not e.honorary and not e.pending)
         .sortBy(e => e.joinSeq)
 
 function syncPrimaryComaster():
@@ -58,11 +68,11 @@ function syncPrimaryComaster():
     // UWAGA: brak osobnej wiadomości do wyznaczonego — patrz "Jak comaster
     // dowiaduje się o swojej roli" niżej.
 
-function designateComaster(peerId):     // ręczne nadpisanie przez mastera
-    target = findEntry(peerId)
-    if not target or target.honorary or target.peerId == MASTER_ID: return
+function designateComaster(clientId):   // ręczne nadpisanie przez mastera
+    target = findEntry(clientId)
+    if not target or target.honorary or target.pending or target.role == 'master': return
     current = debateRoster.find(e => e.comaster == 'primary')
-    if current and current.peerId != peerId:
+    if current and current.clientId != clientId:
         current.comaster = null
     target.comaster = 'primary'
     renderDebate()   // → broadcastRoster()
@@ -83,7 +93,7 @@ pole w rosterze**. Każdy klient, odbierając **dowolny** broadcast rosteru
 
 ```
 // w handleSlaveData, gałąź 'roster':
-me = findEntry(myPeerId)
+me = myEntry()                          // = findEntry(myClientId)
 shouldHost = (me exists and me.comaster == 'primary')
 if shouldHost != isPrimaryComaster:
     setComasterHosting(shouldHost)
@@ -122,10 +132,12 @@ function promoteSelfToMaster(source):      // source = null (awaria) albo {state
     if source.roster: debateRoster = source.roster
     if source.state:  applyState(source.state)
 
-    me = findEntry(myPeerId)
-    me.peerId = MASTER_ID                  // przejęcie sentinela → zachowuje strefę/miejsce
+    debateRoster.removeWhere(e => e.role == 'master')   // martwy wpis eks-mastera (crash path)
+
+    me = myEntry()                         // = findEntry(myClientId)
+    me.role = 'master'                     // przejęcie = zmiana pola roli; strefa/miejsce zostają
+    me.peerId = null                       // master nie ma połączenia sam do siebie
                                             // (me.pushId NIE jest ruszane — patrz wyżej)
-    myPeerId = MASTER_ID
     myGeneration += 1
     isDebateMaster = true
     isSlaveSession = false                 // inaczej App.onStateChange źle routuje zmiany
@@ -149,7 +161,7 @@ na którym ktoś nadal wisiał) znika strukturalnie.
 ```
 function handoffMasterTo(peerId):
     confirm z użytkownikiem
-    rosterForHandoff = debateRoster.filter(e => e.peerId != MASTER_ID)
+    rosterForHandoff = debateRoster.filter(e => e.role != 'master')
     sendToPeer(peerId, {promoteToMaster, state: getFullState(), roster: rosterForHandoff})
     markWasMaster(debateSessionId)         // ja przestaję być masterem → przy powrocie honorowy comaster
 

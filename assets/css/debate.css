@@ -56,6 +56,13 @@ body.is-slave .slave-sharing { display: block; }
   padding: 1.5rem;
 }
 
+/* Hold screen: joining / waiting-room admission */
+.debate-waiting-hint {
+  text-align: center;
+  color: #6c757d;
+  padding: 1.5rem;
+}
+
 .debate-video {
   width: 100%;
   max-width: 440px;
@@ -177,10 +184,9 @@ body.is-slave .slave-sharing { display: block; }
   .debate-center { order: -1; }
 }
 
-.debate-roster-wrap {
-  max-width: 640px;
-  margin: 1.25rem auto 0;
-  width: 100%;
+.debate-roster-modal .modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .roster-row {
@@ -195,9 +201,11 @@ body.is-slave .slave-sharing { display: block; }
 .roster-role { color: #6c757d; font-size: 0.9rem; }
 .roster-side { width: auto; }
 .roster-row .roster-side,
-.roster-row .roster-mute { margin-left: auto; }
+.roster-row .roster-mute,
+.roster-row .roster-admit { margin-left: auto; }
 .roster-row .roster-side ~ .roster-mute,
 .roster-row .roster-signal ~ .roster-side { margin-left: 0; }
+.roster-pending-badge { margin-right: 0.35rem; }
 .roster-signal {
   background: #c0392b;
   color: #fff;
@@ -207,31 +215,54 @@ body.is-slave .slave-sharing { display: block; }
 }
 .roster-signal:hover { background: #a5322299; color: #fff; }
 
-/* Debate control groups — shown per role */
+/* Debate control groups — shown per role, laid out as 3 columns side by side */
 .debate-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 1.25rem;
   justify-content: center;
+  align-items: flex-start;
 }
-.debate-self-controls,
-.debate-signal-controls,
-.debate-master-controls {
+.debate-control-col {
   display: none;
-  flex-wrap: wrap;
+  flex: 1 1 220px;
+  min-width: 200px;
+  max-width: 280px;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.5rem;
-  align-items: center;
-  justify-content: center;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  border-radius: 10px;
 }
-/* Media + signal controls appear only while this browser is publishing */
+.debate-control-col-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.15rem;
+}
+.debate-prep-control {
+  display: flex;
+  gap: 0.5rem;
+}
+.debate-prep-control .input-prep-time { width: 70px; flex: 0 0 auto; }
+.debate-prep-control .debate-prep-btn { flex: 1 1 auto; }
+
+/* Media + signal controls appear only while this browser is publishing;
+   the media column also shows for the master even before they take a seat. */
 body.is-publishing .debate-self-controls,
+body.is-debate-master .debate-self-controls,
 body.is-publishing .debate-signal-controls { display: flex; }
 body.is-debate-master .debate-master-controls { display: flex; }
 
-/* Toggled-on state for raise-hand / ad-vocem / allow-controls */
+/* Leaving the room is a participant action — the master closes the room instead */
+body.is-debate-master .debate-leave-btn { display: none; }
+
+/* Toggled-on state for raise-hand / ad-vocem */
 .debate-hand-btn.active,
-.debate-advocem-btn.active,
-.debate-allow-controls-btn.active {
+.debate-advocem-btn.active {
   background: #6c757d;
   color: #fff;
   border-color: #6c757d;
@@ -351,8 +382,12 @@ body.is-prep-time .timer::before {
 .chat-msg b { color: #444; }
 
 /* Light tint per chat channel — general stays neutral, each team gets its own hue */
-.debate-chat--proposition .debate-chat-log { background: #eaf3ff; }
-.debate-chat--opposition .debate-chat-log { background: #fdecea; }
+.debate-chat--proposition .debate-chat-log,
+.debate-chat--og .debate-chat-log,
+.debate-chat--cg .debate-chat-log { background: #eaf3ff; }
+.debate-chat--opposition .debate-chat-log,
+.debate-chat--oo .debate-chat-log,
+.debate-chat--co .debate-chat-log { background: #fdecea; }
 .debate-chat--judges .debate-chat-log { background: #f2eaff; }
 .debate-chat--audience .debate-chat-log { background: #eafaf0; }
 
