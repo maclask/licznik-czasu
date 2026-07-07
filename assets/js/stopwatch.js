@@ -1,80 +1,135 @@
 (function ($, App) {
-    var timerRunning = false;
-    var jokerRunning = false;
     var showControls = true;
     var soundEnabled = true;
     var currentFormat = 'oxford'; // 'oxford' | 'bp'
     var jokerEnabled = false;
 
-    // Current display values
-    var minutes, seconds;
-    var adVocemMinutes, adVocemSeconds;
-    var jokerSeconds;
+    var JOKER_SECONDS = 30;
+    var OVERTIME_SECONDS = 15;   // BP: automatic overtime after the speech ends
 
-    // System-time anchors for drift-free countdown
-    var timerStartedAt, timerStartSeconds;
-    var jokerStartedAt, jokerStartSeconds;
+    // Whole clock state is a single "seconds remaining" value; MM:SS is derived only
+    // at render/sync boundaries (see renderTimer / curMin / curSec).
+    var displaySeconds = 0;      // what the main timer currently shows
+    var adVocemTotal = 0;        // seconds loaded from the ad-vocem input
 
-    var timerInterval, jokerInterval;
-    var lastTimerSecond = -1;
-    var lastJokerSecond = -1;
-
-    // BP-specific state
-    var bpBell1Rung = false;  // 1 min after start
-    var bpBell2Rung = false;  // 1 min before end
+    // Format/mode flags
+    var bpBell1Rung = false;     // BP bell 1: 1 min after start
+    var bpBell2Rung = false;     // BP bell 2: 1 min before end
     var isAdVocem = false;
-    var isPrepTime = false;  // master-set prep countdown — no format bells, no BP overtime
-    var bpOvertimeRunning = false;
-    var bpOvertimeSecs = 15;  // remaining overtime seconds (updated on pause)
-    var bpOvertimeStartedAt;
+    var isPrepTime = false;      // master-set prep countdown — no format bells, no BP overtime
+    var inOvertime = false;      // BP overtime phase active (running or paused)
 
     // Session sync — the hook and the echo-guard flag live on App (see app.js),
     // so the online layer (online.js) can share them across the file boundary.
-    var logoSrcs = [null, null];            // tracks active logo srcs independently of DOM visibility
+    var logoSrcs = [null, null]; // tracks active logo srcs independently of DOM visibility
     var MAX_LOGOS = 6;
 
-    // --- Init ---
+    // --- Countdown engine (one machine, three instances: timer, overtime, joker) ---
 
-    $('[data-toggle="tooltip"]').tooltip({ trigger: 'hover' });
-    $('.alert').hide();
-    $('.joker-timer').hide();
-    $('.joker-controls').hide();
-    $('.oxford-joker').hide();
-    $('#settings').hide();
-    $('#help').hide();
-    $('#sharing').hide();
-    $('#debate').hide();
-    $('button').focus(function () { this.blur(); });
+    // A drift-free countdown anchored to Date.now(): the remaining time is always
+    // derived from wall-clock elapsed since the last (re)start, never from a tick
+    // count, so it survives a throttled/slept tab. callbacks.onSecond(remaining) fires
+    // at most once per whole second; callbacks.onEnd() fires when it reaches zero.
+    function makeCountdown(callbacks) {
+        var startedAt = 0, startSeconds = 0, lastSecond = -1, frozen = 0;
+        var running = false, interval = null;
 
-    loadTimeFromInput();
-    loadAdVocemFromInput();
+        function tick() {
+            var rem = startSeconds - Math.floor((Date.now() - startedAt) / 1000);
+            if (rem <= 0) {
+                frozen = 0;
+                clearInterval(interval);
+                running = false;
+                callbacks.onEnd();
+                return;
+            }
+            if (rem === lastSecond) return;   // same whole second — nothing to redraw
+            lastSecond = rem;
+            frozen = rem;
+            callbacks.onSecond(rem);
+        }
+
+        var api = {
+            // Start fresh from `seconds`, anchored at now.
+            start: function (seconds) {
+                startedAt = Date.now();
+                startSeconds = seconds;
+                frozen = seconds;
+                lastSecond = seconds;
+                clearInterval(interval);
+                interval = setInterval(tick, 250);
+                running = true;
+            },
+            // Resume a paused countdown from its frozen remaining.
+            resume: function () { api.start(frozen); },
+            // Freeze the current remaining and stop ticking.
+            pause: function () {
+                if (!running) return;
+                clearInterval(interval);
+                running = false;
+                frozen = Math.max(0, startSeconds - Math.floor((Date.now() - startedAt) / 1000));
+            },
+            // Hard stop, keeping the frozen value as-is.
+            stop: function () { clearInterval(interval); running = false; },
+            // Adopt a peer's anchors (sync): pick up a running countdown mid-flight.
+            adopt: function (startedAtVal, startSecondsVal) {
+                startedAt = startedAtVal;
+                startSeconds = startSecondsVal;
+                lastSecond = -1;
+                frozen = Math.max(0, startSeconds - Math.floor((Date.now() - startedAt) / 1000));
+                clearInterval(interval);
+                interval = setInterval(tick, 250);
+                running = true;
+            },
+            setFrozen: function (v) { frozen = v; },
+            remaining: function () { return frozen; },
+            startedAt: function () { return startedAt; },
+            startSeconds: function () { return startSeconds; },
+            isRunning: function () { return running; }
+        };
+        return api;
+    }
+
+    var mainTimer = makeCountdown({ onSecond: onMainSecond, onEnd: onMainEnd });
+    var overtime = makeCountdown({ onSecond: onOvertimeSecond, onEnd: onOvertimeEnd });
+    var joker = makeCountdown({ onSecond: onJokerSecond, onEnd: onJokerEnd });
+
+    function running() { return mainTimer.isRunning() || overtime.isRunning(); }
 
     // --- Helpers ---
 
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+    // Parse an MM:SS input into total seconds, clamping to a sane 99:59.
+    function parseTimeInput(selector) {
+        var parts = ($(selector).val() || '').split(':');
+        var m = Math.min(parseInt(parts[0], 10) || 0, 99);
+        var s = Math.min(parseInt(parts[1], 10) || 0, 59);
+        return m * 60 + s;
+    }
+
+    function curMin() { return Math.floor(displaySeconds / 60); }
+    function curSec() { return displaySeconds % 60; }
+
     function loadTimeFromInput() {
-        var parts = $('.input-minutes').val().split(':');
-        minutes = parseInt(parts[0], 10) || 0;
-        seconds = parseInt(parts[1], 10) || 0;
-        renderTimer();
+        displaySeconds = parseTimeInput('.input-minutes');
+        renderTimer(displaySeconds);
     }
 
     function loadAdVocemFromInput() {
-        var parts = $('.input-minutes-advocem').val().split(':');
-        adVocemMinutes = parseInt(parts[0], 10) || 0;
-        adVocemSeconds = parseInt(parts[1], 10) || 0;
+        adVocemTotal = parseTimeInput('.input-minutes-advocem');
     }
 
-    function renderTimer() {
+    function renderTimer(total) {
+        displaySeconds = total;
         // Both #timer and the debate stage share the same clock classes
-        $('.timer-minutes').text(minutes);
-        $('.timer-seconds').text(seconds < 10 ? '0' + seconds : seconds);
+        $('.timer-minutes').text(Math.floor(total / 60));
+        $('.timer-seconds').text(pad2(total % 60));
     }
 
-    function renderJoker() {
-        var m = Math.floor(jokerSeconds / 60);
-        var s = jokerSeconds % 60;
-        $('.joker-minutes').text(m);
-        $('.joker-seconds').text(s < 10 ? '0' + s : s);
+    function renderJoker(total) {
+        $('.joker-minutes').text(Math.floor(total / 60));
+        $('.joker-seconds').text(pad2(total % 60));
     }
 
     function popTime() {
@@ -82,183 +137,142 @@
         $('.timer').animate({ scale: '100%' }, 'fast');
     }
 
-    // --- Main timer ---
+    // Full timer state on the wire — a superset of every field the online layer reads,
+    // built in one place so start/stop/sync never disagree about the shape.
+    function timerWire() {
+        return {
+            timerRunning: running(),
+            timerStartedAt: mainTimer.startedAt(),
+            timerStartSeconds: mainTimer.startSeconds(),
+            bpOvertimeRunning: inOvertime,
+            bpOvertimeStartedAt: overtime.startedAt(),
+            bpOvertimeSecs: overtime.isRunning() ? overtime.startSeconds() : overtime.remaining(),
+            minutes: curMin(),
+            seconds: curSec()
+        };
+    }
 
-    function timerTick() {
-        // BP overtime: counts down 15 s after speech ends
-        if (bpOvertimeRunning) {
-            var otElapsed = Math.floor((Date.now() - bpOvertimeStartedAt) / 1000);
-            var otRemaining = bpOvertimeSecs - otElapsed;
-            if (otRemaining <= 0) {
-                minutes = 0;
-                seconds = 0;
-                renderTimer();
-                clearInterval(timerInterval);
-                timerRunning = false;
-                bpOvertimeRunning = false;
-                bpOvertimeSecs = 15;
-                $('.start-stop').text('Start');
-                $('.timer').removeClass('bp-overtime');
-                return;
-            }
-            if (otRemaining === lastTimerSecond) return;
-            lastTimerSecond = otRemaining;
-            minutes = 0;
-            seconds = otRemaining;
-            renderTimer();
-            return;
-        }
+    // --- Main timer callbacks ---
 
-        // Normal countdown
-        var elapsed = Math.floor((Date.now() - timerStartedAt) / 1000);
-        var remaining = timerStartSeconds - elapsed;
-
-        if (remaining <= 0) {
-            minutes = 0;
-            seconds = 0;
-            renderTimer();
-            if (soundEnabled) playEndSound();
-
-            if (currentFormat === 'bp' && !isPrepTime) {
-                bpOvertimeRunning = true;
-                bpOvertimeSecs = 15;
-                bpOvertimeStartedAt = Date.now();
-                lastTimerSecond = 15;
-                minutes = 0;
-                seconds = 15;
-                renderTimer();
-                $('.timer').addClass('bp-overtime');
-            } else {
-                stopTimer();
-            }
-            return;
-        }
-
-        if (remaining === lastTimerSecond) return;
-        lastTimerSecond = remaining;
-
-        minutes = Math.floor(remaining / 60);
-        seconds = remaining % 60;
-
+    function onMainSecond(rem) {
         // Format-specific bells — skipped during prep time (it isn't a protected speech)
         if (soundEnabled && !isPrepTime) {
             if (currentFormat === 'oxford') {
-                if (!isAdVocem && remaining === 30) playDingSound();
+                if (!isAdVocem && rem === 30) playSound('#30stoend');
             } else {
-                // BP: 1 min after start, 1 min before end
-                var elapsedSecs = timerStartSeconds - remaining;
-                if (!bpBell1Rung && elapsedSecs >= 60 && timerStartSeconds > 60) {
+                var startSecs = mainTimer.startSeconds();
+                var elapsedSecs = startSecs - rem;
+                if (!bpBell1Rung && elapsedSecs >= 60 && startSecs > 60) {
                     bpBell1Rung = true;
-                    playDingSound();
+                    playSound('#30stoend');
                 }
-                if (!bpBell2Rung && remaining <= 60 && timerStartSeconds > 120) {
+                if (!bpBell2Rung && rem <= 60 && startSecs > 120) {
                     bpBell2Rung = true;
-                    playDingSound();
+                    playSound('#30stoend');
                 }
             }
         }
-
-        renderTimer();
+        renderTimer(rem);
     }
 
-    function startTimer() {
-        if (timerRunning) return;
-
-        if (bpOvertimeRunning) {
-            // Resume paused overtime
-            bpOvertimeStartedAt = Date.now();
+    function onMainEnd() {
+        renderTimer(0);
+        if (soundEnabled) playSound('#endoftime');
+        if (currentFormat === 'bp' && !isPrepTime) {
+            // Slide straight into a 15 s overtime. Each client crosses this boundary on
+            // its own clock, so no broadcast is needed — a peer's own main timer reaches
+            // zero and enters overtime independently.
+            inOvertime = true;
+            $('.timer').addClass('bp-overtime');
+            overtime.start(OVERTIME_SECONDS);
+            renderTimer(OVERTIME_SECONDS);
         } else {
-            timerStartedAt = Date.now();
-            timerStartSeconds = minutes * 60 + seconds;
-            lastTimerSecond = timerStartSeconds;
+            $('.start-stop').text('Start');
+        }
+    }
+
+    function onOvertimeSecond(rem) { renderTimer(rem); }
+
+    function onOvertimeEnd() {
+        renderTimer(0);
+        inOvertime = false;
+        $('.timer').removeClass('bp-overtime');
+        $('.start-stop').text('Start');
+    }
+
+    // --- Main timer controls ---
+
+    function startTimer() {
+        if (running()) return;
+        if (inOvertime) {
+            overtime.resume();
+        } else {
             bpBell1Rung = false;
             bpBell2Rung = false;
+            mainTimer.start(displaySeconds);
         }
-
-        timerInterval = setInterval(timerTick, 250);
-        timerRunning = true;
         $('.start-stop').text('Stop');
-        App.onStateChange({timerRunning: true, timerStartedAt: timerStartedAt, timerStartSeconds: timerStartSeconds});
+        App.onStateChange(timerWire());
     }
 
     function stopTimer() {
-        if (!timerRunning) return;
-        clearInterval(timerInterval);
-        timerRunning = false;
-
-        if (bpOvertimeRunning) {
-            var ot = Math.floor((Date.now() - bpOvertimeStartedAt) / 1000);
-            bpOvertimeSecs = Math.max(0, bpOvertimeSecs - ot);
-            minutes = 0;
-            seconds = bpOvertimeSecs;
-        } else {
-            var el = Math.floor((Date.now() - timerStartedAt) / 1000);
-            var rem = Math.max(0, timerStartSeconds - el);
-            minutes = Math.floor(rem / 60);
-            seconds = rem % 60;
-        }
-        renderTimer();
+        if (!running()) return;
+        if (inOvertime) { overtime.pause(); renderTimer(overtime.remaining()); }
+        else { mainTimer.pause(); renderTimer(mainTimer.remaining()); }
         $('.start-stop').text('Start');
-        App.onStateChange({timerRunning: false, minutes: minutes, seconds: seconds, bpOvertimeRunning: bpOvertimeRunning, bpOvertimeSecs: bpOvertimeSecs});
+        App.onStateChange(timerWire());
     }
 
     function toggleTimer() {
-        if (timerRunning) stopTimer(); else startTimer();
+        if (running()) stopTimer(); else startTimer();
         popTime();
     }
 
-    function reset() {
-        clearInterval(timerInterval);
-        timerRunning = false;
-        bpOvertimeRunning = false;
-        bpOvertimeSecs = 15;
+    // Stop every clock and clear BP overtime — the shared "back to a clean stop" block.
+    function hardStop() {
+        mainTimer.stop();
+        overtime.stop();
+        inOvertime = false;
         bpBell1Rung = false;
         bpBell2Rung = false;
+        $('.timer').removeClass('bp-overtime');
+        $('.start-stop').text('Start');
+    }
+
+    function reset() {
+        hardStop();
         isAdVocem = false;
         isPrepTime = false;
-        $('.timer').removeClass('bp-overtime');
         $('body').removeClass('is-prep-time');
         $('.debate-prep-btn').removeClass('active').text('Czas przygotowania');
-        $('.start-stop').text('Start');
         loadTimeFromInput();
-        App.onStateChange({timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: 15, isPrepTime: false, minutes: minutes, seconds: seconds, timerValue: $('.input-minutes').val()});
+        App.onStateChange({
+            timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: OVERTIME_SECONDS,
+            isPrepTime: false, minutes: curMin(), seconds: curSec(), timerValue: $('.input-minutes').val()
+        });
     }
 
     // Master: switch the shared clock to a plain prep-time countdown (default 15:00) —
     // no protected-time bells, no BP overtime. Resetting (or picking a format) returns
     // to the normal, configured speech time.
     function startPrepTime() {
-        var parts = $('.input-prep-time').val().split(':');
-        var m = Math.min(parseInt(parts[0], 10) || 0, 99);
-        var s = Math.min(parseInt(parts[1], 10) || 0, 59);
-        clearInterval(timerInterval);
-        timerRunning = false;
-        bpOvertimeRunning = false;
-        bpOvertimeSecs = 15;
-        bpBell1Rung = false;
-        bpBell2Rung = false;
+        hardStop();
         isAdVocem = false;
         isPrepTime = true;
-        minutes = m; seconds = s;
-        $('.timer').removeClass('bp-overtime');
         $('body').addClass('is-prep-time');
-        $('.start-stop').text('Start');
-        renderTimer();
-        App.onStateChange({ timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: 15, isPrepTime: true, minutes: minutes, seconds: seconds });
+        renderTimer(parseTimeInput('.input-prep-time'));
+        App.onStateChange({
+            timerRunning: false, bpOvertimeRunning: false, bpOvertimeSecs: OVERTIME_SECONDS,
+            isPrepTime: true, minutes: curMin(), seconds: curSec()
+        });
     }
 
     function setAdVocem() {
         if (currentFormat !== 'oxford') return;
-        clearInterval(timerInterval);
-        timerRunning = false;
-        bpOvertimeRunning = false;
+        hardStop();
         isAdVocem = true;
-        $('.timer').removeClass('bp-overtime');
-        $('.start-stop').text('Start');
-        minutes = adVocemMinutes;
-        seconds = adVocemSeconds;
-        renderTimer();
-        App.onStateChange({timerRunning: false, minutes: minutes, seconds: seconds});
+        renderTimer(adVocemTotal);
+        App.onStateChange({ timerRunning: false, minutes: curMin(), seconds: curSec() });
     }
 
     // --- Format ---
@@ -268,73 +282,57 @@
             $('.oxford-only').hide();
             $('.oxford-joker').hide();
             $('.oxford-setting').addClass('settings-hidden');
+            $('.bp-only').show();
             if ($('.input-minutes').val() === '05:00') $('.input-minutes').val('07:00');
         } else {
             $('.oxford-only').show();
             $('.oxford-joker').toggle(jokerEnabled);
             $('.oxford-setting').removeClass('settings-hidden');
+            $('.bp-only').hide();
             if ($('.input-minutes').val() === '07:00') $('.input-minutes').val('05:00');
         }
         reset();
-        App.onStateChange({currentFormat: currentFormat, timerRunning: false, minutes: minutes, seconds: seconds, timerValue: $('.input-minutes').val()});
+        App.onStateChange({
+            currentFormat: currentFormat, timerRunning: false,
+            minutes: curMin(), seconds: curSec(), timerValue: $('.input-minutes').val()
+        });
     }
 
-    // --- Joker timer ---
+    // --- Joker timer callbacks + controls ---
 
-    function jokerTick() {
-        var elapsed = Math.floor((Date.now() - jokerStartedAt) / 1000);
-        var remaining = jokerStartSeconds - elapsed;
+    function onJokerSecond(rem) { renderJoker(rem); }
 
-        if (remaining <= 0) {
-            jokerSeconds = 0;
-            renderJoker();
-            jokerOff();
-            if (soundEnabled) playDingSound();
-            return;
-        }
-
-        if (remaining === lastJokerSecond) return;
-        lastJokerSecond = remaining;
-        jokerSeconds = remaining;
-        renderJoker();
+    function onJokerEnd() {
+        renderJoker(0);
+        jokerOff();
+        if (soundEnabled) playSound('#30stoend');
     }
 
     function jokerStart() {
-        clearInterval(jokerInterval);
-        jokerSeconds = 30;
-        jokerStartedAt = Date.now();
-        jokerStartSeconds = 30;
-        lastJokerSecond = 30;
-        renderJoker();
+        joker.start(JOKER_SECONDS);
+        renderJoker(JOKER_SECONDS);
         $('.joker-timer').show();
         if (effectiveShowControls()) $('.joker-controls').show();
-        jokerInterval = setInterval(jokerTick, 250);
-        jokerRunning = true;
-        App.onStateChange({jokerRunning: true, jokerStartedAt: jokerStartedAt, jokerStartSeconds: 30, jokerSeconds: 30});
+        App.onStateChange({
+            jokerRunning: true, jokerStartedAt: joker.startedAt(),
+            jokerStartSeconds: JOKER_SECONDS, jokerSeconds: JOKER_SECONDS
+        });
     }
 
     function jokerToggle() {
-        if (jokerRunning) {
-            clearInterval(jokerInterval);
-            jokerRunning = false;
-            var elapsed = Math.floor((Date.now() - jokerStartedAt) / 1000);
-            jokerSeconds = Math.max(0, jokerStartSeconds - elapsed);
-        } else {
-            jokerStartedAt = Date.now();
-            jokerStartSeconds = jokerSeconds;
-            lastJokerSecond = jokerSeconds;
-            jokerInterval = setInterval(jokerTick, 250);
-            jokerRunning = true;
-        }
-        App.onStateChange({jokerRunning: jokerRunning, jokerStartedAt: jokerStartedAt, jokerStartSeconds: jokerStartSeconds, jokerSeconds: jokerSeconds});
+        if (joker.isRunning()) joker.pause(); else joker.resume();
+        renderJoker(joker.remaining());
+        App.onStateChange({
+            jokerRunning: joker.isRunning(), jokerStartedAt: joker.startedAt(),
+            jokerStartSeconds: joker.startSeconds(), jokerSeconds: joker.remaining()
+        });
     }
 
     function jokerOff() {
-        clearInterval(jokerInterval);
-        jokerRunning = false;
+        joker.stop();
         $('.joker-timer').hide();
         $('.joker-controls').hide();
-        App.onStateChange({jokerRunning: false});
+        App.onStateChange({ jokerRunning: false });
     }
 
     function effectiveShowControls() {
@@ -343,14 +341,9 @@
 
     // --- Sound ---
 
-    function playDingSound() {
-        var s = $('#30stoend').get(0);
-        s.currentTime = 0;
-        s.play();
-    }
-
-    function playEndSound() {
-        var s = $('#endoftime').get(0);
+    function playSound(selector) {
+        var s = $(selector).get(0);
+        if (!s) return;
         s.currentTime = 0;
         s.play();
     }
@@ -360,26 +353,6 @@
     }
 
     // --- Images ---
-
-    function setImage(src, no) {
-        logoSrcs[no - 1] = src || null;
-        if (!src) {
-            $('.img' + no).parent().css('display', 'none');
-        } else {
-            $('.img' + no).attr('src', src).parent().css('display', 'flex');
-        }
-        var $slot = $('#logo-slots .logo-slot[data-logo-no="' + no + '"]');
-        if (src) {
-            $slot.find('.logo-slot-preview').attr('src', src);
-            $slot.addClass('logo-slot--active');
-        } else {
-            $slot.removeClass('logo-slot--active');
-            $slot.find('.logo-slot-preview').attr('src', '');
-        }
-        var activeCount = logoSrcs.filter(function (s) { return s !== null; }).length;
-        $('.img-grid').attr('data-count', activeCount);
-        if (!App.state.applyingState) App.onStateChange({ logos: logoSrcs.slice() });
-    }
 
     var DROPDOWN_ITEMS_HTML =
         '<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>' +
@@ -396,13 +369,10 @@
     function createSlotHtml(no) {
         return '<div class="logo-drop-zone logo-slot" data-logo-no="' + no + '">' +
             '<div class="logo-slot-controls">' +
-              '<div class="dropdown dropdown' + no + '">' +
+              '<div class="dropdown">' +
                 '<button type="button" class="btn btn-secondary btn-sm dropdown-toggle" ' +
-                        'id="dropdownMenuButton' + no + '" data-toggle="dropdown" ' +
-                        'aria-haspopup="true" aria-expanded="false">Wybierz z listy</button>' +
-                '<div class="dropdown-menu" aria-labelledby="dropdownMenuButton' + no + '">' +
-                  DROPDOWN_ITEMS_HTML +
-                '</div>' +
+                        'data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Wybierz z listy</button>' +
+                '<div class="dropdown-menu">' + DROPDOWN_ITEMS_HTML + '</div>' +
               '</div>' +
               '<button type="button" class="btn btn-outline-secondary btn-sm logo-file-btn">Wybierz z dysku</button>' +
               '<input type="file" accept="image/*" class="logo-file-input d-none">' +
@@ -414,46 +384,79 @@
           '</div>';
     }
 
+    // Rebuild every settings slot from logoSrcs (render-from-state) — add/remove is just
+    // a splice + this call, so there is no DOM renumbering to keep in sync.
+    function renderLogoSlots() {
+        $('#logo-slots .logo-slot').remove();
+        logoSrcs.forEach(function (src, i) {
+            var $slot = $(createSlotHtml(i + 1));
+            if (src) { $slot.addClass('logo-slot--active').find('.logo-slot-preview').attr('src', src); }
+            $slot.insertBefore('#logo-add-card');
+        });
+        $('#logo-add-card').toggle(logoSrcs.length < MAX_LOGOS);
+    }
+
+    // Push logoSrcs onto the timer's own image grid.
+    function renderTimerLogos() {
+        for (var i = 1; i <= MAX_LOGOS; i++) {
+            var src = logoSrcs[i - 1] || null;
+            var $container = $('.img' + i).parent();
+            if (!src) { $container.css('display', 'none'); }
+            else { $('.img' + i).attr('src', src); $container.css('display', 'flex'); }
+        }
+        var activeCount = logoSrcs.filter(function (s) { return s !== null; }).length;
+        $('.img-grid').attr('data-count', activeCount);
+    }
+
+    function setImage(src, no) {
+        logoSrcs[no - 1] = src || null;
+        renderTimerLogos();
+        var $slot = $('#logo-slots .logo-slot[data-logo-no="' + no + '"]');
+        if (src) { $slot.addClass('logo-slot--active').find('.logo-slot-preview').attr('src', src); }
+        else { $slot.removeClass('logo-slot--active').find('.logo-slot-preview').attr('src', ''); }
+        if (!App.state.applyingState) App.onStateChange({ logos: logoSrcs.slice() });
+    }
+
     // --- Navigation ---
 
     function navigate(section) {
         $('#timer, #settings, #help, #sharing, #debate').hide();
         $('#' + section).show();
-        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '', sharing: 'Udostępnianie', debata: 'Debata online' };
+        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '', sharing: 'Udostępnianie', debate: 'Debata online' };
         $('#section-title').text(titles[section] || '');
     }
 
-    // --- Alert ---
+    // --- Alerts ---
+
+    var alertTimeout = null, warnTimeout = null;
 
     function showAlert(msg) {
-        if (msg) $('.alert-success strong').text(msg);
-        else $('.alert-success strong').text('Zrobiono!');
+        $('.alert-success strong').text(msg || 'Zrobiono!');
         $('.alert-success').fadeIn(50);
-        setTimeout(function () { $('.alert-success').fadeOut(); }, 5000);
+        clearTimeout(alertTimeout);
+        alertTimeout = setTimeout(function () { $('.alert-success').fadeOut(); }, 5000);
     }
 
     function showWarn(msg) {
         $('.toast-warn').text(msg).fadeIn(50);
-        setTimeout(function() { $('.toast-warn').fadeOut(); }, 3000);
+        clearTimeout(warnTimeout);
+        warnTimeout = setTimeout(function () { $('.toast-warn').fadeOut(); }, 3000);
     }
 
     // --- Fullscreen ---
 
     function toggleFullscreen() {
         if (document.fullscreenElement) {
-            (document.exitFullscreen || document.mozCancelFullScreen ||
-             document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+            document.exitFullscreen();
         } else {
-            var el = document.documentElement;
-            (el.requestFullscreen || el.mozRequestFullScreen ||
-             el.webkitRequestFullscreen || el.msRequestFullscreen).call(el);
+            document.documentElement.requestFullscreen();
         }
     }
 
     // --- Time input mask (MM:SS) ---
 
     function applyTimeMask(input) {
-        $(input).on('input', function() {
+        $(input).on('input', function () {
             var raw = $(this).val().replace(/\D/g, '').slice(0, 4);
             if (raw.length >= 3) {
                 $(this).val(raw.slice(0, 2) + ':' + raw.slice(2));
@@ -461,17 +464,37 @@
                 $(this).val(raw);
             }
         });
-        $(input).on('blur', function() {
+        $(input).on('blur', function () {
             var parts = $(this).val().split(':');
             var mm = Math.min(parseInt(parts[0], 10) || 0, 99);
             var ss = Math.min(parseInt(parts[1], 10) || 0, 59);
-            $(this).val((mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss);
+            $(this).val(pad2(mm) + ':' + pad2(ss));
             $(this).trigger('change');
         });
-        $(input).on('keydown', function(e) {
+        $(input).on('keydown', function (e) {
             if (e.key === 'Enter') $(this).blur();
         });
     }
+
+    // --- Init ---
+
+    $('[data-toggle="tooltip"]').tooltip({ trigger: 'hover' });
+    $('.alert').hide();
+    $('.joker-timer').hide();
+    $('.joker-controls').hide();
+    $('.oxford-joker').hide();
+    $('.bp-only').hide();
+    $('#settings').hide();
+    $('#help').hide();
+    $('#sharing').hide();
+    $('#debate').hide();
+    // Drop focus from a just-clicked button so Space toggles the timer, not the button —
+    // but only on mouse click, so keyboard Tab navigation still works.
+    $(document).on('mousedown', 'button', function (e) { e.preventDefault(); });
+
+    renderLogoSlots();
+    loadTimeFromInput();
+    loadAdVocemFromInput();
 
     applyTimeMask('.input-minutes');
     applyTimeMask('.input-minutes-advocem');
@@ -483,9 +506,9 @@
     $('.reset').click(reset);
     $('.input-minutes').change(reset);
     $('.ad-vocem').click(setAdVocem);
-    $('.input-minutes-advocem').change(function() {
+    $('.input-minutes-advocem').change(function () {
         loadAdVocemFromInput();
-        App.onStateChange({adVocemValue: $(this).val()});
+        App.onStateChange({ adVocemValue: $(this).val() });
     });
 
     $('.joker').click(jokerStart);
@@ -493,23 +516,22 @@
     $('.joker-reset').click(jokerStart);
     $('.joker-off').click(jokerOff);
 
-    $('.sound-switch').click(function() {
+    $('.sound-switch').click(function () {
         toggleSound();
-        App.onStateChange({soundEnabled: soundEnabled});
+        App.onStateChange({ soundEnabled: soundEnabled });
     });
-    $('.sound-test1').click(playDingSound);
-    $('.sound-test2').click(playEndSound);
+    $('.sound-test1').click(function () { playSound('#30stoend'); });
+    $('.sound-test2').click(function () { playSound('#endoftime'); });
 
-    $('#settings').find(':submit').click(showAlert);
     $('.input-motion').on('input', function () {
         $('.motion-text').text($(this).val());
-        App.onStateChange({motion: $(this).val()});
+        App.onStateChange({ motion: $(this).val() });
     });
 
     $('.controls-checkbox').click(function () {
         showControls = this.checked;
         $('.timer-controls:not(.joker-controls)').toggle(showControls);
-        App.onStateChange({showControls: showControls});
+        App.onStateChange({ showControls: showControls });
     });
 
     $('.debate-format').change(function () {
@@ -522,7 +544,7 @@
         if (currentFormat === 'oxford') {
             $('.oxford-joker').toggle(jokerEnabled);
         }
-        App.onStateChange({jokerEnabled: jokerEnabled});
+        App.onStateChange({ jokerEnabled: jokerEnabled });
     });
 
     $(document).on('click', '.dropdown-item', function () {
@@ -547,11 +569,9 @@
     });
 
     $('#logo-add-card').click(function () {
-        var nextNo = logoSrcs.length + 1;
-        if (nextNo > MAX_LOGOS) return;
+        if (logoSrcs.length >= MAX_LOGOS) return;
         logoSrcs.push(null);
-        $(createSlotHtml(nextNo)).insertBefore(this);
-        if (logoSrcs.length >= MAX_LOGOS) $(this).hide();
+        renderLogoSlots();
     });
 
     $(document).on('click', '.logo-change-overlay', function () {
@@ -560,30 +580,10 @@
     });
 
     $(document).on('click', '.logo-remove-btn', function () {
-        var $slot = $(this).closest('.logo-drop-zone');
-        var no = parseInt($slot.data('logo-no'));
-        $slot.remove();
+        var no = parseInt($(this).closest('.logo-drop-zone').data('logo-no'));
         logoSrcs.splice(no - 1, 1);
-        // Re-index remaining slots in settings
-        $('#logo-slots .logo-slot').each(function (i) {
-            var newNo = i + 1;
-            $(this).attr('data-logo-no', newNo).data('logo-no', newNo);
-            $(this).find('.dropdown').removeClass(function (idx, cls) {
-                return (cls.match(/\bdropdown\d+\b/) || []).join(' ');
-            }).addClass('dropdown' + newNo);
-            $(this).find('[id^="dropdownMenuButton"]').attr('id', 'dropdownMenuButton' + newNo);
-            $(this).find('[aria-labelledby^="dropdownMenuButton"]').attr('aria-labelledby', 'dropdownMenuButton' + newNo);
-        });
-        // Refresh all timer images to match shifted array
-        for (var i = 1; i <= MAX_LOGOS; i++) {
-            var src = logoSrcs[i - 1] || null;
-            if (!src) {
-                $('.img' + i).parent().css('display', 'none');
-            } else {
-                $('.img' + i).attr('src', src).parent().css('display', 'flex');
-            }
-        }
-        $('#logo-add-card').show();
+        renderLogoSlots();
+        renderTimerLogos();
         if (!App.state.applyingState) App.onStateChange({ logos: logoSrcs.slice() });
     });
 
@@ -655,12 +655,7 @@
 
     // Style theme switcher
     $('#style-select').change(function () {
-        var theme = $(this).val();
-        if (theme === 'glassmorphic') {
-            $('body').addClass('glassmorphic');
-        } else {
-            $('body').removeClass('glassmorphic');
-        }
+        $('body').toggleClass('glassmorphic', $(this).val() === 'glassmorphic');
     });
 
     $('.full-screen-btn').click(toggleFullscreen);
@@ -673,66 +668,64 @@
 
     $(window).keyup(function (e) {
         if ($(e.target).is(':input')) return;
-        switch (e.keyCode) {
-            case 32: e.preventDefault(); toggleTimer(); break;
-            case 49: reset(); break;
-            case 50: if (currentFormat === 'oxford') setAdVocem(); break;
-            case 74: if (currentFormat === 'oxford' && jokerEnabled) jokerStart(); break;
-            case 72: if (currentFormat === 'oxford' && jokerEnabled) jokerToggle(); break;
-            case 75: if (currentFormat === 'oxford' && jokerEnabled) jokerOff(); break;
+        switch (e.key) {
+            case ' ': case 'Spacebar': e.preventDefault(); toggleTimer(); break;
+            case '1': reset(); break;
+            case '2': if (currentFormat === 'oxford') setAdVocem(); break;
+            case 'j': case 'J': if (currentFormat === 'oxford' && jokerEnabled) jokerStart(); break;
+            case 'h': case 'H': if (currentFormat === 'oxford' && jokerEnabled) jokerToggle(); break;
+            case 'k': case 'K': if (currentFormat === 'oxford' && jokerEnabled) jokerOff(); break;
         }
     });
 
+    // --- State sync (seam for online.js) ---
+
     function getFullState() {
-        return {
-            timerRunning: timerRunning,
-            timerStartedAt: timerStartedAt,
-            timerStartSeconds: timerStartSeconds,
-            bpOvertimeRunning: bpOvertimeRunning,
-            bpOvertimeSecs: bpOvertimeSecs,
-            bpOvertimeStartedAt: bpOvertimeStartedAt,
-            minutes: minutes,
-            seconds: seconds,
-            jokerRunning: jokerRunning,
-            jokerStartedAt: jokerStartedAt,
-            jokerStartSeconds: jokerStartSeconds,
-            jokerSeconds: jokerSeconds,
-            currentFormat: currentFormat,
-            isPrepTime: isPrepTime,
-            showControls: showControls,
-            slaveShowControls: App.state.slaveShowControls,
-            soundEnabled: soundEnabled,
-            jokerEnabled: jokerEnabled,
-            timerValue: $('.input-minutes').val(),
-            adVocemValue: $('.input-minutes-advocem').val(),
-            motion: $('.input-motion').val(),
-            logos: logoSrcs.slice()
-        };
+        var wire = timerWire();
+        wire.jokerRunning = joker.isRunning();
+        wire.jokerStartedAt = joker.startedAt();
+        wire.jokerStartSeconds = joker.startSeconds();
+        wire.jokerSeconds = joker.remaining();
+        wire.currentFormat = currentFormat;
+        wire.isPrepTime = isPrepTime;
+        wire.showControls = showControls;
+        wire.slaveShowControls = App.state.slaveShowControls;
+        wire.soundEnabled = soundEnabled;
+        wire.jokerEnabled = jokerEnabled;
+        wire.timerValue = $('.input-minutes').val();
+        wire.adVocemValue = $('.input-minutes-advocem').val();
+        wire.motion = $('.input-motion').val();
+        wire.logos = logoSrcs.slice();
+        return wire;
     }
 
-    function applyState(state) {
-        App.state.applyingState = true;
-
-        // Format first — applyFormat internally calls reset
+    // applyState is an ordered list of per-concern appliers. Order matters: format runs
+    // first because applyFormat() internally calls reset(), which would otherwise wipe a
+    // freshly applied time; the timer applier runs after the input values it may read.
+    function applyFormatField(state) {
         if (state.currentFormat !== undefined && state.currentFormat !== currentFormat) {
             currentFormat = state.currentFormat;
             $('[name="debateFormat"][value="' + currentFormat + '"]').prop('checked', true);
             applyFormat();
         }
+    }
 
+    function applyPrepField(state) {
         if (state.isPrepTime !== undefined) {
             isPrepTime = state.isPrepTime;
             $('body').toggleClass('is-prep-time', isPrepTime);
             $('.debate-prep-btn').toggleClass('active', isPrepTime)
                 .text(isPrepTime ? 'Zakończ czas przygotowania' : 'Czas przygotowania');
         }
+    }
 
-        // Input values
+    function applyInputsField(state) {
         if (state.timerValue) $('.input-minutes').val(state.timerValue);
         if (state.adVocemValue) { $('.input-minutes-advocem').val(state.adVocemValue); loadAdVocemFromInput(); }
         if (state.motion !== undefined) { $('.input-motion').val(state.motion); $('.motion-text').text(state.motion); }
+    }
 
-        // Checkboxes
+    function applyCheckboxesField(state) {
         if (state.showControls !== undefined) {
             showControls = state.showControls;
             if (!App.state.isSlaveSession) {
@@ -744,7 +737,7 @@
             App.state.slaveShowControls = state.slaveShowControls;
             if (App.state.isSlaveSession) {
                 $('.timer-controls:not(.joker-controls)').toggle(App.state.slaveShowControls);
-                if (jokerRunning) $('.joker-controls').toggle(App.state.slaveShowControls);
+                if (joker.isRunning()) $('.joker-controls').toggle(App.state.slaveShowControls);
             }
         }
         if (state.soundEnabled !== undefined) {
@@ -756,63 +749,70 @@
             $('#jokerCheck').prop('checked', jokerEnabled);
             if (currentFormat === 'oxford') $('.oxford-joker').toggle(jokerEnabled);
         }
+    }
 
-        // Logos
+    function applyLogosField(state) {
         if (state.logos !== undefined) {
-            while (logoSrcs.length < state.logos.length && logoSrcs.length < MAX_LOGOS) {
-                logoSrcs.push(null);
-                $('#logo-add-card').before(createSlotHtml(logoSrcs.length));
-            }
-            if (logoSrcs.length >= MAX_LOGOS) $('#logo-add-card').hide();
-            state.logos.forEach(function (src, i) { setImage(src, i + 1); });
+            logoSrcs = state.logos.slice(0, MAX_LOGOS);
+            renderLogoSlots();
+            renderTimerLogos();
         }
-        // Backward compat for old session peers
+        // Backward compat for old session peers that sent individual logo fields
         if (state.logo1 !== undefined) setImage(state.logo1, 1);
         if (state.logo2 !== undefined) setImage(state.logo2, 2);
+    }
 
-        // Timer
-        if (state.timerRunning !== undefined || state.minutes !== undefined) {
-            clearInterval(timerInterval);
-            timerRunning = false;
-            bpOvertimeRunning = state.bpOvertimeRunning || false;
-            bpOvertimeSecs = state.bpOvertimeSecs !== undefined ? state.bpOvertimeSecs : bpOvertimeSecs;
-            bpOvertimeStartedAt = state.bpOvertimeStartedAt;
-            $('.timer').removeClass('bp-overtime');
-            if (bpOvertimeRunning) $('.timer').addClass('bp-overtime');
-            if (state.minutes !== undefined) { minutes = state.minutes; seconds = state.seconds || 0; renderTimer(); }
-            if (state.timerRunning) {
-                timerStartedAt = state.timerStartedAt;
-                timerStartSeconds = state.timerStartSeconds;
-                lastTimerSecond = -1;
-                timerInterval = setInterval(timerTick, 250);
-                timerRunning = true;
-                $('.start-stop').text('Stop');
-            } else {
-                $('.start-stop').text('Start');
-            }
+    function applyTimerField(state) {
+        if (state.timerRunning === undefined && state.minutes === undefined) return;
+        mainTimer.stop();
+        overtime.stop();
+        inOvertime = state.bpOvertimeRunning || false;
+        $('.timer').toggleClass('bp-overtime', inOvertime);
+        if (state.minutes !== undefined) {
+            renderTimer(state.minutes * 60 + (state.seconds || 0));
         }
-
-        // Joker
-        if (state.jokerRunning !== undefined) {
-            clearInterval(jokerInterval);
-            jokerRunning = false;
-            if (state.jokerRunning) {
-                jokerStartedAt = state.jokerStartedAt;
-                jokerStartSeconds = state.jokerStartSeconds;
-                jokerSeconds = state.jokerSeconds;
-                lastJokerSecond = -1;
-                renderJoker();
-                $('.joker-timer').show();
-                if (effectiveShowControls()) $('.joker-controls').show();
-                jokerInterval = setInterval(jokerTick, 250);
-                jokerRunning = true;
+        if (state.timerRunning) {
+            if (inOvertime) {
+                overtime.adopt(state.bpOvertimeStartedAt, state.bpOvertimeSecs);
             } else {
-                jokerSeconds = state.jokerSeconds !== undefined ? state.jokerSeconds : jokerSeconds;
-                $('.joker-timer').hide();
-                $('.joker-controls').hide();
+                mainTimer.adopt(state.timerStartedAt, state.timerStartSeconds);
             }
+            $('.start-stop').text('Stop');
+        } else {
+            // Paused: remember the overtime remaining so a later resume is correct.
+            if (inOvertime && state.bpOvertimeSecs !== undefined) overtime.setFrozen(state.bpOvertimeSecs);
+            $('.start-stop').text('Start');
         }
+    }
 
+    function applyJokerField(state) {
+        if (state.jokerRunning === undefined) return;
+        joker.stop();
+        if (state.jokerRunning) {
+            joker.adopt(state.jokerStartedAt, state.jokerStartSeconds);
+            renderJoker(joker.remaining());
+            $('.joker-timer').show();
+            if (effectiveShowControls()) $('.joker-controls').show();
+        } else {
+            if (state.jokerSeconds !== undefined) joker.setFrozen(state.jokerSeconds);
+            $('.joker-timer').hide();
+            $('.joker-controls').hide();
+        }
+    }
+
+    var STATE_APPLIERS = [
+        applyFormatField,     // first — applyFormat() calls reset()
+        applyPrepField,
+        applyInputsField,     // before the timer applier, which may read the input values
+        applyCheckboxesField,
+        applyLogosField,
+        applyTimerField,
+        applyJokerField
+    ];
+
+    function applyState(state) {
+        App.state.applyingState = true;
+        STATE_APPLIERS.forEach(function (fn) { fn(state); });
         App.state.applyingState = false;
     }
 
