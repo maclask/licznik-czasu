@@ -4,7 +4,7 @@
   <title>Licznik czasu</title>
   <link rel="stylesheet" href="assets/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="assets/css/style.css"/>
-  <link rel="stylesheet" href="assets/css/all.css">
+  <link rel="stylesheet" href="assets/css/debate.css"/>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 </head>
@@ -40,6 +40,13 @@
                 </svg>
               </a>
             </li>
+            <li class="nav-item" id="debate-link-item" data-toggle="tooltip" title="Debata online">
+              <a class="nav-link" id="debate-link" href="#">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="black" style="width:26px;height:26px" class="icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h8.25a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H4.5A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+              </a>
+            </li>
             <li class="nav-item" data-toggle="tooltip" title="Pomoc">
               <a class="nav-link" id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
             </li>
@@ -52,7 +59,7 @@
 
       <div id="timer">
         <div class="row justify-content-md-center">
-          <h2 id="teza" class="text-uppercase"></h2>
+          <h2 id="motion" class="text-uppercase motion-text"></h2>
         </div>
         <div class="row justify-content-md-center">
           <div class="col-lg"></div>
@@ -102,7 +109,7 @@
         <div class="panel-body">
           <div class="settings-rows">
 
-            <!-- Format debaty -->
+            <!-- Debate format -->
             <div class="row no-gutters align-items-center s-row">
               <div class="col-12 col-md-auto s-label">Format debaty</div>
               <div class="col-12 col-md-auto">
@@ -119,24 +126,24 @@
               </div>
             </div>
 
-            <!-- Teza -->
+            <!-- Motion -->
             <div class="row no-gutters align-items-start s-row">
               <div class="col-12 col-md-auto s-label s-label-top">Teza</div>
               <div class="col-12 col-md">
-                <textarea class="input-teza form-control" id="teza-input" name="teza" rows="3" placeholder="wpisz tezę debaty…"></textarea>
+                <textarea class="input-motion form-control" id="motion-input" name="motion" rows="3" placeholder="wpisz tezę debaty…"></textarea>
               </div>
             </div>
 
-            <!-- Czas mowy / Ad vocem / Test dźwięku + Checkboxes -->
+            <!-- Speech time / Ad vocem / Sound test + Checkboxes -->
             <div class="row no-gutters s-row">
               <div class="col-12 col-md">
                 <div class="s-setting-line">
                   <span class="s-label">Czas mowy</span>
-                  <input class="input-minuty form-control" id="minuty" name="minuty" value="05:00" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                  <input class="input-minutes form-control" id="minutes" name="minutes" value="05:00" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
                 </div>
                 <div class="s-setting-line oxford-setting">
                   <span class="s-label">Ad vocem</span>
-                  <input class="input-minuty-advocem form-control" id="minuty-advocem" name="minuty-advocem" value="00:30" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                  <input class="input-minutes-advocem form-control" id="minutes-advocem" name="minutes-advocem" value="00:30" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
                 </div>
                 <div class="s-setting-line">
                   <span class="s-label">Test dźwięku</span>
@@ -162,65 +169,13 @@
               </div>
             </div>
 
-            <!-- Loga -->
+            <!-- Logos -->
             <div class="row no-gutters align-items-start s-row">
               <div class="col-12 col-md-auto s-label s-label-top">Loga</div>
               <div class="col-12 col-md">
                 <div id="logo-slots">
 
-                  <!-- Slot 1 -->
-                  <div class="logo-drop-zone logo-slot" data-logo-no="1">
-                    <div class="logo-slot-controls">
-                      <div class="dropdown dropdown1">
-                        <button type="button" class="btn btn-secondary btn-sm dropdown-toggle" id="dropdownMenuButton1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Wybierz z listy</button>
-                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
-                          <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-                          <a class="dropdown-item" data="tld.png" href="#">TLD</a>
-                          <a class="dropdown-item" data="idp.png" href="#">IDP</a>
-                          <a class="dropdown-item" data="g5.jpg" href="#">G5</a>
-                          <a class="dropdown-item" data="WTDO.png" href="#">WTDO</a>
-                          <a class="dropdown-item" data="mpdo.png" href="#">MPDO</a>
-                          <a class="dropdown-item" data="PPDO.png" href="#">PPDO</a>
-                          <a class="dropdown-item" data="ksm.png" href="#">KSM</a>
-                          <a class="dropdown-item" data="ng.png" href="#">Nowy Głos</a>
-                          <a class="dropdown-item" data="#" href="#">brak obrazu</a>
-                        </div>
-                      </div>
-                      <button type="button" class="btn btn-outline-secondary btn-sm logo-file-btn">Wybierz z dysku</button>
-                      <input type="file" accept="image/*" class="logo-file-input d-none">
-                    </div>
-                    <img class="logo-slot-preview" src="" alt="">
-                    <div class="logo-change-overlay">kliknij by zmienić obraz</div>
-                    <p class="logo-drop-hint">lub przeciągnij / wklej (Ctrl+V)</p>
-                    <button type="button" class="logo-remove-btn" title="Usuń logo">&times;</button>
-                  </div>
-
-                  <!-- Slot 2 -->
-                  <div class="logo-drop-zone logo-slot" data-logo-no="2">
-                    <div class="logo-slot-controls">
-                      <div class="dropdown dropdown2">
-                        <button type="button" class="btn btn-secondary btn-sm dropdown-toggle" id="dropdownMenuButton2" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Wybierz z listy</button>
-                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton2">
-                          <a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-                          <a class="dropdown-item" data="tld.png" href="#">TLD</a>
-                          <a class="dropdown-item" data="idp.png" href="#">IDP</a>
-                          <a class="dropdown-item" data="g5.jpg" href="#">G5</a>
-                          <a class="dropdown-item" data="WTDO.png" href="#">WTDO</a>
-                          <a class="dropdown-item" data="mpdo.png" href="#">MPDO</a>
-                          <a class="dropdown-item" data="PPDO.png" href="#">PPDO</a>
-                          <a class="dropdown-item" data="ksm.png" href="#">KSM</a>
-                          <a class="dropdown-item" data="ng.png" href="#">Nowy Głos</a>
-                          <a class="dropdown-item" data="#" href="#">brak obrazu</a>
-                        </div>
-                      </div>
-                      <button type="button" class="btn btn-outline-secondary btn-sm logo-file-btn">Wybierz z dysku</button>
-                      <input type="file" accept="image/*" class="logo-file-input d-none">
-                    </div>
-                    <img class="logo-slot-preview" src="" alt="">
-                    <div class="logo-change-overlay">kliknij by zmienić obraz</div>
-                    <p class="logo-drop-hint">lub przeciągnij / wklej (Ctrl+V)</p>
-                    <button type="button" class="logo-remove-btn" title="Usuń logo">&times;</button>
-                  </div>
+                  <!-- Logo slots are rendered from state by renderLogoSlots() in stopwatch.js -->
 
                   <!-- Add card -->
                   <div class="logo-drop-zone logo-add-card" id="logo-add-card">
@@ -229,6 +184,17 @@
                   </div>
 
                 </div>
+              </div>
+            </div>
+
+            <!-- Interface style -->
+            <div class="row no-gutters align-items-center s-row">
+              <div class="col-12 col-md-auto s-label">Styl</div>
+              <div class="col-12 col-md-auto">
+                <select class="form-control form-control-sm" id="style-select" style="width:auto">
+                  <option value="default" selected>Domyślny</option>
+                  <option value="glassmorphic">Glassmorphizm</option>
+                </select>
               </div>
             </div>
 
@@ -304,7 +270,7 @@
         </div>
         <div class="panel-body">
 
-          <!-- Master: dwie kolumny -->
+          <!-- Master: two columns -->
           <div class="master-sharing">
             <div class="row">
               <div class="col-md-6 sharing-col">
@@ -344,6 +310,33 @@
                 <small class="session-join-error text-danger d-block mt-1"></small>
               </div>
             </div>
+
+            <!-- Create online debate (below session creation) -->
+            <div class="debate-setup">
+              <div class="sharing-col debate-create-col">
+                <p class="sharing-col-title">Utwórz debatę online</p>
+                <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                  <input type="text" class="form-control debate-master-name-input" placeholder="Twoje imię" maxlength="40" autocomplete="off" style="width:130px">
+                  <div class="input-group" style="width:auto">
+                    <input type="text" class="form-control debate-name-input" placeholder="nazwa pokoju" style="width:130px">
+                    <div class="input-group-append">
+                      <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-secondary debate-create-btn" disabled>Utwórz debatę</button>
+                </div>
+                <div class="debate-links mt-2" style="display:none">
+                  <div class="input-group">
+                    <input type="text" class="form-control debate-link-val" readonly>
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary debate-copy-btn" type="button">Kopiuj</button>
+                    </div>
+                  </div>
+                  <div id="debate-qr" class="mt-2 d-flex justify-content-center"></div>
+                </div>
+                <p class="debate-created-hint" style="display:none">Debata gotowa — przejdź do zakładki „Debata online".</p>
+              </div>
+            </div>
           </div>
 
           <!-- Slave: QR + link -->
@@ -364,17 +357,206 @@
       </div>
       <!--end of sharing-->
 
+      <div id="debate">
+
+        <!-- Empty state: the debate is created in the Sharing tab -->
+        <div class="debate-empty">
+          <div class="panel-header"><h2>Debata online</h2></div>
+          <p class="debate-empty-hint">Aby rozpocząć, utwórz debatę w zakładce „Udostępnianie".</p>
+        </div>
+
+        <!-- Participant: join form (name + camera/mic test) -->
+        <div class="debate-join" style="display:none">
+          <div class="panel-header"><h2>Dołącz do debaty</h2></div>
+          <div class="debate-join-body">
+            <div class="s-setting-line">
+              <span class="s-label">Imię</span>
+              <input type="text" class="form-control debate-join-name" placeholder="Twoje imię" maxlength="40" autocomplete="off">
+            </div>
+            <p class="debate-join-hint">Sprawdź kamerę i mikrofon przed dołączeniem:</p>
+            <div class="debate-join-preview"></div>
+            <div class="mic-level-meter" style="display:none"><div class="mic-level-fill"></div></div>
+            <div class="d-flex flex-wrap align-items-center mb-2" style="gap:0.5rem">
+              <select class="form-control form-control-sm debate-join-cam-select" style="width:auto;display:none"></select>
+              <select class="form-control form-control-sm debate-join-mic-select" style="width:auto;display:none"></select>
+            </div>
+            <div class="d-flex flex-wrap align-items-center" style="gap:0.5rem">
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-preview-btn">Włącz podgląd</button>
+              <button type="button" class="btn btn-secondary debate-join-btn">Dołącz</button>
+            </div>
+            <small class="debate-join-error text-danger d-block mt-1"></small>
+          </div>
+        </div>
+
+        <!-- Participant: hold screen while joining / waiting for admission -->
+        <div class="debate-waiting" style="display:none">
+          <div class="panel-header"><h2>Debata online</h2></div>
+          <p class="debate-waiting-hint">Dołączanie…</p>
+        </div>
+
+        <!-- Debate stage: 3-column layout -->
+        <div class="debate-stage" style="display:none">
+          <h2 class="text-uppercase motion-text debate-motion"></h2>
+          <div class="debate-grid">
+
+            <!-- LEFT: proposition (oxford) / government (bp) / judges / audience -->
+            <div class="debate-side debate-side-left">
+              <div class="debate-zone oxford-only">
+                <h3 class="debate-zone-title">Propozycja</h3>
+                <div class="slot-list" data-zone="proposition" data-slots="4"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Otwierający rząd (OG)</h3>
+                <div class="slot-list" data-zone="og" data-slots="2"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Zamykający rząd (CG)</h3>
+                <div class="slot-list" data-zone="cg" data-slots="2"></div>
+              </div>
+              <div class="debate-zone">
+                <h3 class="debate-zone-title">Sędziowie</h3>
+                <div class="slot-list" data-zone="judges" data-slots="3"></div>
+              </div>
+              <div class="debate-zone">
+                <h3 class="debate-zone-title">Widzowie</h3>
+                <div class="slot-list slot-list--audience" data-zone="audience"></div>
+              </div>
+            </div>
+
+            <!-- CENTER: video, clock, logos, timer controls -->
+            <div class="debate-center">
+              <div class="debate-video"></div>
+              <div class="debate-clock-row">
+                <div class="timer">
+                  <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
+                </div>
+                <div class="joker-timer">
+                  <p>Joker</p>
+                  <span class="joker-minutes text-monospace">0</span>:<span class="joker-seconds text-monospace">00</span>
+                </div>
+              </div>
+              <div class="img-grid">
+                <div class="img-container"><img class="img1" src="" alt="logo1"/></div>
+                <div class="img-container"><img class="img2" src="" alt="logo2"/></div>
+                <div class="img-container"><img class="img3" src="" alt="logo3"/></div>
+                <div class="img-container"><img class="img4" src="" alt="logo4"/></div>
+                <div class="img-container"><img class="img5" src="" alt="logo5"/></div>
+                <div class="img-container"><img class="img6" src="" alt="logo6"/></div>
+              </div>
+              <div class="timer-controls debate-timer-controls">
+                <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
+                <button type="button" class="btn btn-outline-secondary reset">Reset</button>
+                <button type="button" class="btn btn-outline-secondary ad-vocem oxford-only">Ad vocem</button>
+                <button type="button" class="btn btn-outline-secondary joker oxford-joker">Joker</button>
+              </div>
+              <div class="timer-controls joker-controls debate-timer-controls">
+                <button type="button" class="btn btn-outline-secondary joker-start-stop">Start/stop</button>
+                <button type="button" class="btn btn-outline-secondary joker-reset">Reset</button>
+                <button type="button" class="btn btn-outline-secondary joker-off">Zakończ</button>
+              </div>
+            </div>
+
+            <!-- RIGHT: opposition (oxford) / opposition benches (bp) / chat -->
+            <div class="debate-side debate-side-right">
+              <div class="debate-zone oxford-only">
+                <h3 class="debate-zone-title">Opozycja</h3>
+                <div class="slot-list" data-zone="opposition" data-slots="4"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Otwierająca opozycja (OO)</h3>
+                <div class="slot-list" data-zone="oo" data-slots="2"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Zamykająca opozycja (CO)</h3>
+                <div class="slot-list" data-zone="co" data-slots="2"></div>
+              </div>
+              <div class="debate-chat">
+                <h3 class="debate-zone-title">Czat</h3>
+                <div class="debate-chat-tabs">
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-chat-tab debate-chat-tab-general active">Ogólny</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-chat-tab debate-chat-tab-team">Zespół</button>
+                </div>
+                <div class="debate-chat-log"></div>
+                <div class="input-group debate-chat-form">
+                  <input type="text" class="form-control debate-chat-input" placeholder="napisz wiadomość…" maxlength="300" autocomplete="off">
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-secondary debate-chat-send" type="button">Wyślij</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- BOTTOM bar: media / signals / room controls, grouped into 3 columns -->
+          <div class="debate-controls">
+            <div class="debate-control-col debate-self-controls">
+              <h4 class="debate-control-col-title">Audio / wideo</h4>
+              <select class="form-control form-control-sm debate-mic-select" style="display:none"></select>
+              <select class="form-control form-control-sm debate-cam-select" style="display:none"></select>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-mic-btn">Wycisz mikrofon</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-cam-btn">Wyłącz kamerę</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-leave-btn">Opuść pokój</button>
+            </div>
+            <div class="debate-control-col debate-signal-controls">
+              <h4 class="debate-control-col-title">Zgłoszenia</h4>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-hand-btn">✋ Podnieś rękę</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-advocem-btn">🗣️ Ad vocem</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-breakout-btn">Pokój narad</button>
+            </div>
+            <div class="debate-control-col debate-master-controls">
+              <h4 class="debate-control-col-title">Prowadzenie</h4>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-roster-btn" data-toggle="modal" data-target="#debate-roster-modal">Zarządzanie uczestnikami</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-muteall-btn">Wycisz wszystkich</button>
+              <div class="custom-control custom-checkbox">
+                <input type="checkbox" class="custom-control-input debate-allow-controls-checkbox" id="debateAllowControlsCheck">
+                <label class="custom-control-label" for="debateAllowControlsCheck">Pozwól sterować zegarem</label>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-waitroom-btn">Włącz poczekalnię</button>
+              <div class="debate-prep-control">
+                <input type="text" class="form-control form-control-sm input-prep-time" value="15:00" maxlength="5" title="Czas przygotowania">
+                <button type="button" class="btn btn-outline-secondary btn-sm debate-prep-btn">Czas przygotowania</button>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm debate-editmode-btn">Edytuj przypisanie miejsc</button>
+              <button type="button" class="btn btn-outline-danger btn-sm debate-close-btn">Zamknij pokój</button>
+            </div>
+          </div>
+
+          <p class="comaster-hint">Jesteś wyznaczonym następcą (co-master) — w razie problemu z połączeniem prowadzącego automatycznie przejmiesz jego rolę.</p>
+
+          <!-- Participant management dialog (master only) -->
+          <div class="modal debate-roster-modal" id="debate-roster-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Zarządzanie uczestnikami</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Zamknij"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                  <div class="debate-roster"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <!--end of debate-->
+
     </div>
     <!--end of jumbotron-->
 
   </div>
   <!--end of container-->
 
-  <script src="assets/js/popper.min.js"></script>
   <script src="assets/js/jquery3.3.1.min.js"></script>
   <script src="assets/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script src="assets/js/stoper.js"></script>
+  <!-- Load order matters: app.js defines the shared App namespace, stopwatch.js
+       fills App.core, online.js overrides App.onStateChange and uses App.core. -->
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/stopwatch.js"></script>
+  <script src="assets/js/online.js"></script>
 </body>
 </html>

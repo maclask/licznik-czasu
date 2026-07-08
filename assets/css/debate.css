@@ -1,0 +1,538 @@
+/* debate.css — collaboration layer styles: PeerJS session + VDO.Ninja online
+   debate + theme switcher. Loaded after style.css, so the page's :root custom
+   properties and @import-ed fonts are already in scope. */
+
+/* ── Session ────────────────────────────────────────────────── */
+.session-lost-alert { display: none; }
+.session-links { display: none; }
+
+body.is-slave #settings-link {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+body.is-slave #sharing .panel-header { text-align: center; }
+
+/* Sharing panel: master vs slave content */
+.master-sharing { display: block; }
+.slave-sharing { display: none; }
+body.is-slave .master-sharing { display: none; }
+body.is-slave .slave-sharing { display: block; }
+
+/* Sharing columns */
+.sharing-col-title {
+  font-size: 1rem;
+  font-weight: 300;
+  color: #000;
+  margin-bottom: 0.75rem;
+}
+.sharing-col-join { border-left: 1px solid rgba(0, 0, 0, 0.07); padding-left: 3rem; }
+.session-join-error { display: none; }
+
+/* ── Online debate  ──────────────────────────────────────── */
+#debate {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 2rem 1.5rem;
+}
+
+.debate-join-body {
+  padding: 1.4rem 1.5rem;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Debate creation lives under the session-creation block in the Sharing tab */
+.debate-create-col {
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+}
+.debate-created-hint { color: #6c757d; margin-top: 0.5rem; }
+
+/* Empty state for the Debata tab before a room exists */
+.debate-empty-hint {
+  text-align: center;
+  color: #6c757d;
+  padding: 1.5rem;
+}
+
+/* Hold screen: joining / waiting-room admission */
+.debate-waiting-hint {
+  text-align: center;
+  color: #6c757d;
+  padding: 1.5rem;
+}
+
+.debate-video {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto 1rem;
+  aspect-ratio: 16 / 9;
+  background: #fafafa;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.debate-video:empty { display: none; }
+
+.debate-video .vdo-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* ── Debate stage: 3-column layout ──────────────────────── */
+.debate-motion {
+  margin: 2rem 0 2.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #222;
+}
+.debate-motion:empty::before {
+  content: 'Debata';
+  color: #999;
+}
+
+.debate-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 2.2fr) minmax(140px, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.debate-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.debate-clock-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1rem;
+}
+
+/* Cap logo size inside the centre column */
+.debate-center .img-container {
+  max-height: clamp(40px, 9vmin, 84px);
+  max-width: clamp(40px, 9vmin, 110px);
+}
+.debate-center .img-container img { max-height: clamp(40px, 9vmin, 84px); }
+
+.debate-zone { margin-bottom: 1.25rem; }
+.debate-zone-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 0.5rem;
+}
+
+.slot-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.slot { display: flex; align-items: center; gap: 0.5rem; }
+.slot-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #444;
+  font-size: 0.85rem;
+}
+.slot-name { font-size: 0.95rem; }
+.slot--empty .slot-avatar { border-style: dashed; opacity: 0.45; }
+.slot--empty .slot-name { color: #bbb; }
+.slot--signal .slot-avatar { border-color: #c0392b; background: #c0392b; color: #fff; }
+
+.slot-list--audience { flex-direction: row; flex-wrap: wrap; gap: 0.35rem; }
+.aud-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #444;
+}
+
+/* Chat sits in the right column */
+.debate-side .debate-chat { max-width: none; margin: 0; }
+.debate-side .debate-chat-log { height: 120px; }
+
+/* Bottom control bar spans under the grid */
+.debate-stage > .debate-controls {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+@media (max-width: 900px) {
+  .debate-grid { grid-template-columns: 1fr; }
+  .debate-center { order: -1; }
+}
+
+.debate-roster-modal .modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.roster-name { font-weight: 500; }
+.roster-role { color: #6c757d; font-size: 0.9rem; }
+.roster-side { width: auto; }
+.roster-row .roster-side,
+.roster-row .roster-mute,
+.roster-row .roster-admit { margin-left: auto; }
+.roster-row .roster-side ~ .roster-mute,
+.roster-row .roster-signal ~ .roster-side { margin-left: 0; }
+.roster-pending-badge { margin-right: 0.35rem; }
+.roster-signal {
+  background: #c0392b;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.roster-signal:hover { background: #a5322299; color: #fff; }
+
+/* Debate control groups — shown per role, laid out as 3 columns side by side */
+.debate-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+.debate-control-col {
+  display: none;
+  flex: 1 1 220px;
+  min-width: 200px;
+  max-width: 280px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  border-radius: 10px;
+}
+.debate-control-col-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.15rem;
+}
+.debate-prep-control {
+  display: flex;
+  gap: 0.5rem;
+}
+.debate-prep-control .input-prep-time { width: 70px; flex: 0 0 auto; }
+.debate-prep-control .debate-prep-btn { flex: 1 1 auto; }
+
+/* Media + signal controls appear only while this browser is publishing;
+   the media column also shows for the master even before they take a seat. */
+body.is-publishing .debate-self-controls,
+body.is-debate-master .debate-self-controls,
+body.is-publishing .debate-signal-controls { display: flex; }
+body.is-debate-master .debate-master-controls { display: flex; }
+
+/* Leaving the room is a participant action — the master closes the room instead */
+body.is-debate-master .debate-leave-btn { display: none; }
+
+/* Toggled-on state for raise-hand / ad-vocem */
+.debate-hand-btn.active,
+.debate-advocem-btn.active {
+  background: #6c757d;
+  color: #fff;
+  border-color: #6c757d;
+}
+
+/* Slot + button (take a free position) and speaking mic icon */
+.slot-plus {
+  cursor: pointer;
+  padding: 0;
+  color: #999;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.slot-plus:hover { border-color: #6c757d; color: #6c757d; }
+.slot--me .slot-avatar--me { cursor: pointer; border-color: #2a7; }
+.aud-dot--me { border-color: #2a7; }
+.slot-mic { font-size: 0.85rem; }
+.slot--signal .slot-name .slot-mic { display: none; }
+.aud-dot--speaking { border-color: #2a7; box-shadow: 0 0 0 2px rgba(34,170,119,0.3); }
+.aud-dot--comaster { box-shadow: 0 0 0 2px rgba(23,162,184,0.5); }
+
+/* Comaster failover: succession badge (primary) / honorary badge (former master) */
+.comaster-badge { margin-right: 0.35rem; }
+.comaster-hint { display: none; color: #6c757d; text-align: center; margin: 0.5rem 0 0; font-size: 0.9rem; }
+body.is-comaster-primary .comaster-hint { display: block; }
+
+/* Breakout rooms: dim everyone I can no longer hear/see over VDO from a breakout room */
+.slot--dimmed, .aud-dot--dimmed { opacity: 0.3; filter: grayscale(1); }
+.debate-breakout-btn.active { background: #6c757d; border-color: #6c757d; color: #fff; }
+.roster-breakout-badge { margin-right: 0.35rem; }
+
+/* Chief judge: first judges slot */
+.chief-judge-badge { margin-left: 0.35rem; }
+
+/* Master edit mode: drag & drop seat re-assignment */
+.debate-editmode-btn.active { background: #2a7; border-color: #2a7; color: #fff; }
+.slot--draggable, .aud-dot--draggable { cursor: grab; }
+.slot--draggable:active, .aud-dot--draggable:active { cursor: grabbing; }
+body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
+.slot--dragover { outline: 2px dashed #2a7 !important; outline-offset: 2px; }
+
+/* Join-screen camera/mic preview */
+.debate-join-hint { color: #6c757d; margin: 0.75rem 0 0.5rem; }
+.debate-join-preview {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  margin-bottom: 0.5rem;
+}
+.vdo-director-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
+
+/* Prep time: label the clock so it's obviously not a protected speech timer */
+body.is-prep-time .timer { position: relative; }
+body.is-prep-time .timer::before {
+  content: 'Czas przygotowania';
+  position: absolute;
+  top: -1.4rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #c0392b;
+}
+.debate-prep-btn.active { background: #c0392b; border-color: #c0392b; color: #fff; }
+
+.debate-join-preview:empty { display: none; }
+.debate-join-preview .vdo-iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+.mic-level-meter {
+  width: 100%;
+  max-width: 360px;
+  height: 8px;
+  border-radius: 4px;
+  background: #e9ecef;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+.mic-level-fill {
+  height: 100%;
+  width: 0%;
+  background: #2a7;
+  border-radius: 4px;
+  transition: width 60ms linear;
+}
+
+/* Chat */
+.debate-chat {
+  max-width: 640px;
+  margin: 1.25rem auto 0;
+  width: 100%;
+}
+.debate-chat-tabs { display: flex; gap: 0.35rem; margin-bottom: 0.4rem; }
+.debate-chat-tab { position: relative; }
+.debate-chat-tab.active { background: #6c757d; border-color: #6c757d; color: #fff; }
+.debate-chat-tab.has-unread::after {
+  content: '';
+  position: absolute;
+  top: 2px; right: 2px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #c0392b;
+}
+.debate-chat-log {
+  height: 160px;
+  overflow-y: auto;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #fafafa;
+  font-size: 0.95rem;
+  transition: background-color 150ms ease;
+}
+.chat-msg { margin-bottom: 0.2rem; word-break: break-word; }
+.chat-msg b { color: #444; }
+
+/* Light tint per chat channel — general stays neutral, each team gets its own hue */
+.debate-chat--proposition .debate-chat-log,
+.debate-chat--og .debate-chat-log,
+.debate-chat--cg .debate-chat-log { background: #eaf3ff; }
+.debate-chat--opposition .debate-chat-log,
+.debate-chat--oo .debate-chat-log,
+.debate-chat--co .debate-chat-log { background: #fdecea; }
+.debate-chat--judges .debate-chat-log { background: #f2eaff; }
+.debate-chat--audience .debate-chat-log { background: #eafaf0; }
+
+/* Debate participants only ever need the debate view */
+body.is-debate #sharing-link-item {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+
+/* ── Mobile (≤768 px) ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .container {
+    padding: 0;
+    max-width: 100%;
+    width: 100%;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+
+  .jumbotron {
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0 !important;
+    overflow: hidden;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  /* Nav sits naturally inside the rectangle on mobile */
+  .jumbotron nav {
+    position: static;
+    flex: 0 0 auto;
+  }
+
+  /* Content sections fill remaining height and centre their children */
+  .jumbotron > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+
+  .panel-header {
+    display: none;
+  }
+
+  .panel-body {
+    overflow-y: auto;
+    padding: 1rem;
+  }
+
+  #settings,
+  #help,
+  #sharing {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .sharing-col { padding: 0; }
+  .sharing-col-join { border-left: none; border-top: 1px solid rgba(0,0,0,0.07); padding-top: 1rem; margin-top: 1rem; }
+
+  /* Neutralise Bootstrap row's negative margins so panel-body padding shows */
+  #sharing .row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  /* Nav icons: tighten horizontal padding so all 5 fit on narrow screens */
+  .navbar-nav .nav-link {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+
+  /* Sharing form controls: bump up from 0.875rem btn-sm/input-group-sm default */
+  #sharing .form-control,
+  #sharing .btn {
+    font-size: 1rem;
+    height: auto;
+  }
+
+  #sharing .input-group {
+    width: 100% !important;
+  }
+
+  #sharing .session-name-input,
+  #sharing .session-join-input {
+    width: auto !important;
+    max-width: none !important;
+    flex: 1;
+  }
+}
+
+/* ── Glassmorphism Theme ────────────────────────────────── */
+body.glassmorphic {
+ background: radial-gradient(#fff,#c6d1d9);
+}
+
+body.glassmorphic .jumbotron {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border-radius: 19px !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+body.glassmorphic .btn {
+  color: #333;
+  backdrop-filter: blur(4px);
+  border-radius: 7px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5.5px);
+  -webkit-backdrop-filter: blur(5.5px);
+  border: 1px solid rgba(255, 255, 255, 0.21);
+}
+
+body.glassmorphic .btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+body.glassmorphic .btn-primary {
+  background: rgba(102, 126, 234, 0.7);
+  border: 1px solid rgba(102, 126, 234, 0.5);
+  color: white;
+}
+
+body.glassmorphic .btn-primary:hover {
+  background: rgba(102, 126, 234, 0.9);
+}
+
+body.glassmorphic .form-control,
+body.glassmorphic .form-control-sm {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(4px);
+}
