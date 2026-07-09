@@ -362,7 +362,11 @@
                 '&webcam&autostart' + VDO_SPEAKER + VDO_CLEAN;
         }
         // Everyone else (audience / unassigned / master watching) just views the scene.
-        return VDO_BASE + '?room=' + room + '&scene' + VDO_SPEAKER + VDO_CLEAN;
+        // &videodevice=0&audiodevice=0 stops VDO.Ninja from touching local camera/mic at
+        // all, so viewers on hardware without either can still join the room and see
+        // the active speaker.
+        return VDO_BASE + '?room=' + room + '&scene' + VDO_SPEAKER + VDO_CLEAN +
+            '&videodevice=0&audiodevice=0';
     }
 
     // A second, invisible iframe that holds director permissions purely so we can send
