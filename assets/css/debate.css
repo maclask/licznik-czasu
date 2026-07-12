@@ -67,30 +67,129 @@ body.is-slave .slave-sharing { display: block; }
   padding: 1.5rem;
 }
 
+/* .debate-video is the positioning context: the frame (rounded, clipped) and the
+   controls overlay are siblings so the overlay is never wiped by embedVdo()
+   replacing the frame's contents, and dropdown menus opening out of the overlay
+   are never clipped by the frame's own overflow:hidden. */
 .debate-video {
+  position: relative;
   width: 100%;
   max-width: 440px;
   margin: 0 auto 1rem;
   aspect-ratio: 16 / 9;
+}
+
+.debate-video:not(.debate-video--has-frame) { display: none; }
+
+.debate-video-frame {
+  position: absolute;
+  inset: 0;
   background: #fafafa;
   border: 2px solid rgba(0, 0, 0, 0.18);
   border-radius: 14px;
   overflow: hidden;
 }
 
-.debate-video:empty { display: none; }
-
-.debate-video .vdo-iframe {
+.debate-video-frame .vdo-iframe {
   width: 100%;
   height: 100%;
   border: 0;
   display: block;
 }
 
+/* ── Video overlay controls: mic/cam/signals/settings, monochrome icon
+   buttons on a translucent dark bar (needs its own contrast against arbitrary
+   video content, independent of the page theme) ─────────────────────── */
+.debate-video-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(6px, 2vmin, 14px);
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  /* nowrap: an auto-width flex container that's both absolutely positioned and
+     allowed to wrap gets its shrink-to-fit width computed wrong in Chromium (it
+     collapses to ~half the available width and wraps well before it needs to).
+     No overflow-x fallback here: setting overflow-x to anything but visible forces
+     overflow-y to auto too (per spec), which clips the dropup device menus. */
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  max-width: calc(100% - 16px);
+  padding: 4px 6px;
+  background: rgba(20, 20, 20, 0.6);
+  backdrop-filter: blur(6px);
+  border-radius: 999px;
+}
+
+.dv-group { display: none; }
+body.is-publishing .dv-mic-group,
+body.is-debate-master .dv-mic-group,
+body.is-publishing .dv-cam-group,
+body.is-debate-master .dv-cam-group { display: flex; }
+
+.dv-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: clamp(24px, 5vmin, 30px);
+  height: clamp(24px, 5vmin, 30px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  opacity: 0.85;
+}
+.dv-group .dv-btn { display: flex; }
+.dv-btn:hover, .dv-btn:focus { background: rgba(255, 255, 255, 0.15); color: #fff; opacity: 1; }
+.dv-btn:not(:disabled):not(.disabled):active { background: rgba(255, 255, 255, 0.22); color: #fff; }
+
+.dv-icon { width: 60%; height: 60%; }
+.dv-caret { width: clamp(15px, 3.5vmin, 18px); }
+.dv-caret .dv-icon { width: 65%; height: 65%; }
+/* Use our own chevron SVG instead of Bootstrap's default ::after caret triangle */
+.dv-caret.dropdown-toggle::after { display: none; }
+/* Always shown (not hidden) — greyed out and inert when there's no device list
+   to switch between, per fillDeviceMenu() in online.js */
+.dv-caret:disabled { opacity: 0.3; }
+
+.dv-icon-off { display: none; }
+.dv-btn.is-off .dv-icon-on { display: none; }
+.dv-btn.is-off .dv-icon-off { display: block; }
+.dv-btn.is-off { color: #ff5252; opacity: 1; background: rgba(255, 82, 82, 0.18); }
+.dv-btn.is-off:hover { background: rgba(255, 82, 82, 0.28); }
+
+.dv-text-btn { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
+
+/* Signals (question / ad vocem / breakout) and leave: only while publishing */
+.debate-hand-btn, .debate-advocem-btn, .debate-breakout-btn, .debate-leave-btn { display: none; }
+body.is-publishing .debate-hand-btn,
+body.is-publishing .debate-advocem-btn,
+body.is-publishing .debate-breakout-btn { display: flex; }
+body.is-publishing:not(.is-debate-master) .debate-leave-btn { display: flex; }
+
+.debate-hand-btn.active,
+.debate-advocem-btn.active,
+.debate-breakout-btn.active {
+  background: rgba(255, 255, 255, 0.9);
+  color: #222;
+  opacity: 1;
+}
+
+/* Settings (master only) */
+.debate-settings-btn { display: none; }
+body.is-debate-master .debate-settings-btn { display: flex; }
+
+.debate-settings-body { display: flex; flex-direction: column; gap: 0.6rem; align-items: stretch; }
+
 /* ── Debate stage: 3-column layout ──────────────────────── */
+/* Lives at the top of the centre column (not full-width above the grid), so
+   the proposition/opposition zones flank it on either side. */
 .debate-motion {
-  margin: 2rem 0 2.5rem;
-  font-weight: 600;
+  margin: 0 0 1.5rem;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: #222;
 }
@@ -103,8 +202,10 @@ body.is-slave .slave-sharing { display: block; }
   display: grid;
   grid-template-columns: minmax(140px, 1fr) minmax(0, 2.2fr) minmax(140px, 1fr);
   gap: 1.25rem;
-  align-items: start;
+  align-items: stretch;
 }
+
+.debate-side { display: flex; flex-direction: column; }
 
 .debate-center {
   display: flex;
@@ -113,10 +214,28 @@ body.is-slave .slave-sharing { display: block; }
   text-align: center;
 }
 
+/* Clock + joker stay together; logos sit below by default (short/no motion) and
+   move beside the clock when the motion is long enough to wrap — see
+   updateMotionLayout() in online.js, which toggles debate-center--long-motion. */
 .debate-clock-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.debate-clock-main {
   display: flex;
   align-items: baseline;
   justify-content: center;
+  gap: 1rem;
+}
+.debate-clock-row .img-grid { padding: 0; }
+
+.debate-center--long-motion .debate-clock-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
 }
 
@@ -172,16 +291,18 @@ body.is-slave .slave-sharing { display: block; }
   color: #444;
 }
 
-/* Chat sits in the right column */
-.debate-side .debate-chat { max-width: none; margin: 0; }
-.debate-side .debate-chat-log { height: 120px; }
-
-/* Bottom control bar spans under the grid */
-.debate-stage > .debate-controls {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(0, 0, 0, 0.07);
+/* Chat sits in the right column and grows to fill the column's height (stretched
+   to match the taller of the two side columns by .debate-grid) instead of a
+   short fixed box with dead space below it. */
+.debate-side .debate-chat {
+  max-width: none;
+  margin: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
+.debate-side .debate-chat-log { flex: 1 1 auto; height: auto; min-height: 200px; }
 
 @media (max-width: 900px) {
   .debate-grid { grid-template-columns: 1fr; }
@@ -219,58 +340,13 @@ body.is-slave .slave-sharing { display: block; }
 }
 .roster-signal:hover { background: #a5322299; color: #fff; }
 
-/* Debate control groups — shown per role, laid out as 3 columns side by side */
-.debate-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem;
-  justify-content: center;
-  align-items: flex-start;
-}
-.debate-control-col {
-  display: none;
-  flex: 1 1 220px;
-  min-width: 200px;
-  max-width: 280px;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid rgba(0, 0, 0, 0.09);
-  border-radius: 10px;
-}
-.debate-control-col-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #6c757d;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: 0.15rem;
-}
+/* Prep-time control now lives in the settings dialog (#debate-settings-modal) */
 .debate-prep-control {
   display: flex;
   gap: 0.5rem;
 }
 .debate-prep-control .input-prep-time { width: 70px; flex: 0 0 auto; }
 .debate-prep-control .debate-prep-btn { flex: 1 1 auto; }
-
-/* Media + signal controls appear only while this browser is publishing;
-   the media column also shows for the master even before they take a seat. */
-body.is-publishing .debate-self-controls,
-body.is-debate-master .debate-self-controls,
-body.is-publishing .debate-signal-controls { display: flex; }
-body.is-debate-master .debate-master-controls { display: flex; }
-
-/* Leaving the room is a participant action — the master closes the room instead */
-body.is-debate-master .debate-leave-btn { display: none; }
-
-/* Toggled-on state for raise-hand / ad-vocem */
-.debate-hand-btn.active,
-.debate-advocem-btn.active {
-  background: #6c757d;
-  color: #fff;
-  border-color: #6c757d;
-}
 
 /* Slot + button (take a free position) and speaking mic icon */
 .slot-plus {
@@ -295,11 +371,14 @@ body.is-comaster-primary .comaster-hint { display: block; }
 
 /* Breakout rooms: dim everyone I can no longer hear/see over VDO from a breakout room */
 .slot--dimmed, .aud-dot--dimmed { opacity: 0.3; filter: grayscale(1); }
-.debate-breakout-btn.active { background: #6c757d; border-color: #6c757d; color: #fff; }
 .roster-breakout-badge { margin-right: 0.35rem; }
 
 /* Chief judge: first judges slot */
 .chief-judge-badge { margin-left: 0.35rem; }
+
+/* Marshal: master-assigned, shown inline when seated among the judges, or in
+   its own zone otherwise (see .debate-zone--marshal) */
+.marshal-badge { margin-left: 0.35rem; background: #800000; color: #fff; }
 
 /* Master edit mode: drag & drop seat re-assignment */
 .debate-editmode-btn.active { background: #2a7; border-color: #2a7; color: #fff; }
@@ -319,7 +398,7 @@ body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
   background: #fff;
   margin-bottom: 0.5rem;
 }
-.vdo-director-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
+.vdo-director-iframe, .vdo-publish-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
 
 /* Prep time: label the clock so it's obviously not a protected speech timer */
 body.is-prep-time .timer { position: relative; }
