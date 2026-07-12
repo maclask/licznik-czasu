@@ -130,6 +130,7 @@
         });
     }
     function safeSend(conn, obj) {
+        App.vlog('[PeerJS→]', conn && conn.peer, obj);
         try { conn.send(obj); } catch (e) {}
     }
     function sendToPeer(peerId, obj) {
@@ -147,9 +148,7 @@
     App.onStateChange = function(delta) {
         if (App.state.applyingState) return;
         if (App.state.isSlaveSession) {
-            if (masterConn) {
-                try { masterConn.send({type: 'settings', state: delta}); } catch(e) {}
-            }
+            if (masterConn) safeSend(masterConn, {type: 'settings', state: delta});
         } else if (sessionPeer) {
             eachConn(function(c, peerId) { if (connAdmitted(peerId)) safeSend(c, {type: 'state', state: delta}); });
         }
@@ -217,18 +216,19 @@
             // connAdmitted() falls back to "admitted iff waiting room is off" — keep
             // the clock state out of their hands until they're actually let in.
             if (connAdmitted(conn.peer)) {
-                conn.send({type: 'init', state: App.core.getFullState()});
+                safeSend(conn, {type: 'init', state: App.core.getFullState()});
             }
             // A reconnecting participant (post-failover) never re-sends {type:'join'},
             // so this is the only place it gets a fresh roster — a brand-new joiner
             // gets a second, complete one moments later once addRosterEntry runs.
             // With the waiting room on, an unknown peer gets nothing until admitted.
             if (debateRoster.length && connAdmitted(conn.peer)) {
-                conn.send({ type: 'roster', roster: slimRoster() });
+                safeSend(conn, { type: 'roster', roster: slimRoster() });
             }
             App.core.showAlert('Podłączono sesję');
         });
         conn.on('data', function(data) {
+            App.vlog('[PeerJS←]', conn.peer, data);
             var sender = findEntryByPeer(conn.peer);
             // Someone still in the waiting room can't touch the clock, seats or chat
             if (sender && sender.pending && data.type !== 'join') return;
@@ -341,6 +341,18 @@
     var VDO_CLEAN = '&cleanoutput&hidemenu&transparent&cover';
     // Show only whoever is actually talking, hiding silent-but-published guests.
     var VDO_SPEAKER = '&activespeaker&activespeakerdelay=1500';
+    // Baza: nieaktywni publikujący na 0kbps do ręcznego dodania — patrz
+    // docs.vdo.ninja/advanced-settings/mixer-scene-parameters/scene.md.
+    // Kto konkretnie jest "ręcznie dodawany" na ciepło (żeby strona przeciwna
+    // do mówiącej nie miała opóźnienia przy wtrąceniu) — patrz updatePrewarm().
+    var VDO_SCENE = '&scene=2';
+    // Sufit pobierania na gościa dla całego pokoju — ustawiany na linku reżysera,
+    // patrz docs.vdo.ninja/advanced-settings/video-bitrate-parameters/roombitrate.md.
+    // Wartość konserwatywna z myślą o słabszym łączu szkolnym; do doprecyzowania po teście.
+    var VDO_DIRECTOR_BITRATE = '&totalroombitrate=4500';
+    // Sufit tego, ile inni goście mogą pociągnąć z TEGO publikującego — niezależny
+    // od sufitu całego pokoju, chroni przed jedną kamerą zjadającą cały budżet.
+    var VDO_PUBLISH_BITRATE = '&roombitrate=2000';
 
     // A stable, predictable VDO.Ninja stream id per participant (instead of a random one)
     // so the director can target a specific person with &push/&forward regardless of when
@@ -359,13 +371,13 @@
         if (mode === 'publish') {
             return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
                 '&push=' + encodeURIComponent(pushIdFor(pushId)) +
-                '&webcam&autostart' + VDO_SPEAKER + VDO_CLEAN;
+                '&webcam&autostart' + VDO_SPEAKER + VDO_SCENE + VDO_PUBLISH_BITRATE + VDO_CLEAN;
         }
         // Everyone else (audience / unassigned / master watching) just views the scene.
         // &videodevice=0&audiodevice=0 stops VDO.Ninja from touching local camera/mic at
         // all, so viewers on hardware without either can still join the room and see
         // the active speaker.
-        return VDO_BASE + '?room=' + room + '&scene' + VDO_SPEAKER + VDO_CLEAN +
+        return VDO_BASE + '?room=' + room + VDO_SCENE + VDO_SPEAKER + VDO_CLEAN +
             '&videodevice=0&audiodevice=0';
     }
 
@@ -374,16 +386,54 @@
     // (record/mute/scene buttons) never leaks into our UI. The master's visible iframe
     // above stays a plain scene viewer / publisher, unchanged.
     var directorIframe = null;
+    // A director's &forward command only works on guests currently inside that director's
+    // own room — VDO.Ninja hands "ownership" of a guest to whichever room it's forwarded
+    // into. So pulling someone back out of a breakout room needs a director actually
+    // sitting in that breakout room; the main room's director can no longer see them by
+    // then. One extra invisible director iframe per zone covers that.
+    var breakoutDirectorIframes = {};
+
+    // Które strefy należą do którego formatu — Oxford: proposition/opposition,
+    // BP: og/oo/cg/co; judges (i audience) dotyczą obu i nigdy nie są filtrowane.
+    var ZONE_FORMAT = { proposition: 'oxford', opposition: 'oxford', og: 'bp', oo: 'bp', cg: 'bp', co: 'bp' };
+    function relevantZones() {
+        var fmt = App.core.getCurrentFormat();
+        return Object.keys(ZONE_SLOTS).filter(function(zone) {
+            return !ZONE_FORMAT[zone] || ZONE_FORMAT[zone] === fmt;
+        });
+    }
+
+    // Kto realnie może wtrącić się, gdy mówi dana strefa. Sędziowie/widownia
+    // celowo nie mają tu wpisu — brak wpisu = brak podgrzewania, zgodnie z
+    // założeniem, że oni mogą znieść sekundowe opóźnienie.
+    var INTERJECT_OPPONENTS = {
+        proposition: ['opposition'], opposition: ['proposition'],
+        og: ['oo', 'co'], cg: ['oo', 'co'],
+        oo: ['og', 'cg'], co: ['og', 'cg']
+    };
+    function zonePushIds(zone) {
+        return debateRoster.filter(function(e) { return e.zone === zone; }).map(function(e) { return e.pushId; });
+    }
+
     function embedDirector() {
         if (directorIframe) return;
         var room = encodeURIComponent(vdoRoom());
         var $f = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
-            VDO_BASE + '?director=' + room + '&cleanoutput&hidemenu"></iframe>');
+            VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
         $('body').append($f);
         directorIframe = $f.get(0);
+        $.each(relevantZones(), function(i, zone) {
+            var broom = encodeURIComponent(breakoutRoomId(zone));
+            var $bf = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
+                VDO_BASE + '?director=' + broom + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
+            $('body').append($bf);
+            breakoutDirectorIframes[zone] = $bf.get(0);
+        });
     }
     function removeDirector() {
         if (directorIframe) { $(directorIframe).remove(); directorIframe = null; }
+        $.each(breakoutDirectorIframes, function(zone, iframe) { $(iframe).remove(); });
+        breakoutDirectorIframes = {};
     }
 
     // Local self-view for the join screen — lets the user test camera/mic before joining.
@@ -488,8 +538,18 @@
         }
     }
 
+    function vdoFrameLabel(iframe) {
+        if (iframe === debateIframe) return 'debate';
+        if (iframe === directorIframe) return 'director';
+        if (iframe === previewIframe) return 'preview';
+        var breakoutZone = null;
+        $.each(breakoutDirectorIframes, function(zone, f) { if (f === iframe) breakoutZone = zone; });
+        if (breakoutZone) return 'director-breakout-' + breakoutZone;
+        return 'iframe';
+    }
     function postToFrame(iframe, obj) {
         if (iframe && iframe.contentWindow) {
+            App.vlog('[VDO→ ' + vdoFrameLabel(iframe) + ']', obj);
             try { iframe.contentWindow.postMessage(obj, '*'); } catch (e) {}
         }
     }
@@ -781,8 +841,12 @@
     // different one) always pulls them back to the main room first.
     function doForward(entry) {
         if (!entry) return;
+        // entry.breakout already reflects the *new* state, so it also tells us which
+        // room the guest is coming from: the main room when entering, that zone's
+        // breakout room when leaving — see the directorIframe comment above.
         var dest = entry.breakout ? breakoutRoomId(entry.zone) : vdoRoom();
-        postToFrame(directorIframe, { action: 'forward', target: pushIdFor(entry.pushId), value: dest });
+        var source = entry.breakout ? directorIframe : breakoutDirectorIframes[entry.zone];
+        postToFrame(source, { action: 'forward', target: pushIdFor(entry.pushId), value: dest });
     }
     function resetBreakout(entry) {
         if (entry && entry.breakout) { entry.breakout = false; doForward(entry); }
@@ -796,7 +860,7 @@
     }
     function requestBreakout(on) {
         if (isDebateMaster) setBreakout(myClientId, on);
-        else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'breakout', on: on }); } catch (e) {} }
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'breakout', on: on });
     }
 
     function setSignal(clientId, kind) {
@@ -810,11 +874,11 @@
     // Called locally (master) or relayed to master (participant)
     function requestSlot(zone, index) {
         if (isDebateMaster) assignSlot(myClientId, zone, index);
-        else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'takeSlot', zone: zone, index: index }); } catch (e) {} }
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'takeSlot', zone: zone, index: index });
     }
     function requestLeave() {
         if (isDebateMaster) vacateSlot(myClientId);
-        else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'leaveSlot' }); } catch (e) {} }
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'leaveSlot' });
     }
 
     // renderDebate = the visual zones (everyone) + the master management list (master only)
@@ -1229,7 +1293,7 @@
     function toggleSignal(kind) {
         mySignal = (mySignal === kind) ? null : kind;
         if (isDebateMaster) setSignal(myClientId, mySignal);
-        else if (masterConn && masterConn.open) { try { masterConn.send({ type: 'signal', kind: mySignal }); } catch (e) {} }
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'signal', kind: mySignal });
         updateSignalButtons();
     }
     $('.debate-hand-btn').click(function() { toggleSignal('hand'); });
@@ -1343,7 +1407,7 @@
         if (isDebateMaster) {
             broadcastChat(myDebateName, msg, channel);
         } else if (masterConn && masterConn.open) {
-            try { masterConn.send({ type: 'chat', channel: channel, msg: msg }); } catch (e) {}
+            safeSend(masterConn, { type: 'chat', channel: channel, msg: msg });
         }
     }
     $('.debate-chat-send').click(sendChatMessage);
@@ -1357,9 +1421,11 @@
         var d = e.data;
         if (!d) return;
         if (debateIframe && e.source === debateIframe.contentWindow) {
+            App.vlog('[VDO← debate]', d);
             if (d.deviceList) populateDevices(d.deviceList);
             if (d.loudness !== undefined) handleLoudness(d.loudness);
         } else if (previewIframe && e.source === previewIframe.contentWindow) {
+            App.vlog('[VDO← preview]', d);
             if (d.deviceList) populateJoinDevices(d.deviceList);
         }
     });
@@ -1385,7 +1451,7 @@
             var sp = !!loudIds[pushIdFor(e.pushId)];
             if (sp !== !!e.speaking) { e.speaking = sp; changed = true; }
         });
-        if (changed) { renderZones(); broadcastSpeaking(); }
+        if (changed) { renderZones(); broadcastSpeaking(); updatePrewarm(); }
     }
     function broadcastSpeaking() {
         var ids = debateRoster.filter(function(e) { return e.speaking; }).map(function(e) { return e.pushId; });
@@ -1393,6 +1459,34 @@
             if (!connAdmitted(peerId)) return;
             safeSend(c, { type: 'speaking', pushIds: ids });
         });
+    }
+
+    // Selektywne "podgrzewanie" (addScene) strony przeciwnej do aktualnie mówiącej —
+    // patrz VDO_SCENE. Każdy klient steruje WYŁĄCZNIE swoim własnym, lokalnym
+    // debateIframe, więc ta funkcja musi być wywoływana z każdego miejsca, gdzie
+    // entry.speaking się zmienia (handleLoudness na masterze, handler 'speaking'
+    // gdzie indziej) — nie ma jednego globalnego sterowania.
+    var warmPushIds = {}; // pushId -> true, aktualnie przypięte na "ciepło" w MOIM iframe
+    function updatePrewarm() {
+        var speakingZones = {};
+        debateRoster.forEach(function(e) { if (e.speaking && e.zone) speakingZones[e.zone] = true; });
+        var target = {};
+        Object.keys(speakingZones).forEach(function(zone) {
+            // Mówiąca strefa nigdy nie może wypaść z target — inaczej w momencie
+            // przejścia "podgrzany przeciwnik" → "teraz mówi" dostałaby addScene
+            // value:0 w trakcie własnej wypowiedzi.
+            zonePushIds(zone).forEach(function(pid) { target[pid] = true; });
+            (INTERJECT_OPPONENTS[zone] || []).forEach(function(opp) {
+                zonePushIds(opp).forEach(function(pid) { target[pid] = true; });
+            });
+        });
+        Object.keys(warmPushIds).forEach(function(pid) {
+            if (!target[pid]) postToVdo({ action: 'addScene', target: pushIdFor(pid), value: 0 });
+        });
+        Object.keys(target).forEach(function(pid) {
+            if (!warmPushIds[pid]) postToVdo({ action: 'addScene', target: pushIdFor(pid), value: 1 });
+        });
+        warmPushIds = target;
     }
 
     // --- Comaster failover: promotion, backup hub, reconnect cascade ---
@@ -1403,7 +1497,7 @@
     function sendJoinMessage(name) {
         var payload = { type: 'join', name: name, wasMaster: checkWasMaster(debateSessionId), clientId: getClientId() };
         if (masterConn && masterConn.open) {
-            try { masterConn.send(payload); } catch (e) {}
+            safeSend(masterConn, payload);
         } else {
             debatePendingJoin = { name: name };
         }
@@ -1667,6 +1761,7 @@
     // Slave-side dispatch of data arriving over masterConn — factored out so it can
     // be re-attached to a fresh connection after a failover reconnect.
     function handleSlaveData(data) {
+        App.vlog('[PeerJS←]', masterConn && masterConn.peer, data);
         if (data.type === 'init' || data.type === 'state') App.core.applyState(data.state);
         else if (data.type === 'chat') appendChat(data.name, data.msg, data.channel);
         else if (data.type === 'cmd') handleDebateCmd(data);
@@ -1699,6 +1794,7 @@
         else if (data.type === 'speaking') {
             debateRoster.forEach(function(e) { e.speaking = (data.pushIds || []).indexOf(e.pushId) !== -1; });
             renderZones();
+            updatePrewarm();
         }
     }
 

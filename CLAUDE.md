@@ -35,7 +35,7 @@ No build artifacts, no `package.json`, no transpilation.
 Three plain `<script>`s load in order (`app.js` → `stopwatch.js` → `online.js`). There is no bundler, so instead of one closure they share a small, deliberate contract through a global `App`. Each file is its own `(function ($, App) { … })(jQuery, window.App)` IIFE.
 
 - **`app.js`** defines the contract: `App.state` (the only fields both layers touch — `isSlaveSession`, `slaveShowControls`, `applyingState`), a no-op `App.onStateChange`, and an empty `App.core`.
-- **`stopwatch.js`** (core) fills `App.core` at the end of its IIFE with the functions `online.js` needs: `getFullState`, `applyState`, `navigate`, `showAlert`, `showWarn`, `reset`, `startPrepTime`, `isPrepActive`. Everything else stays local to its closure.
+- **`stopwatch.js`** (core) fills `App.core` at the end of its IIFE with the functions `online.js` needs: `getFullState`, `applyState`, `navigate`, `showAlert`, `showWarn`, `reset`, `startPrepTime`, `isPrepActive`, `getCurrentFormat`. Everything else stays local to its closure.
 - **`online.js`** overrides `App.onStateChange` to broadcast state deltas to peers, and reaches into core only via `App.core.*` / `App.state.*`.
 
 Dependency direction is one-way: the core knows nothing about sessions or debate — its single seam to the online layer is `App.onStateChange`, which it calls after every state mutation. Keep it that way: any new cross-file need goes through `App`, and the `<script>` order in `index.html` **is** the dependency contract.
