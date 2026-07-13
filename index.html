@@ -396,10 +396,9 @@
 
         <!-- Debate stage: 3-column layout -->
         <div class="debate-stage" style="display:none">
-          <h2 class="text-uppercase motion-text debate-motion"></h2>
           <div class="debate-grid">
 
-            <!-- LEFT: proposition (oxford) / government (bp) / judges / audience -->
+            <!-- LEFT: proposition (oxford) / government (bp) / marshal / judges / audience -->
             <div class="debate-side debate-side-left">
               <div class="debate-zone oxford-only">
                 <h3 class="debate-zone-title">Propozycja</h3>
@@ -413,6 +412,10 @@
                 <h3 class="debate-zone-title">Zamykający rząd (CG)</h3>
                 <div class="slot-list" data-zone="cg" data-slots="2"></div>
               </div>
+              <div class="debate-zone debate-zone--marshal" style="display:none">
+                <h3 class="debate-zone-title">Marszałek</h3>
+                <div class="slot-list" data-zone="marszalek" data-slots="1"></div>
+              </div>
               <div class="debate-zone">
                 <h3 class="debate-zone-title">Sędziowie</h3>
                 <div class="slot-list" data-zone="judges" data-slots="3"></div>
@@ -423,25 +426,80 @@
               </div>
             </div>
 
-            <!-- CENTER: video, clock, logos, timer controls -->
+            <!-- CENTER: motion, video, clock, logos, timer controls -->
             <div class="debate-center">
-              <div class="debate-video"></div>
-              <div class="debate-clock-row">
-                <div class="timer">
-                  <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
-                </div>
-                <div class="joker-timer">
-                  <p>Joker</p>
-                  <span class="joker-minutes text-monospace">0</span>:<span class="joker-seconds text-monospace">00</span>
+              <h2 class="text-uppercase motion-text debate-motion"></h2>
+              <div class="debate-video">
+                <div class="debate-video-frame"></div>
+                <div class="debate-video-overlay">
+
+                  <div class="btn-group dropup dv-group dv-mic-group">
+                    <button type="button" class="btn dv-btn debate-mic-btn" title="Wycisz mikrofon">
+                      <svg class="dv-icon dv-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                      <svg class="dv-icon dv-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2"/><path d="M19 10v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    </button>
+                    <button type="button" class="btn dv-btn dv-caret dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" disabled>
+                      <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                      <span class="sr-only">Wybierz mikrofon</span>
+                    </button>
+                    <div class="dropdown-menu debate-mic-menu"></div>
+                  </div>
+
+                  <div class="btn-group dropup dv-group dv-cam-group">
+                    <button type="button" class="btn dv-btn debate-cam-btn" title="Wyłącz kamerę">
+                      <svg class="dv-icon dv-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                      <svg class="dv-icon dv-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                    <button type="button" class="btn dv-btn dv-caret dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" disabled>
+                      <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                      <span class="sr-only">Wybierz kamerę</span>
+                    </button>
+                    <div class="dropdown-menu debate-cam-menu"></div>
+                  </div>
+
+                  <button type="button" class="btn dv-btn debate-hand-btn" title="Zgłoś pytanie">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5.5"/>
+                      <path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0v7"/>
+                      <path d="M14 11.8V6a1.5 1.5 0 0 1 3 0v6.5"/>
+                      <path d="M17 13V9a1.5 1.5 0 0 1 3 0v6c0 3.5-2 6.5-6 6.5h-1.5c-2 0-3-.5-4.3-2.2L5 15.8c-.6-.8-.5-1.7.3-2.3.8-.6 1.8-.4 2.4.3L9 15.5"/>
+                    </svg>
+                  </button>
+
+                  <button type="button" class="btn dv-btn dv-text-btn debate-advocem-btn" title="Ad vocem">AV</button>
+
+                  <button type="button" class="btn dv-btn debate-breakout-btn" title="Pokój narad">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </button>
+
+                  <button type="button" class="btn dv-btn debate-leave-btn" title="Opuść pokój">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  </button>
+
+                  <button type="button" class="btn dv-btn debate-settings-btn" title="Ustawienia" data-toggle="modal" data-target="#debate-settings-modal">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </button>
+
                 </div>
               </div>
-              <div class="img-grid">
-                <div class="img-container"><img class="img1" src="" alt="logo1"/></div>
-                <div class="img-container"><img class="img2" src="" alt="logo2"/></div>
-                <div class="img-container"><img class="img3" src="" alt="logo3"/></div>
-                <div class="img-container"><img class="img4" src="" alt="logo4"/></div>
-                <div class="img-container"><img class="img5" src="" alt="logo5"/></div>
-                <div class="img-container"><img class="img6" src="" alt="logo6"/></div>
+              <div class="debate-clock-row">
+                <div class="debate-clock-main">
+                  <div class="timer">
+                    <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
+                  </div>
+                  <div class="joker-timer">
+                    <p>Joker</p>
+                    <span class="joker-minutes text-monospace">0</span>:<span class="joker-seconds text-monospace">00</span>
+                  </div>
+                </div>
+                <div class="img-grid">
+                  <div class="img-container"><img class="img1" src="" alt="logo1"/></div>
+                  <div class="img-container"><img class="img2" src="" alt="logo2"/></div>
+                  <div class="img-container"><img class="img3" src="" alt="logo3"/></div>
+                  <div class="img-container"><img class="img4" src="" alt="logo4"/></div>
+                  <div class="img-container"><img class="img5" src="" alt="logo5"/></div>
+                  <div class="img-container"><img class="img6" src="" alt="logo6"/></div>
+                </div>
               </div>
               <div class="timer-controls debate-timer-controls">
                 <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
@@ -488,40 +546,6 @@
 
           </div>
 
-          <!-- BOTTOM bar: media / signals / room controls, grouped into 3 columns -->
-          <div class="debate-controls">
-            <div class="debate-control-col debate-self-controls">
-              <h4 class="debate-control-col-title">Audio / wideo</h4>
-              <select class="form-control form-control-sm debate-mic-select" style="display:none"></select>
-              <select class="form-control form-control-sm debate-cam-select" style="display:none"></select>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-mic-btn">Wycisz mikrofon</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-cam-btn">Wyłącz kamerę</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-leave-btn">Opuść pokój</button>
-            </div>
-            <div class="debate-control-col debate-signal-controls">
-              <h4 class="debate-control-col-title">Zgłoszenia</h4>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-hand-btn">✋ Podnieś rękę</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-advocem-btn">🗣️ Ad vocem</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-breakout-btn">Pokój narad</button>
-            </div>
-            <div class="debate-control-col debate-master-controls">
-              <h4 class="debate-control-col-title">Prowadzenie</h4>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-roster-btn" data-toggle="modal" data-target="#debate-roster-modal">Zarządzanie uczestnikami</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-muteall-btn">Wycisz wszystkich</button>
-              <div class="custom-control custom-checkbox">
-                <input type="checkbox" class="custom-control-input debate-allow-controls-checkbox" id="debateAllowControlsCheck">
-                <label class="custom-control-label" for="debateAllowControlsCheck">Pozwól sterować zegarem</label>
-              </div>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-waitroom-btn">Włącz poczekalnię</button>
-              <div class="debate-prep-control">
-                <input type="text" class="form-control form-control-sm input-prep-time" value="15:00" maxlength="5" title="Czas przygotowania">
-                <button type="button" class="btn btn-outline-secondary btn-sm debate-prep-btn">Czas przygotowania</button>
-              </div>
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-editmode-btn">Edytuj przypisanie miejsc</button>
-              <button type="button" class="btn btn-outline-danger btn-sm debate-close-btn">Zamknij pokój</button>
-            </div>
-          </div>
-
           <p class="comaster-hint">Jesteś wyznaczonym następcą (co-master) — w razie problemu z połączeniem prowadzącego automatycznie przejmiesz jego rolę.</p>
 
           <!-- Participant management dialog (master only) -->
@@ -534,6 +558,33 @@
                 </div>
                 <div class="modal-body">
                   <div class="debate-roster"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Settings dialog (master only) — reached via the gear icon in the video overlay -->
+          <div class="modal debate-settings-modal" id="debate-settings-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Ustawienia debaty</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Zamknij"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body debate-settings-body">
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-roster-btn">Zarządzanie uczestnikami</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-muteall-btn">Wycisz wszystkich</button>
+                  <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input debate-allow-controls-checkbox" id="debateAllowControlsCheck">
+                    <label class="custom-control-label" for="debateAllowControlsCheck">Pozwól sterować zegarem</label>
+                  </div>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-waitroom-btn">Włącz poczekalnię</button>
+                  <div class="debate-prep-control">
+                    <input type="text" class="form-control form-control-sm input-prep-time" value="15:00" maxlength="5" title="Czas przygotowania">
+                    <button type="button" class="btn btn-outline-secondary btn-sm debate-prep-btn">Czas przygotowania</button>
+                  </div>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-editmode-btn">Edytuj przypisanie miejsc</button>
+                  <button type="button" class="btn btn-outline-danger btn-sm debate-close-btn">Zamknij pokój</button>
                 </div>
               </div>
             </div>

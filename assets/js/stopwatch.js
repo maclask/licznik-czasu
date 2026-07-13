@@ -825,6 +825,7 @@
         showWarn: showWarn,
         reset: reset,
         startPrepTime: startPrepTime,
-        isPrepActive: function () { return isPrepTime; }
+        isPrepActive: function () { return isPrepTime; },
+        getCurrentFormat: function () { return currentFormat; }
     };
 })(jQuery, window.App);

@@ -10,8 +10,6 @@
 
 - Uprzątnięcie przycisków — sterowanie w debacie się rozrosło (kontrolki mastera, sygnały, media, breakout, prep time), warto przejrzeć układ/grupowanie.
 
-- Zadbać o przypadek, gdy sędziów jest więcej niż 3 (obecny limit `ZONE_SLOTS.judges = 3`).
-
 - Przemyśleć, jakie jeszcze przyciski/funkcje są potrzebne do prowadzenia debaty (otwarty brainstorm).
 
 - Dodać więcej wizualnych i dźwiękowych sygnałów o tym, co się dzieje w debacie (np. wejście/wyjście z pokoju breakout, ktoś dołączył/wyszedł, zmiana miejsca).

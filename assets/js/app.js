@@ -24,4 +24,12 @@
 
     // Populated by stopwatch.js at the end of its IIFE.
     App.core = {};
+
+    // Verbose debug logging — off by default. Enable from the browser console with
+    // `App.verbose = true` to log every PeerJS message sent/received and every
+    // VDO.Ninja postMessage action invoked (see online.js).
+    App.verbose = false;
+    App.vlog = function () {
+        if (App.verbose) console.log.apply(console, arguments);
+    };
 })();
