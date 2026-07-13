@@ -165,11 +165,12 @@ body.is-debate-master .dv-cam-group { display: flex; }
 
 /* Signals (question / ad vocem): team seats only (body.is-debater, set in
    updateMyEmbed) — judges, the marshal and the audience never see them.
-   Breakout and leave: anyone publishing. */
+   Breakout: team seats and judges (body.has-breakout) — the marshal has no room
+   to confer in. Leave: anyone publishing. */
 .debate-hand-btn, .debate-advocem-btn, .debate-breakout-btn, .debate-leave-btn { display: none; }
 body.is-debater .debate-hand-btn,
 body.is-debater .debate-advocem-btn,
-body.is-publishing .debate-breakout-btn { display: flex; }
+body.has-breakout .debate-breakout-btn { display: flex; }
 body.is-publishing:not(.is-debate-master) .debate-leave-btn { display: flex; }
 
 .debate-hand-btn.active,

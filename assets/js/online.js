@@ -37,6 +37,10 @@
     // never judges, the marshal or the audience.
     var DEBATER_ZONES = { proposition: true, opposition: true, og: true, oo: true, cg: true, co: true };
     function isDebaterZone(zone) { return !!DEBATER_ZONES[zone]; }
+    // Zones with a breakout room ("Pokój narad") — team seats and the judges. The
+    // marshal sits alone in their zone (nobody to confer with) and the audience
+    // doesn't publish, so neither gets one.
+    function zoneHasBreakout(zone) { return isDebaterZone(zone) || zone === 'judges'; }
 
     function zoneSlotCount(zone) {
         var base = ZONE_SLOTS[zone] || 0;
@@ -457,7 +461,7 @@
             VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
         $('body').append($f);
         directorIframe = $f.get(0);
-        $.each(relevantZones(), function(i, zone) {
+        $.each(relevantZones().filter(zoneHasBreakout), function(i, zone) {
             var broom = encodeURIComponent(breakoutRoomId(zone));
             var $bf = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
                 VDO_BASE + '?director=' + broom + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
@@ -1019,9 +1023,10 @@
         else assignSlot(clientId, 'marszalek', 0);
     }
 
-    // Breakout rooms: only debaters/judges (never audience) may use them, and only for
-    // whichever zone they're currently seated in. Leaving the seat (or being moved to a
-    // different one) always pulls them back to the main room first.
+    // Breakout rooms: only debaters/judges (never the audience or the marshal's own
+    // zone) may use them, and only for whichever zone they're currently seated in.
+    // Leaving the seat (or being moved to a different one) always pulls them back to
+    // the main room first.
     function doForward(entry) {
         if (!entry) return;
         // entry.breakout already reflects the *new* state, so it also tells us which
@@ -1036,7 +1041,7 @@
     }
     function setBreakout(clientId, on) {
         var e = findEntry(clientId);
-        if (!e || e.zone === 'audience') return;
+        if (!e || !zoneHasBreakout(e.zone)) return;
         e.breakout = !!on;
         doForward(e);
         renderDebate();
@@ -1446,8 +1451,10 @@
     function updateMyEmbed() {
         embedVdo();
         var me = myEntry();
-        // Signal buttons (question / ad vocem) are for team seats only — see debate.css
-        $('body').toggleClass('is-debater', !!(me && isDebaterZone(me.zone)));
+        // Signal buttons (question / ad vocem) are for team seats only; the breakout
+        // button additionally covers judges — see debate.css
+        $('body').toggleClass('is-debater', !!(me && isDebaterZone(me.zone)))
+            .toggleClass('has-breakout', !!(me && zoneHasBreakout(me.zone)));
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
