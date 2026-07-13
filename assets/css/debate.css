@@ -312,7 +312,10 @@ body.is-debate-master .debate-settings-btn { display: flex; }
   flex-direction: column;
   min-height: 0;
 }
-.debate-side .debate-chat-log { flex: 1 1 auto; height: auto; min-height: 200px; }
+.debate-side .debate-chat-box { flex: 1 1 auto; min-height: 0; }
+/* height: 0 (not auto) so message content never sets the log's intrinsic size —
+   the box stays put and the log scrolls instead of stretching the column */
+.debate-side .debate-chat-log { flex: 1 1 auto; height: 0; min-height: 200px; }
 
 @media (max-width: 900px) {
   .debate-grid { grid-template-columns: 1fr; }
@@ -445,14 +448,32 @@ body.is-prep-time .timer::before {
   transition: width 60ms linear;
 }
 
-/* Chat */
+/* Chat: tabs, log and input fused into one bordered box (.debate-chat-box);
+   the log alone scrolls — it must never grow the box with message count */
 .debate-chat {
   max-width: 640px;
   margin: 1.25rem auto 0;
   width: 100%;
 }
-.debate-chat-tabs { display: flex; gap: 0.35rem; margin-bottom: 0.4rem; }
-.debate-chat-tab { position: relative; }
+.debate-chat-box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fafafa;
+}
+.debate-chat-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.debate-chat-box .debate-chat-tab {
+  position: relative;
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0;
+}
+.debate-chat-box .debate-chat-tab + .debate-chat-tab { border-left: 1px solid rgba(0, 0, 0, 0.12); }
 .debate-chat-tab.active { background: #6c757d; border-color: #6c757d; color: #fff; }
 .debate-chat-tab.has-unread::after {
   content: '';
@@ -465,14 +486,24 @@ body.is-prep-time .timer::before {
 .debate-chat-log {
   height: 160px;
   overflow-y: auto;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 6px;
   padding: 0.5rem 0.75rem;
-  margin-bottom: 0.5rem;
   background: #fafafa;
   font-size: 0.95rem;
   transition: background-color 150ms ease;
 }
+.debate-chat-form { border-top: 1px solid rgba(0, 0, 0, 0.12); }
+.debate-chat-form .debate-chat-input,
+.debate-chat-form .debate-chat-send {
+  border: 0;
+  border-radius: 0;
+}
+.debate-chat-form .debate-chat-send { border-left: 1px solid rgba(0, 0, 0, 0.12); }
+/* Outward focus glow would be clipped by the box's overflow:hidden — keep it inside */
+.debate-chat-form .debate-chat-input:focus { box-shadow: inset 0 0 0 2px rgba(108, 117, 125, 0.25); }
+/* The glassmorphic theme re-rounds every .btn; keep chat buttons flush with the box */
+body.glassmorphic .debate-chat-box .btn { border-radius: 0; border-width: 0; }
+body.glassmorphic .debate-chat-box .debate-chat-tab + .debate-chat-tab,
+body.glassmorphic .debate-chat-box .debate-chat-send { border-left: 1px solid rgba(0, 0, 0, 0.12); }
 .chat-msg { margin-bottom: 0.2rem; word-break: break-word; }
 .chat-msg b { color: #444; }
 
