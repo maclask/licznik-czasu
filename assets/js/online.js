@@ -388,10 +388,11 @@
         var room = encodeURIComponent(vdoRoom());
         // This viewer has no idea the publish iframe's stream is "us", so once we're
         // addScene'd it would play our own mic back with full WebRTC latency (delayed
-        // self-echo). &exludeaudio — spelling per docs.vdo.ninja/advanced-settings/
-        // audio-parameters/noaudio.md — drops just that stream's audio while keeping
-        // its video on stage. Harmless for audience: the id simply never publishes.
-        var selfMute = myPushId ? '&exludeaudio=' + encodeURIComponent(pushIdFor(myPushId)) : '';
+        // self-echo). &excludeaudio drops just that stream's audio while keeping its
+        // video on stage. (docs.vdo.ninja/advanced-settings/audio-parameters/noaudio.md
+        // misspells it "exludeaudio" — the correct spelling is what works.)
+        // Harmless for audience: the id simply never publishes.
+        var selfMute = myPushId ? '&excludeaudio=' + encodeURIComponent(pushIdFor(myPushId)) : '';
         return VDO_BASE + '?room=' + room + VDO_SCENE + VDO_SPEAKER + VDO_CLEAN +
             '&videodevice=0&audiodevice=0' + selfMute;
     }
