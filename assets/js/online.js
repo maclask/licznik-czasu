@@ -386,8 +386,14 @@
     // iframe below, so viewers on hardware without either can still join and watch.
     function buildViewUrl() {
         var room = encodeURIComponent(vdoRoom());
+        // This viewer has no idea the publish iframe's stream is "us", so once we're
+        // addScene'd it would play our own mic back with full WebRTC latency (delayed
+        // self-echo). &exludeaudio — spelling per docs.vdo.ninja/advanced-settings/
+        // audio-parameters/noaudio.md — drops just that stream's audio while keeping
+        // its video on stage. Harmless for audience: the id simply never publishes.
+        var selfMute = myPushId ? '&exludeaudio=' + encodeURIComponent(pushIdFor(myPushId)) : '';
         return VDO_BASE + '?room=' + room + VDO_SCENE + VDO_SPEAKER + VDO_CLEAN +
-            '&videodevice=0&audiodevice=0';
+            '&videodevice=0&audiodevice=0' + selfMute;
     }
     // Publishers (people who took a debater/judge slot) send camera + mic through this
     // hidden iframe. &webcam picks "Join Room with Camera" and &autostart skips the entry
@@ -603,10 +609,19 @@
         updatePrewarm();
     }
 
-    // The visible stage — a plain scene viewer, created once and never swapped/rebuilt
-    // regardless of publish/view role (see buildViewUrl for why it can't also publish).
+    // The visible stage — a plain scene viewer, never swapped on publish/view role
+    // changes (see buildViewUrl for why it can't also publish). Rebuilt only when
+    // myPushId changes: a master handoff mints a new peer id, and the &exludeaudio
+    // baked into the old URL would keep pointing at the previous stream, bringing
+    // the self-echo back for the ex-master once they take a seat again.
+    var viewUrlPushId = null;  // myPushId baked into the current iframe's URL
     function embedVdo() {
+        if (debateIframe && viewUrlPushId !== myPushId) {
+            $('.debate-video-frame').empty();
+            debateIframe = null;
+        }
         if (debateIframe) return;
+        viewUrlPushId = myPushId;
         var allow = 'autoplay; fullscreen; picture-in-picture';
         $('.debate-video-frame').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl() + '"></iframe>'
