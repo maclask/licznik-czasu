@@ -26,13 +26,17 @@
                                    // (participants: PeerJS id at join; master: clientId)
     var myDebateName = '';        // this browser's own display name
     var myEmbedMode = null;       // 'publish' | 'view' — current VDO iframe mode
-    var mySignal = null;          // 'hand' | 'advocem' | null (this browser's raised signal)
+    var mySignals = { hand: false, advocem: false }; // this browser's raised signals — independent, both can be up at once
     var debateAllowControls = false; // master let positioned participants run the clock
     var debateEditMode = false;   // master: drag & drop seat re-assignment
     var micOn = true, camOn = true;  // this browser's local media state (VDO gives no readback)
     var waitingRoomOn = false;    // master: new joiners wait for approval before seeing the room
     var ZONE_SLOTS = { proposition: 4, opposition: 4, og: 2, oo: 2, cg: 2, co: 2, judges: 3, marszalek: 1 };
     var DYNAMIC_ZONES = { judges: true }; // grows past its base slot count: always one spare empty slot beyond who's seated
+    // Zones whose occupants may raise a question / ad vocem — the debating teams only,
+    // never judges, the marshal or the audience.
+    var DEBATER_ZONES = { proposition: true, opposition: true, og: true, oo: true, cg: true, co: true };
+    function isDebaterZone(zone) { return !!DEBATER_ZONES[zone]; }
 
     function zoneSlotCount(zone) {
         var base = ZONE_SLOTS[zone] || 0;
@@ -256,7 +260,12 @@
                 var chatChannel = (data.channel === 'general') ? 'general' : sender.zone;
                 broadcastChat(sender.name, data.msg, chatChannel);
             } else if (data.type === 'signal') {
-                if (sender) setSignal(sender.clientId, data.kind);
+                if (sender) setSignal(sender.clientId, data.kind, data.on);
+            } else if (data.type === 'clearSignal') {
+                // Only the raiser themselves or the marshal may take a signal down
+                if (sender && (sender.marshal || sender.clientId === String(data.clientId))) {
+                    setSignal(String(data.clientId), data.kind, false);
+                }
             } else if (data.type === 'breakout') {
                 if (sender) setBreakout(sender.clientId, data.on);
             }
@@ -885,7 +894,7 @@
             // afterwards (not even on promotion to master), so their VDO stream (and any
             // &forward targeting it) keeps working with no re-embed. See TODO.md.
             clientId: clientId, peerId: peerId, pushId: peerId, name: name, role: null,
-            zone: 'audience', index: -1, signal: null, speaking: false, breakout: false,
+            zone: 'audience', index: -1, signals: {}, speaking: false, breakout: false,
             joinSeq: nextJoinSeq++, comaster: null, honorary: !!wasMaster,
             pending: waitingRoomOn
         };
@@ -895,7 +904,7 @@
         var prev = stale[0];
         if (prev) {
             entry.joinSeq = prev.joinSeq;
-            entry.signal = prev.signal;
+            entry.signals = prev.signals || {};
             entry.pending = prev.pending && waitingRoomOn;
             if (prev.zone !== 'audience' && !occupant(prev.zone, prev.index)) {
                 entry.zone = prev.zone;
@@ -974,6 +983,7 @@
         if (!e) return;
         if (e.zone !== zone) resetBreakout(e);
         e.zone = zone; e.index = index;
+        if (!isDebaterZone(zone)) dropSignalWithSeat(e);
         renderDebate();
     }
 
@@ -985,6 +995,7 @@
         var e = findEntry(clientId);
         if (!e) return;
         resetBreakout(e);
+        dropSignalWithSeat(e);
         if (e.marshal) { e.zone = 'marszalek'; e.index = 0; }
         else { e.zone = 'audience'; e.index = -1; }
         renderDebate();
@@ -1035,12 +1046,33 @@
         else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'breakout', on: on });
     }
 
-    function setSignal(clientId, kind) {
+    // The master can be seated too — keep its own toggle buttons in sync no matter
+    // which path (button, badge click, marshal request) changed a signal.
+    function syncMySignals(e) {
+        mySignals.hand = !!(e && e.signals && e.signals.hand);
+        mySignals.advocem = !!(e && e.signals && e.signals.advocem);
+        updateSignalButtons();
+    }
+
+    // Question and ad vocem are independent — raising one never lowers the other
+    function setSignal(clientId, kind, on) {
+        if (kind !== 'hand' && kind !== 'advocem') return;
         var e = findEntry(clientId);
         if (!e) return;
-        e.signal = kind || null;
+        if (on && !isDebaterZone(e.zone)) return; // only team seats may raise; clearing is always allowed
+        if (!e.signals) e.signals = {};
+        e.signals[kind] = !!on;
+        if (e.clientId === myClientId) syncMySignals(e);
         renderDebate();
-        if (kind) App.core.showAlert((e.name || 'Uczestnik') + (kind === 'advocem' ? ': ad vocem' : ': podnosi rękę'));
+        if (on) App.core.showAlert((e.name || 'Uczestnik') + (kind === 'advocem' ? ': ad vocem' : ': zgłasza pytanie'));
+    }
+
+    // Raised signals belong to a team seat — being reseated outside the team zones
+    // (judge, marshal, audience) takes them down with the seat.
+    function dropSignalWithSeat(e) {
+        if (!e || !e.signals || (!e.signals.hand && !e.signals.advocem)) return;
+        e.signals = {};
+        if (e.clientId === myClientId) syncMySignals(e);
     }
 
     // Called locally (master) or relayed to master (participant)
@@ -1066,7 +1098,7 @@
         return debateRoster.filter(function(e) { return !e.pending; }).map(function(e) {
             return {
                 clientId: e.clientId, peerId: e.peerId, pushId: e.pushId, name: e.name,
-                role: e.role || null, zone: e.zone, index: e.index, signal: e.signal,
+                role: e.role || null, zone: e.zone, index: e.index, signals: e.signals || {},
                 speaking: e.speaking, breakout: !!e.breakout,
                 joinSeq: e.joinSeq, comaster: e.comaster || null, honorary: !!e.honorary,
                 marshal: !!e.marshal
@@ -1095,11 +1127,44 @@
         return !(entry.zone === me.zone && entry.breakout);
     }
 
+    // Same raised-hand drawing as on the .debate-hand-btn button, sized for a badge
+    var HAND_BADGE_SVG =
+        '<svg class="signal-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5.5"/>' +
+        '<path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0v7"/>' +
+        '<path d="M14 11.8V6a1.5 1.5 0 0 1 3 0v6.5"/>' +
+        '<path d="M17 13V9a1.5 1.5 0 0 1 3 0v6c0 3.5-2 6.5-6 6.5h-1.5c-2 0-3-.5-4.3-2.2L5 15.8c-.6-.8-.5-1.7.3-2.3.8-.6 1.8-.4 2.4.3L9 15.5"/>' +
+        '</svg>';
+
+    // Raised-signal badge beside the name, one per raised kind (both can be up at
+    // once). Clickable (to take that signal down) for the raiser themselves, the
+    // marshal and the master; static for everyone else.
+    function signalBadgeEl(entry, kind) {
+        var isAdvocem = kind === 'advocem';
+        var me = myEntry();
+        var canClear = entry.clientId === myClientId || isDebateMaster || !!(me && me.marshal);
+        var $b = $('<span class="badge signal-badge"></span>')
+            .addClass(isAdvocem ? 'signal-badge--advocem' : 'signal-badge--hand')
+            .attr('data-client', entry.clientId).attr('data-kind', kind)
+            .attr('title', (isAdvocem ? 'Ad vocem' : 'Pytanie') + (canClear ? ' — kliknij, aby usunąć' : ''));
+        if (isAdvocem) $b.text('AV'); else $b.html(HAND_BADGE_SVG);
+        if (canClear) $b.addClass('signal-badge--clickable');
+        return $b;
+    }
+
+    $(document).on('click', '.signal-badge--clickable', function(ev) {
+        ev.stopPropagation();
+        var clientId = String($(this).attr('data-client'));
+        var kind = String($(this).attr('data-kind'));
+        if (isDebateMaster) setSignal(clientId, kind, false);
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'clearSignal', clientId: clientId, kind: kind });
+    });
+
     function slotEl(entry, zone, index) {
         var mine = entry && entry.clientId === myClientId;
         var draggable = isDebateMaster && debateEditMode && !!entry;
         var cls = 'slot' + (entry ? '' : ' slot--empty') + (mine ? ' slot--me' : '') +
-            (entry && entry.signal ? ' slot--signal' : '') + (draggable ? ' slot--draggable' : '') +
+            (draggable ? ' slot--draggable' : '') +
             (isDimmedForMe(entry) ? ' slot--dimmed' : '');
         var $s = $('<div class="' + cls + '"></div>').attr('data-zone', zone).attr('data-index', index);
         if (draggable) $s.attr('draggable', 'true').attr('data-client', entry.clientId);
@@ -1111,12 +1176,13 @@
             $s.append($('<div class="slot-name"></div>').text(isChiefJudge ? 'Sędzia główny' : '—'));
             return $s;
         }
-        var badge = entry.signal ? (entry.signal === 'advocem' ? 'AV' : '✋') :
-            (entry.name ? entry.name.trim().charAt(0).toUpperCase() : '');
-        var $av = $('<div class="slot-avatar"></div>').text(badge);
+        var $av = $('<div class="slot-avatar"></div>')
+            .text(entry.name ? entry.name.trim().charAt(0).toUpperCase() : '');
         if (mine) { $av.addClass('slot-avatar--me').attr('title', 'Kliknij, aby wrócić do widzów'); }
         $s.append($av);
         var $n = $('<div class="slot-name"></div>').text(entry.name);
+        if (entry.signals && entry.signals.hand) $n.append(' ').append(signalBadgeEl(entry, 'hand'));
+        if (entry.signals && entry.signals.advocem) $n.append(' ').append(signalBadgeEl(entry, 'advocem'));
         if (isChiefJudge) $n.append(' ').append($('<span class="badge badge-dark chief-judge-badge" title="Sędzia główny"></span>').text('SG'));
         if (zone === 'judges' && entry.marshal) $n.append(' ').append($('<span class="badge marshal-badge" title="Marszałek"></span>').text('M'));
         if (entry.speaking) $n.append(' ').append($('<span class="slot-mic" title="Mówi">🎤</span>'));
@@ -1270,12 +1336,13 @@
             if (e.honorary) {
                 $('<span class="badge badge-secondary comaster-badge comaster-badge--honorary" title="Był(a) prowadzącym"></span>').text('Co-master (h.)').appendTo($row);
             }
-            if (e.signal) {
+            ['hand', 'advocem'].forEach(function(kind) {
+                if (!e.signals || !e.signals[kind]) return;
                 $('<button type="button" class="btn btn-sm roster-signal"></button>')
-                    .attr('data-client', e.clientId)
-                    .text(e.signal === 'advocem' ? 'AD VOCEM' : '✋ ręka')
+                    .attr('data-client', e.clientId).attr('data-kind', kind)
+                    .text(kind === 'advocem' ? 'AD VOCEM' : '✋ pytanie')
                     .appendTo($row);
-            }
+            });
             if (e.breakout) {
                 $('<span class="badge badge-secondary roster-breakout-badge"></span>').text('Narada').appendTo($row);
                 $('<button type="button" class="btn btn-outline-secondary btn-sm roster-recall">Wróć</button>')
@@ -1371,11 +1438,7 @@
     });
 
     $(document).on('click', '.roster-signal', function() {
-        var clientId = String($(this).data('client'));
-        setSignal(clientId, null);
-        // Clearing our own signal from the admin panel (the master can be seated too)
-        // bypasses toggleSignal, which is the only other place mySignal is written.
-        if (clientId === myClientId) { mySignal = null; updateSignalButtons(); }
+        setSignal(String($(this).data('client')), String($(this).data('kind')), false);
     });
 
     // The visible stage is always on (a no-op after the first call); on top of that,
@@ -1383,6 +1446,8 @@
     function updateMyEmbed() {
         embedVdo();
         var me = myEntry();
+        // Signal buttons (question / ad vocem) are for team seats only — see debate.css
+        $('body').toggleClass('is-debater', !!(me && isDebaterZone(me.zone)));
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
@@ -1403,8 +1468,8 @@
     }
 
     function updateSignalButtons() {
-        $('.debate-hand-btn').toggleClass('active', mySignal === 'hand');
-        $('.debate-advocem-btn').toggleClass('active', mySignal === 'advocem');
+        $('.debate-hand-btn').toggleClass('active', !!mySignals.hand);
+        $('.debate-advocem-btn').toggleClass('active', !!mySignals.advocem);
     }
 
     // Master: create a debate room
@@ -1429,7 +1494,7 @@
             debateRoster = [{
                 clientId: myClientId, peerId: null, pushId: myClientId, name: myDebateName,
                 role: 'master', zone: 'audience', index: -1,
-                signal: null, speaking: false, breakout: false,
+                signals: {}, speaking: false, breakout: false,
                 joinSeq: 0, comaster: null, honorary: false, pending: false
             }];
             embedDirector();
@@ -1506,11 +1571,16 @@
         postToPublish({ changeAudioDevice: idx });
     });
 
-    // Debater signals — click again to cancel (toggle)
+    // Debater signals — click again to cancel (toggle); hand and ad vocem are
+    // independent, so raising one never lowers the other. Team seats only: the
+    // buttons are hidden for everyone else (body.is-debater), this guards the code path too.
     function toggleSignal(kind) {
-        mySignal = (mySignal === kind) ? null : kind;
-        if (isDebateMaster) setSignal(myClientId, mySignal);
-        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'signal', kind: mySignal });
+        var me = myEntry();
+        if (!me || !isDebaterZone(me.zone)) return;
+        var on = !mySignals[kind];
+        mySignals[kind] = on;
+        if (isDebateMaster) setSignal(myClientId, kind, on);
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'signal', kind: kind, on: on });
         updateSignalButtons();
     }
     $('.debate-hand-btn').click(function() { toggleSignal('hand'); });
@@ -2081,11 +2151,10 @@
             renderZones();
             updateMyEmbed();
             var me = myEntry();
-            // The master can clear a raised hand/ad-vocem from the management panel —
-            // without resyncing from our own roster entry, our toggle button would stay
-            // lit and the next click would re-send the same (already-cleared) value.
-            mySignal = me ? me.signal : null;
-            updateSignalButtons();
+            // The master (or marshal) can clear a raised hand/ad-vocem remotely —
+            // without resyncing from our own roster entry, our toggle buttons would
+            // stay lit and the next click would re-send the same (already-cleared) value.
+            syncMySignals(me);
             // Whether I should be hosting the standby hub is derived from my own entry
             // in every roster broadcast, not a separate point-to-point message — right
             // after a promotion the designated comaster usually isn't even connected

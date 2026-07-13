@@ -163,10 +163,12 @@ body.is-debate-master .dv-cam-group { display: flex; }
 
 .dv-text-btn { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
 
-/* Signals (question / ad vocem / breakout) and leave: only while publishing */
+/* Signals (question / ad vocem): team seats only (body.is-debater, set in
+   updateMyEmbed) — judges, the marshal and the audience never see them.
+   Breakout and leave: anyone publishing. */
 .debate-hand-btn, .debate-advocem-btn, .debate-breakout-btn, .debate-leave-btn { display: none; }
-body.is-publishing .debate-hand-btn,
-body.is-publishing .debate-advocem-btn,
+body.is-debater .debate-hand-btn,
+body.is-debater .debate-advocem-btn,
 body.is-publishing .debate-breakout-btn { display: flex; }
 body.is-publishing:not(.is-debate-master) .debate-leave-btn { display: flex; }
 
@@ -274,7 +276,14 @@ body.is-debate-master .debate-settings-btn { display: flex; }
 .slot-name { font-size: 0.95rem; }
 .slot--empty .slot-avatar { border-style: dashed; opacity: 0.45; }
 .slot--empty .slot-name { color: #bbb; }
-.slot--signal .slot-avatar { border-color: #c0392b; background: #c0392b; color: #fff; }
+
+/* Raised-signal badges beside the name — hand drawing for a question,
+   "AV" for ad vocem, each with its own colour */
+.signal-badge { margin-left: 0.35rem; color: #fff; }
+.signal-badge--hand { background: #e67e22; }
+.signal-badge--advocem { background: #2e6da4; }
+.signal-badge--clickable { cursor: pointer; }
+.signal-badge-icon { width: 0.9em; height: 0.9em; vertical-align: -0.1em; }
 
 .slot-list--audience { flex-direction: row; flex-wrap: wrap; gap: 0.35rem; }
 .aud-dot {
@@ -360,7 +369,6 @@ body.is-debate-master .debate-settings-btn { display: flex; }
 .slot--me .slot-avatar--me { cursor: pointer; border-color: #2a7; }
 .aud-dot--me { border-color: #2a7; }
 .slot-mic { font-size: 0.85rem; }
-.slot--signal .slot-name .slot-mic { display: none; }
 .aud-dot--speaking { border-color: #2a7; box-shadow: 0 0 0 2px rgba(34,170,119,0.3); }
 .aud-dot--comaster { box-shadow: 0 0 0 2px rgba(23,162,184,0.5); }
 
