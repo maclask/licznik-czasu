@@ -352,8 +352,6 @@
     // &transparent lets the .debate-video container control the background colour.
     // &cover crops the feed to fill the tile instead of letterboxing/pillarboxing it.
     var VDO_CLEAN = '&cleanoutput&hidemenu&transparent&cover';
-    // Show only whoever is actually talking, hiding silent-but-published guests.
-    var VDO_SPEAKER = '&activespeaker&activespeakerdelay=1500';
     // Baza: nieaktywni publikujący na 0kbps do ręcznego dodania — patrz
     // docs.vdo.ninja/advanced-settings/mixer-scene-parameters/scene.md.
     // Kto konkretnie jest "ręcznie dodawany" na ciepło (żeby strona przeciwna
@@ -406,7 +404,12 @@
         // misspells it "exludeaudio" — the correct spelling is what works.)
         // Harmless for audience: the id simply never publishes.
         var selfMute = myPushId ? '&excludeaudio=' + encodeURIComponent(pushIdFor(myPushId)) : '';
-        return VDO_BASE + '?room=' + room + VDO_SCENE + VDO_SPEAKER + VDO_CLEAN +
+        // Celowo BEZ &activespeaker: jego detekcja jest lokalna per viewer i oparta na
+        // odbieranym audio, więc przez powyższy &excludeaudio mówca nigdy nie widział
+        // własnego kafelka. Kto jest widoczny, narzuca aplikacja — patrz applySpeakerView().
+        // &animated=0 gasi domyślną animację przesuwania kafelków przy przestawianiu
+        // sceny — przy zmianie mówcy (replace) klatkowała zamiast płynnie przełączyć.
+        return VDO_BASE + '?room=' + room + VDO_SCENE + VDO_CLEAN + '&animated=0' +
             '&videodevice=0&audiodevice=0' + selfMute;
     }
     // Publishers (people who took a debater/judge slot) send camera + mic through this
@@ -621,6 +624,7 @@
         renderZones();
         broadcastSpeaking();
         updatePrewarm();
+        applySpeakerView();
     }
 
     // The visible stage — a plain scene viewer, never swapped on publish/view role
@@ -636,6 +640,7 @@
         }
         if (debateIframe) return;
         viewUrlPushId = myPushId;
+        speakerViewSids = null; // świeży iframe = czysty grid, filtr narzucimy od zera
         var allow = 'autoplay; fullscreen; picture-in-picture';
         $('.debate-video-frame').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl() + '"></iframe>'
@@ -649,6 +654,8 @@
                     postToVdo({ getLoudness: true });
                     setTimeout(function() { postToVdo({ getLoudness: true }); }, 3000);
                 }
+                // Dołączenie w trakcie: ktoś może już mówić, zanim dotrą zdarzenia sceny
+                applySpeakerView(true);
             };
         }
     }
@@ -1729,6 +1736,14 @@
         if (debateIframe && e.source === debateIframe.contentWindow) {
             App.vlog('[VDO← debate]', d);
             if (d.loudness !== undefined) handleLoudness(d.loudness);
+            // Zmiana topologii sceny (nowy strumień, zmiana slotów, wejście/wyjście ze
+            // sceny) mogła dorenderować kafelki spoza naszego filtra — narzuć go na nowo.
+            if (d.action === 'guest-connected' || d.action === 'view-connection' ||
+                d.action === 'slot-updated' || d.action === 'scene-connected' ||
+                d.action === 'push-connection' || d.action === 'add-to-scene' ||
+                d.action === 'remove-from-scene') {
+                applySpeakerView(true);
+            }
         } else if (publishIframe && e.source === publishIframe.contentWindow) {
             App.vlog('[VDO← publish]', d);
             if (d.deviceList) populateDevices(d.deviceList);
@@ -1774,7 +1789,7 @@
             var sp = !!loudIds[pushIdFor(e.pushId)];
             if (sp !== !!e.speaking) { e.speaking = sp; changed = true; }
         });
-        if (changed) { renderZones(); broadcastSpeaking(); updatePrewarm(); }
+        if (changed) { renderZones(); broadcastSpeaking(); updatePrewarm(); applySpeakerView(); }
     }
     function broadcastSpeaking() {
         var ids = debateRoster.filter(function(e) { return e.speaking; }).map(function(e) { return e.pushId; });
@@ -1782,6 +1797,35 @@
             if (!connAdmitted(peerId)) return;
             safeSend(c, { type: 'speaking', pushIds: ids });
         });
+    }
+
+    // Kto jest WIDOCZNY na scenie, narzuca aplikacja — nie &activespeaker VDO (patrz
+    // buildViewUrl). Źródłem prawdy jest stan `speaking` rosteru (u mastera z detekcji
+    // głośności, u pozostałych z broadcastu 'speaking'), nakładany lokalnie na własny
+    // iframe sceny komendami DOM {target, replace/add}. To warstwa niezależna od
+    // addScene/prewarm poniżej: skład sceny 2 decyduje, czyje media w ogóle płyną
+    // (podgrzanie wideo + natychmiastowa słyszalność wtrąceń), a ten filtr — co widać.
+    var speakerViewSids = null; // ostatnio narzucona lista widocznych sid (null = jeszcze nic)
+
+    function applySpeakerView(reapply) {
+        if (!debateIframe) return;
+        var sids = [];
+        debateRoster.forEach(function(e) {
+            if (e.speaking && e.zone) sids.push(pushIdFor(e.pushId));
+        });
+        // Cisza nie czyści widoku — ostatni mówca zostaje na ekranie (spójnie z
+        // updatePrewarm); przy re-aplikacji ponawiamy ostatni znany układ, bo scena
+        // mogła właśnie dorenderować kafelki podgrzanych (a milczących) przeciwników.
+        if (!sids.length) {
+            if (!reapply || !speakerViewSids || !speakerViewSids.length) return;
+            sids = speakerViewSids;
+        }
+        if (!reapply && speakerViewSids && sids.join(',') === speakerViewSids.join(',')) return;
+        speakerViewSids = sids;
+        // replace atomowo usuwa wszystkie pozostałe kafelki; ewentualni równocześni
+        // mówcy (np. wtrącenie w trakcie) dochodzą add-em.
+        postToVdo({ target: sids[0], replace: true });
+        for (var i = 1; i < sids.length; i++) postToVdo({ target: sids[i], add: true });
     }
 
     // Selektywne "podgrzewanie" (addScene) strony przeciwnej do aktualnie mówiącej —
@@ -2173,6 +2217,7 @@
             debateRoster.forEach(function(e) { e.speaking = (data.pushIds || []).indexOf(e.pushId) !== -1; });
             renderZones();
             updatePrewarm();
+            applySpeakerView();
         }
     }
 
