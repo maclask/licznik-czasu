@@ -481,7 +481,15 @@
         updateSelfSpeechDetection();
     }
 
-    // Local self-view for the join screen — lets the user test camera/mic before joining.
+    // Local self-view for the join screen — lets the user test camera/mic before
+    // joining. Auto-embedded together with the join screen: this iframe is what asks
+    // for camera+mic permission, in one combined prompt (a grant is per device TYPE,
+    // so it covers every camera and every mic). Don't pre-ask via a top-level
+    // getUserMedia instead — a top-level grant doesn't reliably transfer to the
+    // cross-origin vdo.ninja iframes (Safari scopes grants to the requesting frame's
+    // origin; Chrome's "Allow this time" isn't delegated), which used to cause a
+    // second prompt at seat-taking. Grants DO carry between successive vdo.ninja
+    // iframes on the same page, so the later publish iframe starts silently.
     function embedPreview() {
         var allow = 'camera *; microphone *; autoplay; fullscreen; picture-in-picture';
         $('.debate-join-preview').html(
@@ -491,18 +499,43 @@
         previewIframe = $('.debate-join-preview iframe').get(0);
         if (previewIframe) {
             previewIframe.onload = function() {
-                postToFrame(previewIframe, { getDeviceList: true });
-                setTimeout(function() { postToFrame(previewIframe, { getDeviceList: true }); }, 3000);
+                pollDeviceList('preview', function() { return previewIframe; });
             };
         }
         startMicMeter();
     }
     function clearPreview() {
+        stopDeviceListPoll('preview');
         $('.debate-join-preview').empty();
         previewIframe = null;
         $('.debate-join-cam-select').hide().empty();
         $('.debate-join-mic-select').hide().empty();
         stopMicMeter();
+    }
+
+    // A getDeviceList answered before the user clicks "Allow" returns placeholder
+    // entries (one per kind, empty labels) — enumerateDevices() only yields the real
+    // list once the iframe's own getUserMedia has been granted. The permission prompt
+    // easily outlives a one-shot request, so poll until a labelled list arrives (the
+    // message handler stops the poll when it sees one).
+    var deviceListPolls = {};   // frame label -> interval id
+    function pollDeviceList(label, getFrame) {
+        stopDeviceListPoll(label);
+        var attempts = 0;
+        function ask() {
+            var f = getFrame();
+            if (!f || ++attempts > 20) { stopDeviceListPoll(label); return; }
+            postToFrame(f, { getDeviceList: true });
+        }
+        deviceListPolls[label] = setInterval(ask, 2000);
+        ask();
+    }
+    function stopDeviceListPoll(label) {
+        if (deviceListPolls[label]) { clearInterval(deviceListPolls[label]); delete deviceListPolls[label]; }
+    }
+    function deviceListHasLabels(list) {
+        var split = splitDeviceList(list);
+        return split.cams.concat(split.mics).some(function(d) { return !!d.label; });
     }
 
     // Mic level meter — grabbed independently of the VDO iframe (which owns the camera
@@ -673,11 +706,11 @@
         $('body').append($f);
         publishIframe = $f.get(0);
         publishIframe.onload = function() {
-            postToPublish({ getDeviceList: true });
-            setTimeout(function() { postToPublish({ getDeviceList: true }); }, 3000);
+            pollDeviceList('publish', function() { return publishIframe; });
         };
     }
     function removePublish() {
+        stopDeviceListPoll('publish');
         if (publishIframe) { $(publishIframe).remove(); publishIframe = null; }
     }
 
@@ -724,7 +757,9 @@
         var split = splitDeviceList(list);
         fillDeviceMenu($('.debate-cam-menu'), split.cams, 'Kamera');
         fillDeviceMenu($('.debate-mic-menu'), split.mics, 'Mikrofon');
-        applyPreferredDevices();
+        // Join-screen indexes refer to the REAL device list — applying them against a
+        // pre-permission placeholder list would switch to the wrong device.
+        if (deviceListHasLabels(list)) applyPreferredDevices();
     }
 
     // Carry the device chosen on the join screen over into the live room the first
@@ -732,7 +767,8 @@
     function applyPreferredDevices() {
         if (joinCamDeviceIndex != null) {
             markActiveDevice($('.debate-cam-menu'), joinCamDeviceIndex);
-            postToPublish({ changeVideoDevice: joinCamDeviceIndex });
+            // VDO.Ninja's changeVideoDevice is 0-based while our UI index is 1-based (see changeAudioDevice below).
+            postToPublish({ changeVideoDevice: joinCamDeviceIndex - 1 });
         }
         if (joinMicDeviceIndex != null) {
             markActiveDevice($('.debate-mic-menu'), joinMicDeviceIndex);
@@ -1526,16 +1562,18 @@
         navigator.clipboard.writeText($('.debate-link-val').val());
     });
 
-    // Join screen: preview camera/mic before entering
+    // Join screen: preview camera/mic before entering (fallback — the preview now
+    // auto-starts with the join screen and this button is hidden then)
     $('.debate-preview-btn').click(function() {
-        embedPreview();
+        if (!previewIframe) embedPreview();
         $(this).text('Podgląd włączony');
     });
 
     // Join screen: pick a device — switches the live preview and carries over into the room
     $('.debate-join-cam-select').change(function() {
         joinCamDeviceIndex = parseInt($(this).val(), 10);
-        postToFrame(previewIframe, { changeVideoDevice: joinCamDeviceIndex });
+        // VDO.Ninja's changeVideoDevice is 0-based while our UI index is 1-based (see changeAudioDevice below).
+        postToFrame(previewIframe, { changeVideoDevice: joinCamDeviceIndex - 1 });
     });
     $('.debate-join-mic-select').change(function() {
         joinMicDeviceIndex = parseInt($(this).val(), 10);
@@ -1577,7 +1615,8 @@
     $(document).on('click', '.debate-cam-menu .dropdown-item', function() {
         var idx = parseInt($(this).attr('data-index'), 10);
         markActiveDevice($('.debate-cam-menu'), idx);
-        postToPublish({ changeVideoDevice: idx });
+        // VDO.Ninja's changeVideoDevice is 0-based while our UI index is 1-based (see changeAudioDevice below).
+        postToPublish({ changeVideoDevice: idx - 1 });
     });
     $(document).on('click', '.debate-mic-menu .dropdown-item', function() {
         var idx = parseInt($(this).attr('data-index'), 10);
@@ -1746,10 +1785,16 @@
             }
         } else if (publishIframe && e.source === publishIframe.contentWindow) {
             App.vlog('[VDO← publish]', d);
-            if (d.deviceList) populateDevices(d.deviceList);
+            if (d.deviceList) {
+                populateDevices(d.deviceList);
+                if (deviceListHasLabels(d.deviceList)) stopDeviceListPoll('publish');
+            }
         } else if (previewIframe && e.source === previewIframe.contentWindow) {
             App.vlog('[VDO← preview]', d);
-            if (d.deviceList) populateJoinDevices(d.deviceList);
+            if (d.deviceList) {
+                populateJoinDevices(d.deviceList);
+                if (deviceListHasLabels(d.deviceList)) stopDeviceListPoll('preview');
+            }
         } else if (directorIframe && e.source === directorIframe.contentWindow) {
             // The director iframe reports back its own actions — most importantly
             // {action:'add-to-scene'/'remove-from-scene'} after an addScene command
@@ -2238,6 +2283,11 @@
             App.core.navigate('debate');
             $('.debate-empty').hide();
             $('.debate-join').show();
+            // The preview starts by itself, so the camera+mic prompt appears the
+            // moment you land on the join screen — and coming from the vdo.ninja
+            // iframe, its grant is the one the publish iframe reuses later.
+            embedPreview();
+            $('.debate-preview-btn').hide();
         } else {
             var slaveUrl = window.location.href;
             $('.slave-session-link-val').val(slaveUrl);
