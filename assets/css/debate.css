@@ -90,12 +90,101 @@ body.is-slave .slave-sharing { display: block; }
   overflow: hidden;
 }
 
+/* Breakout: my own stage temporarily shows that team's/judges' room instead of
+   the main scene (see embedVdo/buildViewUrl in online.js) — label it the same
+   way is-prep-time labels the clock, so it reads as "different room", not a
+   frozen/broken video. */
+.debate-video--breakout::before {
+  content: 'Pokój narad';
+  position: absolute;
+  top: -1.4rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6c757d;
+}
+.debate-video--breakout .debate-video-frame { border-color: #6c757d; }
+
 .debate-video-frame .vdo-iframe {
   width: 100%;
   height: 100%;
   border: 0;
   display: block;
 }
+
+/* ── Self-view PiP: corner preview of our own published camera. The widget only
+   ever holds children that intercept pointer events (the eye button), so it stays
+   pointer-events:none and clicks fall through to the video underneath. Visibility is
+   driven entirely by data-state, set by updateSelfPreview() in online.js. ── */
+.debate-self-preview {
+  position: absolute;
+  top: clamp(6px, 2.2vmin, 14px);
+  right: clamp(6px, 2.2vmin, 14px);
+  width: clamp(84px, 30%, 148px);
+  aspect-ratio: 16 / 9;
+  z-index: 6;
+  pointer-events: none;
+  display: none;
+}
+/* "onstage" keeps the widget in flow (iframe must keep streaming) but hides every
+   visible part; "none" (no publish iframe) drops it entirely. */
+.debate-self-preview[data-state="open"],
+.debate-self-preview[data-state="collapsed"],
+.debate-self-preview[data-state="onstage"] { display: block; }
+
+.debate-self-preview-frame {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  background: #000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+/* Hidden preview states use visibility (not display:none): the iframe stays laid out
+   and full-size so its WebRTC capture is never throttled. */
+.debate-self-preview[data-state="onstage"] .debate-self-preview-frame,
+.debate-self-preview[data-state="collapsed"] .debate-self-preview-frame {
+  visibility: hidden;
+}
+.debate-self-preview-frame .vdo-publish-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.debate-self-preview-eye {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: clamp(20px, 4.5vmin, 26px);
+  height: clamp(20px, 4.5vmin, 26px);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.62);
+  color: #fff;
+  opacity: 0.9;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.debate-self-preview-eye:hover { background: rgba(20, 20, 20, 0.82); opacity: 1; }
+/* On stage the whole widget is hidden — the eye button carries no media, so it can
+   safely display:none (only the frame needs to stay laid out). */
+.debate-self-preview[data-state="onstage"] .debate-self-preview-eye { display: none; }
+.debate-self-preview-eye .dv-icon { width: 64%; height: 64%; }
+.debate-self-preview-eye .dv-icon-off { display: none; }
+.debate-self-preview-eye.is-closed .dv-icon-on { display: none; }
+.debate-self-preview-eye.is-closed .dv-icon-off { display: block; }
 
 /* ── Video overlay controls: mic/cam/signals/settings, monochrome icon
    buttons on a translucent dark bar (needs its own contrast against arbitrary
@@ -163,11 +252,14 @@ body.is-debate-master .dv-cam-group { display: flex; }
 
 .dv-text-btn { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
 
-/* Signals (question / ad vocem / breakout) and leave: only while publishing */
+/* Signals (question / ad vocem): team seats only (body.is-debater, set in
+   updateMyEmbed) — judges, the marshal and the audience never see them.
+   Breakout: team seats and judges (body.has-breakout) — the marshal has no room
+   to confer in. Leave: anyone publishing. */
 .debate-hand-btn, .debate-advocem-btn, .debate-breakout-btn, .debate-leave-btn { display: none; }
-body.is-publishing .debate-hand-btn,
-body.is-publishing .debate-advocem-btn,
-body.is-publishing .debate-breakout-btn { display: flex; }
+body.is-debater .debate-hand-btn,
+body.is-debater .debate-advocem-btn,
+body.has-breakout .debate-breakout-btn { display: flex; }
 body.is-publishing:not(.is-debate-master) .debate-leave-btn { display: flex; }
 
 .debate-hand-btn.active,
@@ -274,7 +366,14 @@ body.is-debate-master .debate-settings-btn { display: flex; }
 .slot-name { font-size: 0.95rem; }
 .slot--empty .slot-avatar { border-style: dashed; opacity: 0.45; }
 .slot--empty .slot-name { color: #bbb; }
-.slot--signal .slot-avatar { border-color: #c0392b; background: #c0392b; color: #fff; }
+
+/* Raised-signal badges beside the name — hand drawing for a question,
+   "AV" for ad vocem, each with its own colour */
+.signal-badge { margin-left: 0.35rem; color: #fff; }
+.signal-badge--hand { background: #e67e22; }
+.signal-badge--advocem { background: #2e6da4; }
+.signal-badge--clickable { cursor: pointer; }
+.signal-badge-icon { width: 0.9em; height: 0.9em; vertical-align: -0.1em; }
 
 .slot-list--audience { flex-direction: row; flex-wrap: wrap; gap: 0.35rem; }
 .aud-dot {
@@ -302,7 +401,10 @@ body.is-debate-master .debate-settings-btn { display: flex; }
   flex-direction: column;
   min-height: 0;
 }
-.debate-side .debate-chat-log { flex: 1 1 auto; height: auto; min-height: 200px; }
+.debate-side .debate-chat-box { flex: 1 1 auto; min-height: 0; }
+/* height: 0 (not auto) so message content never sets the log's intrinsic size —
+   the box stays put and the log scrolls instead of stretching the column */
+.debate-side .debate-chat-log { flex: 1 1 auto; height: 0; min-height: 200px; }
 
 @media (max-width: 900px) {
   .debate-grid { grid-template-columns: 1fr; }
@@ -360,7 +462,6 @@ body.is-debate-master .debate-settings-btn { display: flex; }
 .slot--me .slot-avatar--me { cursor: pointer; border-color: #2a7; }
 .aud-dot--me { border-color: #2a7; }
 .slot-mic { font-size: 0.85rem; }
-.slot--signal .slot-name .slot-mic { display: none; }
 .aud-dot--speaking { border-color: #2a7; box-shadow: 0 0 0 2px rgba(34,170,119,0.3); }
 .aud-dot--comaster { box-shadow: 0 0 0 2px rgba(23,162,184,0.5); }
 
@@ -398,7 +499,102 @@ body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
   background: #fff;
   margin-bottom: 0.5rem;
 }
-.vdo-director-iframe, .vdo-publish-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
+/* Director iframes stay parked off-screen: they exist only to send &forward commands.
+   The publish iframe is NOT parked here — it now lives inside the self-preview widget
+   (.debate-self-preview-frame) and is sized/hidden there, so its camera keeps streaming
+   even while the preview is visually hidden (never display:none — that throttles the send). */
+.vdo-director-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
+
+/* Przyciski widoku debugowego istnieją tylko w trybie verbose — klasę na body stawia
+   setter App.verbose (app.js), więc `App.verbose = true` z konsoli odsłania je od razu.
+   Wariant z overlaya wideo jest .dv-btn, który bazowo ma display:none. */
+.vdo-debug-btn { display: none; }
+body.is-verbose .vdo-debug-btn { display: inline-block; }
+body.is-verbose .vdo-debug-btn.dv-btn { display: flex; }
+.vdo-debug-btn.dv-btn.active { background: rgba(255, 255, 255, 0.22); opacity: 1; }
+
+/* ── Widok debugowy: pływające okna z żywymi iframe'ami VDO.Ninja.
+   Okna trzymają TE SAME elementy iframe (przeniesione, nie kopie — patrz openDebugView),
+   więc reguła parkująca .vdo-director-iframe poza ekranem musi tu przegrać: selektor
+   potomny .vdo-debug-win iframe ma wyższą specyficzność i wraca do normalnego layoutu.
+   Pozycję i rozmiar okna trzyma style inline (drag + uchwyt skalowania). ── */
+.vdo-debug-win {
+  position: fixed;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1b1b1b;
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.55);
+}
+.vdo-debug-title {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #333;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;  /* inaczej przeglądarka zjada pointermove na rzecz scrolla */
+}
+.vdo-debug-title:active { cursor: grabbing; }
+.vdo-debug-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vdo-debug-min {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.vdo-debug-min:hover { background: rgba(255, 255, 255, 0.32); }
+.vdo-debug-body { flex: 1 1 auto; position: relative; background: #000; }
+.vdo-debug-win iframe {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+/* Uchwyt skalowania: własny element, nie CSS `resize` — iframe przykrywa róg okna i
+   połknąłby natywny uchwyt. Leży nad iframe'em, gest obsługuje ten sam setPointerCapture. */
+.vdo-debug-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  z-index: 1;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.5) 50%);
+}
+/* Zwinięte okno: zostaje sam pasek, a treść jedzie poza ekran w pełnym rozmiarze —
+   nigdy display:none, bo iframe publish przestałby nadawać (ta sama zasada, co przy
+   .debate-self-preview-frame). Wyjście z flow zbija wysokość okna do samego paska. */
+.vdo-debug-win.is-min .vdo-debug-body {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  width: 360px;
+  height: 200px;
+}
+.vdo-debug-win.is-min .vdo-debug-grip { display: none; }
+/* Podczas dragu kursor nie może wpaść do iframe'a (połknąłby pointermove mimo capture) */
+body.vdo-debug-dragging .vdo-debug-win iframe { pointer-events: none; }
 
 /* Prep time: label the clock so it's obviously not a protected speech timer */
 body.is-prep-time .timer { position: relative; }
@@ -436,14 +632,32 @@ body.is-prep-time .timer::before {
   transition: width 60ms linear;
 }
 
-/* Chat */
+/* Chat: tabs, log and input fused into one bordered box (.debate-chat-box);
+   the log alone scrolls — it must never grow the box with message count */
 .debate-chat {
   max-width: 640px;
   margin: 1.25rem auto 0;
   width: 100%;
 }
-.debate-chat-tabs { display: flex; gap: 0.35rem; margin-bottom: 0.4rem; }
-.debate-chat-tab { position: relative; }
+.debate-chat-box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fafafa;
+}
+.debate-chat-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.debate-chat-box .debate-chat-tab {
+  position: relative;
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0;
+}
+.debate-chat-box .debate-chat-tab + .debate-chat-tab { border-left: 1px solid rgba(0, 0, 0, 0.12); }
 .debate-chat-tab.active { background: #6c757d; border-color: #6c757d; color: #fff; }
 .debate-chat-tab.has-unread::after {
   content: '';
@@ -456,14 +670,24 @@ body.is-prep-time .timer::before {
 .debate-chat-log {
   height: 160px;
   overflow-y: auto;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 6px;
   padding: 0.5rem 0.75rem;
-  margin-bottom: 0.5rem;
   background: #fafafa;
   font-size: 0.95rem;
   transition: background-color 150ms ease;
 }
+.debate-chat-form { border-top: 1px solid rgba(0, 0, 0, 0.12); }
+.debate-chat-form .debate-chat-input,
+.debate-chat-form .debate-chat-send {
+  border: 0;
+  border-radius: 0;
+}
+.debate-chat-form .debate-chat-send { border-left: 1px solid rgba(0, 0, 0, 0.12); }
+/* Outward focus glow would be clipped by the box's overflow:hidden — keep it inside */
+.debate-chat-form .debate-chat-input:focus { box-shadow: inset 0 0 0 2px rgba(108, 117, 125, 0.25); }
+/* The glassmorphic theme re-rounds every .btn; keep chat buttons flush with the box */
+body.glassmorphic .debate-chat-box .btn { border-radius: 0; border-width: 0; }
+body.glassmorphic .debate-chat-box .debate-chat-tab + .debate-chat-tab,
+body.glassmorphic .debate-chat-box .debate-chat-send { border-left: 1px solid rgba(0, 0, 0, 0.12); }
 .chat-msg { margin-bottom: 0.2rem; word-break: break-word; }
 .chat-msg b { color: #444; }
 

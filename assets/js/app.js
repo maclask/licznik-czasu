@@ -28,8 +28,22 @@
     // Verbose debug logging — off by default. Enable from the browser console with
     // `App.verbose = true` to log every PeerJS message sent/received and every
     // VDO.Ninja postMessage action invoked (see online.js).
-    App.verbose = false;
+    //
+    // An accessor rather than a plain field: flipping it from the console must take
+    // effect immediately in the UI too. It carries the debug-only affordances —
+    // body.is-verbose reveals them in CSS, and onVerboseChange lets the online layer
+    // tear its debug view down when the flag goes off.
+    var verbose = false;
+    Object.defineProperty(App, 'verbose', {
+        get: function () { return verbose; },
+        set: function (on) {
+            verbose = !!on;
+            if (document.body) document.body.classList.toggle('is-verbose', verbose);
+            App.onVerboseChange(verbose);
+        }
+    });
+    App.onVerboseChange = function (on) {};  // no-op until online.js overrides it
     App.vlog = function () {
-        if (App.verbose) console.log.apply(console, arguments);
+        if (verbose) console.log.apply(console, arguments);
     };
 })();

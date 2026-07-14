@@ -26,13 +26,21 @@
                                    // (participants: PeerJS id at join; master: clientId)
     var myDebateName = '';        // this browser's own display name
     var myEmbedMode = null;       // 'publish' | 'view' — current VDO iframe mode
-    var mySignal = null;          // 'hand' | 'advocem' | null (this browser's raised signal)
+    var mySignals = { hand: false, advocem: false }; // this browser's raised signals — independent, both can be up at once
     var debateAllowControls = false; // master let positioned participants run the clock
     var debateEditMode = false;   // master: drag & drop seat re-assignment
     var micOn = true, camOn = true;  // this browser's local media state (VDO gives no readback)
     var waitingRoomOn = false;    // master: new joiners wait for approval before seeing the room
     var ZONE_SLOTS = { proposition: 4, opposition: 4, og: 2, oo: 2, cg: 2, co: 2, judges: 3, marszalek: 1 };
     var DYNAMIC_ZONES = { judges: true }; // grows past its base slot count: always one spare empty slot beyond who's seated
+    // Zones whose occupants may raise a question / ad vocem — the debating teams only,
+    // never judges, the marshal or the audience.
+    var DEBATER_ZONES = { proposition: true, opposition: true, og: true, oo: true, cg: true, co: true };
+    function isDebaterZone(zone) { return !!DEBATER_ZONES[zone]; }
+    // Zones with a breakout room ("Pokój narad") — team seats and the judges. The
+    // marshal sits alone in their zone (nobody to confer with) and the audience
+    // doesn't publish, so neither gets one.
+    function zoneHasBreakout(zone) { return isDebaterZone(zone) || zone === 'judges'; }
 
     function zoneSlotCount(zone) {
         var base = ZONE_SLOTS[zone] || 0;
@@ -256,7 +264,12 @@
                 var chatChannel = (data.channel === 'general') ? 'general' : sender.zone;
                 broadcastChat(sender.name, data.msg, chatChannel);
             } else if (data.type === 'signal') {
-                if (sender) setSignal(sender.clientId, data.kind);
+                if (sender) setSignal(sender.clientId, data.kind, data.on);
+            } else if (data.type === 'clearSignal') {
+                // Only the raiser themselves or the marshal may take a signal down
+                if (sender && (sender.marshal || sender.clientId === String(data.clientId))) {
+                    setSignal(String(data.clientId), data.kind, false);
+                }
             } else if (data.type === 'breakout') {
                 if (sender) setBreakout(sender.clientId, data.on);
             }
@@ -339,8 +352,6 @@
     // &transparent lets the .debate-video container control the background colour.
     // &cover crops the feed to fill the tile instead of letterboxing/pillarboxing it.
     var VDO_CLEAN = '&cleanoutput&hidemenu&transparent&cover';
-    // Show only whoever is actually talking, hiding silent-but-published guests.
-    var VDO_SPEAKER = '&activespeaker&activespeakerdelay=1500';
     // Baza: nieaktywni publikujący na 0kbps do ręcznego dodania — patrz
     // docs.vdo.ninja/advanced-settings/mixer-scene-parameters/scene.md.
     // Kto konkretnie jest "ręcznie dodawany" na ciepło (żeby strona przeciwna
@@ -368,7 +379,20 @@
     function nextCib() { return 'c' + (++cibCounter) + '_' + Date.now(); }
 
     function breakoutRoomId(zone) {
-        return vdoRoom() + '-bo-' + zone;
+        return vdoRoom() + 'bo' + zone;
+    }
+    // Which breakout room (if any) MY OWN view stage should be showing right now —
+    // null once forward() has moved us back out (see doForward/setBreakout).
+    function myBreakoutZone() {
+        var me = myEntry();
+        return (me && me.breakout) ? me.zone : null;
+    }
+    // Who's actually inside a given zone's breakout room right now — the &view list
+    // for buildViewUrl's breakout link, since there's no director there to curate a
+    // scene (see doForward/breakoutDirectorIframes: they only ever send &forward).
+    function breakoutOccupantSids(zone) {
+        return debateRoster.filter(function(e) { return e.zone === zone && e.breakout; })
+            .map(function(e) { return pushIdFor(e.pushId); });
     }
 
     // &scene and &push are mutually exclusive on a single VDO.Ninja link — per
@@ -384,16 +408,37 @@
     // scene through this link. &videodevice=0&audiodevice=0 stops VDO.Ninja from touching
     // local camera/mic on THIS iframe at all — that only ever happens on the publish
     // iframe below, so viewers on hardware without either can still join and watch.
-    function buildViewUrl() {
-        var room = encodeURIComponent(vdoRoom());
+    function buildViewUrl(breakoutZone) {
+        var room = encodeURIComponent(breakoutZone ? breakoutRoomId(breakoutZone) : vdoRoom());
         // This viewer has no idea the publish iframe's stream is "us", so once we're
-        // addScene'd it would play our own mic back with full WebRTC latency (delayed
-        // self-echo). &excludeaudio drops just that stream's audio while keeping its
-        // video on stage. (docs.vdo.ninja/advanced-settings/audio-parameters/noaudio.md
-        // misspells it "exludeaudio" — the correct spelling is what works.)
+        // addScene'd (or, in a breakout room, listed in &view below) it would play our
+        // own mic back with full WebRTC latency (delayed self-echo). &excludeaudio
+        // drops just that stream's audio while keeping its video on stage.
+        // (docs.vdo.ninja/advanced-settings/audio-parameters/noaudio.md misspells it
+        // "exludeaudio" — the correct spelling is what works.)
         // Harmless for audience: the id simply never publishes.
         var selfMute = myPushId ? '&excludeaudio=' + encodeURIComponent(pushIdFor(myPushId)) : '';
-        return VDO_BASE + '?room=' + room + VDO_SCENE + VDO_SPEAKER + VDO_CLEAN +
+        if (breakoutZone) {
+            // A bare &room=X guest link isn't actually viewer-only — VDO.Ninja treats it
+            // as someone who MIGHT publish and gates it behind its own "Join Room" click
+            // (autoplay-policy workaround), which is exactly the blank stage this was
+            // built to avoid. There's also no director in a breakout room to curate a
+            // &scene (breakoutDirectorIframes only ever send &forward — see doForward),
+            // so instead we name the exact streams to show via &view (comma-separated
+            // per docs.vdo.ninja/advanced-settings/mixer-scene-parameters/view.md) and add
+            // &solo, which — like &scene — marks the link as viewer-only and skips the
+            // join gate (docs .../and-solo.md: "&solo and &scene ... tells the system not
+            // to be a publisher, but a viewer").
+            var sids = breakoutOccupantSids(breakoutZone);
+            return VDO_BASE + '?room=' + room + '&solo&view=' + encodeURIComponent(sids.join(',')) +
+                VDO_CLEAN + '&animated=0&videodevice=0&audiodevice=0' + selfMute;
+        }
+        // Celowo BEZ &activespeaker: jego detekcja jest lokalna per viewer i oparta na
+        // odbieranym audio, więc przez powyższy &excludeaudio mówca nigdy nie widział
+        // własnego kafelka. Kto jest widoczny, narzuca aplikacja — patrz applySpeakerView().
+        // &animated=0 gasi domyślną animację przesuwania kafelków przy przestawianiu
+        // sceny — przy zmianie mówcy (replace) klatkowała zamiast płynnie przełączyć.
+        return VDO_BASE + '?room=' + room + VDO_SCENE + VDO_CLEAN + '&animated=0' +
             '&videodevice=0&audiodevice=0' + selfMute;
     }
     // Publishers (people who took a debater/judge slot) send camera + mic through this
@@ -402,9 +447,11 @@
     // comes back through the always-present buildViewUrl() iframe, same as everyone else.
     function buildPublishUrl(name, pushId) {
         var room = encodeURIComponent(vdoRoom());
+        // &cover makes the self-view tile fill the corner preview (display-only, same
+        // as the join screen's &cover — it does not touch the stream we publish).
         return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
             '&push=' + encodeURIComponent(pushIdFor(pushId)) +
-            '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu';
+            '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover';
     }
 
     // A second, invisible iframe that holds director permissions purely so we can send
@@ -438,26 +485,32 @@
         oo: ['og', 'cg'], co: ['og', 'cg']
     };
     function zonePushIds(zone) {
-        return debateRoster.filter(function(e) { return e.zone === zone; }).map(function(e) { return e.pushId; });
+        // Excludes anyone currently in a breakout room: their stream isn't in the main
+        // room at all (forwarded away — see doForward), so targeting them with addScene
+        // has no control-box to act on and would just misfire once they're back.
+        return debateRoster.filter(function(e) { return e.zone === zone && !e.breakout; }).map(function(e) { return e.pushId; });
     }
 
     function embedDirector() {
         if (directorIframe) return;
+        closeDebugView();
         var room = encodeURIComponent(vdoRoom());
         var $f = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
-            VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
+            VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&novideo&noaudio&cleanoutput&hidemenu"></iframe>');
         $('body').append($f);
         directorIframe = $f.get(0);
-        $.each(relevantZones(), function(i, zone) {
+        $.each(relevantZones().filter(zoneHasBreakout), function(i, zone) {
             var broom = encodeURIComponent(breakoutRoomId(zone));
             var $bf = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
-                VDO_BASE + '?director=' + broom + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
+                VDO_BASE + '?director=' + broom + VDO_DIRECTOR_BITRATE + '&novideo&noaudio&cleanoutput&hidemenu"></iframe>');
             $('body').append($bf);
             breakoutDirectorIframes[zone] = $bf.get(0);
         });
         updateSelfSpeechDetection();
     }
     function removeDirector() {
+        // director + jego breakouty powstają razem, więc jeden warunek starczy za oba
+        if (directorIframe) closeDebugView();
         if (directorIframe) { $(directorIframe).remove(); directorIframe = null; }
         $.each(breakoutDirectorIframes, function(zone, iframe) { $(iframe).remove(); });
         breakoutDirectorIframes = {};
@@ -465,8 +518,17 @@
         updateSelfSpeechDetection();
     }
 
-    // Local self-view for the join screen — lets the user test camera/mic before joining.
+    // Local self-view for the join screen — lets the user test camera/mic before
+    // joining. Auto-embedded together with the join screen: this iframe is what asks
+    // for camera+mic permission, in one combined prompt (a grant is per device TYPE,
+    // so it covers every camera and every mic). Don't pre-ask via a top-level
+    // getUserMedia instead — a top-level grant doesn't reliably transfer to the
+    // cross-origin vdo.ninja iframes (Safari scopes grants to the requesting frame's
+    // origin; Chrome's "Allow this time" isn't delegated), which used to cause a
+    // second prompt at seat-taking. Grants DO carry between successive vdo.ninja
+    // iframes on the same page, so the later publish iframe starts silently.
     function embedPreview() {
+        closeDebugView();
         var allow = 'camera *; microphone *; autoplay; fullscreen; picture-in-picture';
         $('.debate-join-preview').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' +
@@ -475,18 +537,44 @@
         previewIframe = $('.debate-join-preview iframe').get(0);
         if (previewIframe) {
             previewIframe.onload = function() {
-                postToFrame(previewIframe, { getDeviceList: true });
-                setTimeout(function() { postToFrame(previewIframe, { getDeviceList: true }); }, 3000);
+                pollDeviceList('preview', function() { return previewIframe; });
             };
         }
         startMicMeter();
     }
     function clearPreview() {
+        if (previewIframe) closeDebugView();
+        stopDeviceListPoll('preview');
         $('.debate-join-preview').empty();
         previewIframe = null;
         $('.debate-join-cam-select').hide().empty();
         $('.debate-join-mic-select').hide().empty();
         stopMicMeter();
+    }
+
+    // A getDeviceList answered before the user clicks "Allow" returns placeholder
+    // entries (one per kind, empty labels) — enumerateDevices() only yields the real
+    // list once the iframe's own getUserMedia has been granted. The permission prompt
+    // easily outlives a one-shot request, so poll until a labelled list arrives (the
+    // message handler stops the poll when it sees one).
+    var deviceListPolls = {};   // frame label -> interval id
+    function pollDeviceList(label, getFrame) {
+        stopDeviceListPoll(label);
+        var attempts = 0;
+        function ask() {
+            var f = getFrame();
+            if (!f || ++attempts > 20) { stopDeviceListPoll(label); return; }
+            postToFrame(f, { getDeviceList: true });
+        }
+        deviceListPolls[label] = setInterval(ask, 2000);
+        ask();
+    }
+    function stopDeviceListPoll(label) {
+        if (deviceListPolls[label]) { clearInterval(deviceListPolls[label]); delete deviceListPolls[label]; }
+    }
+    function deviceListHasLabels(list) {
+        var split = splitDeviceList(list);
+        return split.cams.concat(split.mics).some(function(d) { return !!d.label; });
     }
 
     // Mic level meter — grabbed independently of the VDO iframe (which owns the camera
@@ -608,26 +696,41 @@
         renderZones();
         broadcastSpeaking();
         updatePrewarm();
+        applySpeakerView();
     }
 
     // The visible stage — a plain scene viewer, never swapped on publish/view role
-    // changes (see buildViewUrl for why it can't also publish). Rebuilt only when
-    // myPushId changes: a master handoff mints a new peer id, and the &exludeaudio
-    // baked into the old URL would keep pointing at the previous stream, bringing
-    // the self-echo back for the ex-master once they take a seat again.
-    var viewUrlPushId = null;  // myPushId baked into the current iframe's URL
+    // changes (see buildViewUrl for why it can't also publish). Rebuilt when myPushId
+    // changes (a master handoff mints a new peer id, and the &excludeaudio baked into
+    // the old URL would keep pointing at the previous stream, bringing the self-echo
+    // back for the ex-master once they take a seat again) or when we enter/leave a
+    // breakout room — doForward() moves our OWN publish stream to/from that room, but
+    // this viewer iframe is a separate connection that has to be re-pointed at it too,
+    // otherwise nobody sees any video once inside ("pokój narad" stays blank). A
+    // teammate joining/leaving that SAME breakout room does NOT rebuild — see
+    // syncBreakoutView, which adds/removes just that one stream live instead.
+    var viewUrlPushId = null;      // myPushId baked into the current iframe's URL
+    var viewUrlBreakoutZone = null; // breakout zone (or null for the main room) baked in
+    var viewUrlBreakoutSids = '';   // breakout &view targets currently shown (joined string)
     function embedVdo() {
-        if (debateIframe && viewUrlPushId !== myPushId) {
+        var bzone = myBreakoutZone();
+        if (debateIframe && (viewUrlPushId !== myPushId || viewUrlBreakoutZone !== bzone)) {
+            closeDebugView();  // scena może siedzieć w oknie debug — najpierw wróć nią na miejsce
             $('.debate-video-frame').empty();
             debateIframe = null;
         }
-        if (debateIframe) return;
+        if (debateIframe) { syncBreakoutView(bzone); return; }  // zwykły no-op przy renderze rosteru — trybu debug nie ruszamy
+        closeDebugView();
         viewUrlPushId = myPushId;
+        viewUrlBreakoutZone = bzone;
+        viewUrlBreakoutSids = bzone ? breakoutOccupantSids(bzone).join(',') : '';
+        speakerViewSids = null; // świeży iframe = czysty grid, filtr narzucimy od zera
+        updateSelfPreview();    // świeży grid pokazuje też nas → podgląd chowamy do czasu applySpeakerView
         var allow = 'autoplay; fullscreen; picture-in-picture';
         $('.debate-video-frame').html(
-            '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl() + '"></iframe>'
+            '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl(bzone) + '"></iframe>'
         );
-        $('.debate-video').addClass('debate-video--has-frame');
+        $('.debate-video').addClass('debate-video--has-frame').toggleClass('debate-video--breakout', !!bzone);
         debateIframe = $('.debate-video-frame iframe').get(0);
         if (debateIframe) {
             debateIframe.onload = function() {
@@ -636,8 +739,39 @@
                     postToVdo({ getLoudness: true });
                     setTimeout(function() { postToVdo({ getLoudness: true }); }, 3000);
                 }
+                // Dołączenie w trakcie: ktoś może już mówić, zanim dotrą zdarzenia sceny
+                applySpeakerView(true);
             };
         }
+    }
+
+    // Keeps an already-open breakout stage in sync as teammates join/leave, without
+    // reloading the iframe (see embedVdo). No director/&scene is running in a breakout
+    // room, so &view's static list can't be updated by re-declaring it — instead we ask
+    // the viewer to fetch the new stream (requestStream) and show it (target/add), or
+    // drop a departed one (target/remove). Both are documented IFRAME API viewer
+    // commands (docs.vdo.ninja/guides/iframe-api-documentation).
+    function syncBreakoutView(bzone) {
+        if (!bzone || !debateIframe) return;
+        var current = breakoutOccupantSids(bzone);
+        var joined = current.join(',');
+        if (joined === viewUrlBreakoutSids) return;
+        var prevSet = {};
+        (viewUrlBreakoutSids ? viewUrlBreakoutSids.split(',') : []).forEach(function(sid) {
+            if (sid) prevSet[sid] = true;
+        });
+        var curSet = {};
+        current.forEach(function(sid) {
+            curSet[sid] = true;
+            if (!prevSet[sid]) {
+                postToVdo({ requestStream: sid });
+                postToVdo({ target: sid, add: true });
+            }
+        });
+        Object.keys(prevSet).forEach(function(sid) {
+            if (!curSet[sid]) postToVdo({ target: sid, remove: true });
+        });
+        viewUrlBreakoutSids = joined;
     }
 
     // Hidden send-only iframe for when we've taken a debater/judge slot — see
@@ -645,20 +779,27 @@
     var publishIframe = null;
     function embedPublish(name, pushId) {
         if (publishIframe) return;
+        closeDebugView();
         // Camera/microphone must be delegated to the cross-origin vdo.ninja iframe with
         // "*" (bare "camera" means 'self' only, which silently blocks getUserMedia there).
         var allow = 'camera *; microphone *; display-capture *; autoplay; fullscreen; picture-in-picture';
         var $f = $('<iframe class="vdo-publish-iframe" allow="' + allow + '" src="' +
             buildPublishUrl(name, pushId) + '"></iframe>');
-        $('body').append($f);
+        // Into the self-preview widget, NOT body: this same iframe doubles as the corner
+        // self-view, and moving an iframe in the DOM later would reload it (restarting
+        // getUserMedia). The widget just keeps it off-screen when the preview is hidden.
+        $('.debate-self-preview-frame').append($f);
         publishIframe = $f.get(0);
         publishIframe.onload = function() {
-            postToPublish({ getDeviceList: true });
-            setTimeout(function() { postToPublish({ getDeviceList: true }); }, 3000);
+            pollDeviceList('publish', function() { return publishIframe; });
         };
+        updateSelfPreview();
     }
     function removePublish() {
+        if (publishIframe) closeDebugView();  // wyjmij z okna debug, zanim skasujemy iframe
+        stopDeviceListPoll('publish');
         if (publishIframe) { $(publishIframe).remove(); publishIframe = null; }
+        updateSelfPreview();
     }
 
     function vdoFrameLabel(iframe) {
@@ -679,6 +820,170 @@
     }
     function postToVdo(obj) { postToFrame(debateIframe, obj); }
     function postToPublish(obj) { postToFrame(publishIframe, obj); }
+
+    // ── Widok debugowy (przycisk .vdo-debug-btn — TYMCZASOWY) ───────────────────
+    // Każdy żywy iframe VDO.Ninja ląduje w pływającym okienku w rzędzie u dołu ekranu,
+    // z URL-a zdjęte są parametry czyszczące UI → widać pełny, domyślny interfejs
+    // VDO.Ninja (u mistrza: prawdziwy panel reżysera). Okna trzymają TE SAME elementy
+    // iframe (przeniesione), nie kopie: kopia z tym samym &push to konflikt strumienia,
+    // a kopia sceny/reżysera to drugi pełny odbiór pokoju. Cena: i przeniesienie w DOM,
+    // i zmiana src przeładowują iframe, więc wejście/wyjście z trybu przerywa na chwilę
+    // nadawanie (publish wznawia się sam — &webcam&autostart zostają w URL-u). Dla
+    // narzędzia debugowego to akceptowalne.
+    var DEBUG_WIN_W = 360, DEBUG_WIN_H = 230, DEBUG_GAP = 8;
+    var DEBUG_WIN_MIN_W = 220, DEBUG_WIN_MIN_H = 140;
+    var debugFrames = null;  // [{iframe, originalSrc, parent, nextSibling}] gdy tryb otwarty
+
+    function liveVdoFrames() {
+        var frames = [debateIframe, publishIframe, directorIframe, previewIframe];
+        $.each(breakoutDirectorIframes, function(zone, f) { frames.push(f); });
+        return frames.filter(function(f) { return !!f; });
+    }
+    // src niesie stan z chwili utworzenia (&excludeaudio=<sid>, &label, &push), więc nie
+    // przebudowujemy go builderami — zdejmujemy wyłącznie parametry chowające UI. Reszta
+    // zostaje: &videodevice=0&audiodevice=0 dalej blokuje scenie sięganie po naszą kamerę,
+    // a parametry bitrate dalej trzymają jakość, którą chcemy podglądać.
+    function debugSrc(src) {
+        return src.replace(/&(cleanoutput|hidemenu|transparent|cover)\b/g, '');
+    }
+    function openDebugView() {
+        var frames = liveVdoFrames();
+        if (!frames.length) {
+            App.core.showWarn('Brak aktywnych iframe\'ów VDO.Ninja');
+            return;
+        }
+        debugFrames = [];
+        var perRow = Math.max(1, Math.floor((window.innerWidth - DEBUG_GAP) / (DEBUG_WIN_W + DEBUG_GAP)));
+        frames.forEach(function(iframe, i) {
+            debugFrames.push({
+                iframe: iframe,
+                originalSrc: iframe.src,
+                parent: iframe.parentNode,
+                nextSibling: iframe.nextSibling
+            });
+            // Rząd liczony od dołu, ale zapisany jako left/top — drag ma potem ruszać
+            // jedną parą współrzędnych, bez mieszania bottom z top. Rozmiar też idzie
+            // inline: uchwyt skalowania nadpisuje właśnie te wartości.
+            var row = Math.floor(i / perRow), col = i % perRow;
+            var $win = $(
+                '<div class="vdo-debug-win">' +
+                '<div class="vdo-debug-title">' +
+                '<span class="vdo-debug-label"></span>' +
+                '<button type="button" class="vdo-debug-min" title="Zwiń">–</button>' +
+                '</div>' +
+                '<div class="vdo-debug-body"></div>' +
+                '<div class="vdo-debug-grip" title="Zmień rozmiar"></div>' +
+                '</div>'
+            );
+            $win.css({
+                left: (DEBUG_GAP + col * (DEBUG_WIN_W + DEBUG_GAP)) + 'px',
+                top: (window.innerHeight - DEBUG_GAP - DEBUG_WIN_H - row * (DEBUG_WIN_H + DEBUG_GAP)) + 'px',
+                width: DEBUG_WIN_W + 'px',
+                height: DEBUG_WIN_H + 'px'
+            });
+            $win.find('.vdo-debug-label').text(vdoFrameLabel(iframe));
+            $('body').append($win);
+            // Kolejność nie jest kosmetyczna: odpięty iframe nie ma browsing contextu, więc
+            // podmiana src nic nie ładuje — ładowanie odpala dopiero wstawienie do okna.
+            // Odwrotna kolejność (src w DOM, potem przenosiny) przeładowałaby iframe dwa razy.
+            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            iframe.src = debugSrc(iframe.src);
+            $win.find('.vdo-debug-body').append(iframe);
+        });
+        updateSelfPreview();
+        updateDebugBtn();
+        App.vlog('[debug] otwarty widok debugowy', debugFrames.length + ' iframe(ów)');
+    }
+    // No-op gdy tryb zamknięty. MUSI polecieć przed każdą przebudową/usunięciem iframe'ów
+    // (patrz wywołania w embed*/remove* i w ścieżkach teardownu) — inaczej np. embedVdo
+    // wyczyściłby pusty .debate-video-frame i zbudował drugą scenę obok tej, która wciąż
+    // gra w okienku debug (podwójne audio), a remove* zostawiłyby osierocone wrappery.
+    function closeDebugView() {
+        if (!debugFrames) return;
+        debugFrames.forEach(function(rec) {
+            // Ta sama sztuczka co przy otwieraniu: src wracamy na odpiętym iframe (bez
+            // ładowania), a wstawienie w stare miejsce robi jedno przeładowanie.
+            if (rec.iframe.parentNode) rec.iframe.parentNode.removeChild(rec.iframe);
+            rec.iframe.src = rec.originalSrc;
+            var ref = (rec.nextSibling && rec.nextSibling.parentNode === rec.parent) ? rec.nextSibling : null;
+            rec.parent.insertBefore(rec.iframe, ref);
+        });
+        debugFrames = null;
+        $('.vdo-debug-win').remove();
+        updateSelfPreview();
+        updateDebugBtn();  // tryb zamyka się też sam, przy każdej przebudowie iframe'ów
+    }
+    // Tryb odpala przycisk .vdo-debug-btn, widoczny wyłącznie przy App.verbose = true. Przycisk
+    // stoi w trzech miejscach (wiersz tworzenia debaty, ekran dołączania, overlay wideo), bo żadne
+    // pojedyncze nie jest widoczne dla obu ról przez cały czas: zakładkę Udostępnianie uczestnik
+    // ma zablokowaną (body.is-debate), a ekran dołączania znika po wejściu do pokoju.
+    function toggleDebugView() {
+        if (debugFrames) closeDebugView(); else openDebugView();
+    }
+    function updateDebugBtn() {
+        var on = !!debugFrames;
+        // Tylko klasa i tytuł — etykiety zostają takie, jak w markupie (overlay ma "DBG").
+        $('.vdo-debug-btn').toggleClass('active', on)
+            .attr('title', on ? 'Zamknij widok debugowy' : 'Widok debugowy iframe\'ów VDO.Ninja');
+    }
+    $(document).on('click', '.vdo-debug-btn', toggleDebugView);
+    // Same przyciski chowa CSS (body.is-verbose); tu zostaje sprzątanie po wyłączeniu
+    // flagi — inaczej okna wisiałyby na ekranie bez czegokolwiek, czym je zamknąć.
+    App.onVerboseChange = function(on) {
+        if (!on) closeDebugView();
+    };
+
+    // Wspólny gest dla paska (przesuwanie) i uchwytu (skalowanie). Pointer Events z
+    // setPointerCapture: bez capture iframe pod kursorem połyka pointermove i okno gubi
+    // się przy szybszym ruchu. Na czas gestu klasa na body gasi pointer-events w iframe'ach
+    // okien — kursor nie może wpaść do środka VDO.
+    function startWinGesture(el, oe, onMove) {
+        var startX = oe.clientX, startY = oe.clientY;
+        function move(ev) { onMove(ev.clientX - startX, ev.clientY - startY); }
+        function up(ev) {
+            el.removeEventListener('pointermove', move);
+            el.removeEventListener('pointerup', up);
+            el.removeEventListener('pointercancel', up);
+            try { el.releasePointerCapture(ev.pointerId); } catch (err) {}
+            $('body').removeClass('vdo-debug-dragging');
+        }
+        try { el.setPointerCapture(oe.pointerId); } catch (err) {}
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+        $('body').addClass('vdo-debug-dragging');
+    }
+    $(document).on('pointerdown', '.vdo-debug-title', function(e) {
+        if ($(e.target).closest('.vdo-debug-min').length) return;  // klik w zwijanie to nie drag
+        var win = this.parentNode;
+        var left0 = win.offsetLeft, top0 = win.offsetTop;
+        startWinGesture(this, e.originalEvent || e, function(dx, dy) {
+            win.style.left = (left0 + dx) + 'px';
+            win.style.top = (top0 + dy) + 'px';
+        });
+        e.preventDefault();
+    });
+    $(document).on('pointerdown', '.vdo-debug-grip', function(e) {
+        var win = this.parentNode;
+        var w0 = win.offsetWidth, h0 = win.offsetHeight;
+        startWinGesture(this, e.originalEvent || e, function(dx, dy) {
+            win.style.width = Math.max(DEBUG_WIN_MIN_W, w0 + dx) + 'px';
+            win.style.height = Math.max(DEBUG_WIN_MIN_H, h0 + dy) + 'px';
+        });
+        e.preventDefault();
+    });
+    // Zwijanie: wysokość jest inline (od skalowania), więc klasa CSS by jej nie nadpisała
+    // — chowamy przez 'auto' i wracamy do zapamiętanej. Sama treść zwiniętego okna jedzie
+    // poza ekran w pełnym rozmiarze (CSS), a nie w display:none, żeby publish nie przestał
+    // nadawać — ta sama zasada co przy podglądzie PiP.
+    $(document).on('click', '.vdo-debug-min', function() {
+        var $win = $(this).closest('.vdo-debug-win');
+        var min = !$win.hasClass('is-min');
+        if (min) $win.data('h', $win.get(0).style.height);
+        $win.toggleClass('is-min', min)
+            .css('height', min ? 'auto' : ($win.data('h') || DEBUG_WIN_H + 'px'));
+        $(this).text(min ? '+' : '–').attr('title', min ? 'Rozwiń' : 'Zwiń');
+    });
 
     function setMicBtn(on) {
         micOn = on;
@@ -704,7 +1009,9 @@
         var split = splitDeviceList(list);
         fillDeviceMenu($('.debate-cam-menu'), split.cams, 'Kamera');
         fillDeviceMenu($('.debate-mic-menu'), split.mics, 'Mikrofon');
-        applyPreferredDevices();
+        // Join-screen indexes refer to the REAL device list — applying them against a
+        // pre-permission placeholder list would switch to the wrong device.
+        if (deviceListHasLabels(list)) applyPreferredDevices();
     }
 
     // Carry the device chosen on the join screen over into the live room the first
@@ -712,7 +1019,8 @@
     function applyPreferredDevices() {
         if (joinCamDeviceIndex != null) {
             markActiveDevice($('.debate-cam-menu'), joinCamDeviceIndex);
-            postToPublish({ changeVideoDevice: joinCamDeviceIndex });
+            // VDO.Ninja's changeVideoDevice is 0-based while our UI index is 1-based (see changeAudioDevice below).
+            postToPublish({ changeVideoDevice: joinCamDeviceIndex - 1 });
         }
         if (joinMicDeviceIndex != null) {
             markActiveDevice($('.debate-mic-menu'), joinMicDeviceIndex);
@@ -842,6 +1150,7 @@
             updateControlsVisibility();
         } else if (data.action === 'waiting') {
             // Waiting room: pull back anything already revealed and park on the hold screen
+            closeDebugView();  // ta ścieżka czyści scenę z pominięciem embedVdo()
             $('.debate-stage').hide();
             $('.debate-video-frame').empty();
             $('.debate-video').removeClass('debate-video--has-frame');
@@ -885,7 +1194,7 @@
             // afterwards (not even on promotion to master), so their VDO stream (and any
             // &forward targeting it) keeps working with no re-embed. See TODO.md.
             clientId: clientId, peerId: peerId, pushId: peerId, name: name, role: null,
-            zone: 'audience', index: -1, signal: null, speaking: false, breakout: false,
+            zone: 'audience', index: -1, signals: {}, speaking: false, breakout: false,
             joinSeq: nextJoinSeq++, comaster: null, honorary: !!wasMaster,
             pending: waitingRoomOn
         };
@@ -895,7 +1204,7 @@
         var prev = stale[0];
         if (prev) {
             entry.joinSeq = prev.joinSeq;
-            entry.signal = prev.signal;
+            entry.signals = prev.signals || {};
             entry.pending = prev.pending && waitingRoomOn;
             if (prev.zone !== 'audience' && !occupant(prev.zone, prev.index)) {
                 entry.zone = prev.zone;
@@ -974,6 +1283,7 @@
         if (!e) return;
         if (e.zone !== zone) resetBreakout(e);
         e.zone = zone; e.index = index;
+        if (!isDebaterZone(zone)) dropSignalWithSeat(e);
         renderDebate();
     }
 
@@ -985,6 +1295,7 @@
         var e = findEntry(clientId);
         if (!e) return;
         resetBreakout(e);
+        dropSignalWithSeat(e);
         if (e.marshal) { e.zone = 'marszalek'; e.index = 0; }
         else { e.zone = 'audience'; e.index = -1; }
         renderDebate();
@@ -1008,9 +1319,10 @@
         else assignSlot(clientId, 'marszalek', 0);
     }
 
-    // Breakout rooms: only debaters/judges (never audience) may use them, and only for
-    // whichever zone they're currently seated in. Leaving the seat (or being moved to a
-    // different one) always pulls them back to the main room first.
+    // Breakout rooms: only debaters/judges (never the audience or the marshal's own
+    // zone) may use them, and only for whichever zone they're currently seated in.
+    // Leaving the seat (or being moved to a different one) always pulls them back to
+    // the main room first.
     function doForward(entry) {
         if (!entry) return;
         // entry.breakout already reflects the *new* state, so it also tells us which
@@ -1019,13 +1331,19 @@
         var dest = entry.breakout ? breakoutRoomId(entry.zone) : vdoRoom();
         var source = entry.breakout ? directorIframe : breakoutDirectorIframes[entry.zone];
         postToFrame(source, { action: 'forward', target: pushIdFor(entry.pushId), value: dest });
+        // Room membership just changed — re-evaluate scene-2 warm targets right away
+        // instead of waiting for the next incidental loudness tick: entering breakout
+        // must drop this sid immediately (see zonePushIds), and returning must pick it
+        // back up immediately if their zone is already speaking (a teammate carried on
+        // without them), rather than sitting un-warmed until someone's volume changes.
+        updatePrewarm();
     }
     function resetBreakout(entry) {
         if (entry && entry.breakout) { entry.breakout = false; doForward(entry); }
     }
     function setBreakout(clientId, on) {
         var e = findEntry(clientId);
-        if (!e || e.zone === 'audience') return;
+        if (!e || !zoneHasBreakout(e.zone)) return;
         e.breakout = !!on;
         doForward(e);
         renderDebate();
@@ -1035,12 +1353,33 @@
         else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'breakout', on: on });
     }
 
-    function setSignal(clientId, kind) {
+    // The master can be seated too — keep its own toggle buttons in sync no matter
+    // which path (button, badge click, marshal request) changed a signal.
+    function syncMySignals(e) {
+        mySignals.hand = !!(e && e.signals && e.signals.hand);
+        mySignals.advocem = !!(e && e.signals && e.signals.advocem);
+        updateSignalButtons();
+    }
+
+    // Question and ad vocem are independent — raising one never lowers the other
+    function setSignal(clientId, kind, on) {
+        if (kind !== 'hand' && kind !== 'advocem') return;
         var e = findEntry(clientId);
         if (!e) return;
-        e.signal = kind || null;
+        if (on && !isDebaterZone(e.zone)) return; // only team seats may raise; clearing is always allowed
+        if (!e.signals) e.signals = {};
+        e.signals[kind] = !!on;
+        if (e.clientId === myClientId) syncMySignals(e);
         renderDebate();
-        if (kind) App.core.showAlert((e.name || 'Uczestnik') + (kind === 'advocem' ? ': ad vocem' : ': podnosi rękę'));
+        if (on) App.core.showAlert((e.name || 'Uczestnik') + (kind === 'advocem' ? ': ad vocem' : ': zgłasza pytanie'));
+    }
+
+    // Raised signals belong to a team seat — being reseated outside the team zones
+    // (judge, marshal, audience) takes them down with the seat.
+    function dropSignalWithSeat(e) {
+        if (!e || !e.signals || (!e.signals.hand && !e.signals.advocem)) return;
+        e.signals = {};
+        if (e.clientId === myClientId) syncMySignals(e);
     }
 
     // Called locally (master) or relayed to master (participant)
@@ -1066,7 +1405,7 @@
         return debateRoster.filter(function(e) { return !e.pending; }).map(function(e) {
             return {
                 clientId: e.clientId, peerId: e.peerId, pushId: e.pushId, name: e.name,
-                role: e.role || null, zone: e.zone, index: e.index, signal: e.signal,
+                role: e.role || null, zone: e.zone, index: e.index, signals: e.signals || {},
                 speaking: e.speaking, breakout: !!e.breakout,
                 joinSeq: e.joinSeq, comaster: e.comaster || null, honorary: !!e.honorary,
                 marshal: !!e.marshal
@@ -1095,11 +1434,44 @@
         return !(entry.zone === me.zone && entry.breakout);
     }
 
+    // Same raised-hand drawing as on the .debate-hand-btn button, sized for a badge
+    var HAND_BADGE_SVG =
+        '<svg class="signal-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5.5"/>' +
+        '<path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0v7"/>' +
+        '<path d="M14 11.8V6a1.5 1.5 0 0 1 3 0v6.5"/>' +
+        '<path d="M17 13V9a1.5 1.5 0 0 1 3 0v6c0 3.5-2 6.5-6 6.5h-1.5c-2 0-3-.5-4.3-2.2L5 15.8c-.6-.8-.5-1.7.3-2.3.8-.6 1.8-.4 2.4.3L9 15.5"/>' +
+        '</svg>';
+
+    // Raised-signal badge beside the name, one per raised kind (both can be up at
+    // once). Clickable (to take that signal down) for the raiser themselves, the
+    // marshal and the master; static for everyone else.
+    function signalBadgeEl(entry, kind) {
+        var isAdvocem = kind === 'advocem';
+        var me = myEntry();
+        var canClear = entry.clientId === myClientId || isDebateMaster || !!(me && me.marshal);
+        var $b = $('<span class="badge signal-badge"></span>')
+            .addClass(isAdvocem ? 'signal-badge--advocem' : 'signal-badge--hand')
+            .attr('data-client', entry.clientId).attr('data-kind', kind)
+            .attr('title', (isAdvocem ? 'Ad vocem' : 'Pytanie') + (canClear ? ' — kliknij, aby usunąć' : ''));
+        if (isAdvocem) $b.text('AV'); else $b.html(HAND_BADGE_SVG);
+        if (canClear) $b.addClass('signal-badge--clickable');
+        return $b;
+    }
+
+    $(document).on('click', '.signal-badge--clickable', function(ev) {
+        ev.stopPropagation();
+        var clientId = String($(this).attr('data-client'));
+        var kind = String($(this).attr('data-kind'));
+        if (isDebateMaster) setSignal(clientId, kind, false);
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'clearSignal', clientId: clientId, kind: kind });
+    });
+
     function slotEl(entry, zone, index) {
         var mine = entry && entry.clientId === myClientId;
         var draggable = isDebateMaster && debateEditMode && !!entry;
         var cls = 'slot' + (entry ? '' : ' slot--empty') + (mine ? ' slot--me' : '') +
-            (entry && entry.signal ? ' slot--signal' : '') + (draggable ? ' slot--draggable' : '') +
+            (draggable ? ' slot--draggable' : '') +
             (isDimmedForMe(entry) ? ' slot--dimmed' : '');
         var $s = $('<div class="' + cls + '"></div>').attr('data-zone', zone).attr('data-index', index);
         if (draggable) $s.attr('draggable', 'true').attr('data-client', entry.clientId);
@@ -1111,12 +1483,13 @@
             $s.append($('<div class="slot-name"></div>').text(isChiefJudge ? 'Sędzia główny' : '—'));
             return $s;
         }
-        var badge = entry.signal ? (entry.signal === 'advocem' ? 'AV' : '✋') :
-            (entry.name ? entry.name.trim().charAt(0).toUpperCase() : '');
-        var $av = $('<div class="slot-avatar"></div>').text(badge);
+        var $av = $('<div class="slot-avatar"></div>')
+            .text(entry.name ? entry.name.trim().charAt(0).toUpperCase() : '');
         if (mine) { $av.addClass('slot-avatar--me').attr('title', 'Kliknij, aby wrócić do widzów'); }
         $s.append($av);
         var $n = $('<div class="slot-name"></div>').text(entry.name);
+        if (entry.signals && entry.signals.hand) $n.append(' ').append(signalBadgeEl(entry, 'hand'));
+        if (entry.signals && entry.signals.advocem) $n.append(' ').append(signalBadgeEl(entry, 'advocem'));
         if (isChiefJudge) $n.append(' ').append($('<span class="badge badge-dark chief-judge-badge" title="Sędzia główny"></span>').text('SG'));
         if (zone === 'judges' && entry.marshal) $n.append(' ').append($('<span class="badge marshal-badge" title="Marszałek"></span>').text('M'));
         if (entry.speaking) $n.append(' ').append($('<span class="slot-mic" title="Mówi">🎤</span>'));
@@ -1270,12 +1643,13 @@
             if (e.honorary) {
                 $('<span class="badge badge-secondary comaster-badge comaster-badge--honorary" title="Był(a) prowadzącym"></span>').text('Co-master (h.)').appendTo($row);
             }
-            if (e.signal) {
+            ['hand', 'advocem'].forEach(function(kind) {
+                if (!e.signals || !e.signals[kind]) return;
                 $('<button type="button" class="btn btn-sm roster-signal"></button>')
-                    .attr('data-client', e.clientId)
-                    .text(e.signal === 'advocem' ? 'AD VOCEM' : '✋ ręka')
+                    .attr('data-client', e.clientId).attr('data-kind', kind)
+                    .text(kind === 'advocem' ? 'AD VOCEM' : '✋ pytanie')
                     .appendTo($row);
-            }
+            });
             if (e.breakout) {
                 $('<span class="badge badge-secondary roster-breakout-badge"></span>').text('Narada').appendTo($row);
                 $('<button type="button" class="btn btn-outline-secondary btn-sm roster-recall">Wróć</button>')
@@ -1371,11 +1745,7 @@
     });
 
     $(document).on('click', '.roster-signal', function() {
-        var clientId = String($(this).data('client'));
-        setSignal(clientId, null);
-        // Clearing our own signal from the admin panel (the master can be seated too)
-        // bypasses toggleSignal, which is the only other place mySignal is written.
-        if (clientId === myClientId) { mySignal = null; updateSignalButtons(); }
+        setSignal(String($(this).data('client')), String($(this).data('kind')), false);
     });
 
     // The visible stage is always on (a no-op after the first call); on top of that,
@@ -1383,6 +1753,10 @@
     function updateMyEmbed() {
         embedVdo();
         var me = myEntry();
+        // Signal buttons (question / ad vocem) are for team seats only; the breakout
+        // button additionally covers judges — see debate.css
+        $('body').toggleClass('is-debater', !!(me && isDebaterZone(me.zone)))
+            .toggleClass('has-breakout', !!(me && zoneHasBreakout(me.zone)));
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
@@ -1403,8 +1777,8 @@
     }
 
     function updateSignalButtons() {
-        $('.debate-hand-btn').toggleClass('active', mySignal === 'hand');
-        $('.debate-advocem-btn').toggleClass('active', mySignal === 'advocem');
+        $('.debate-hand-btn').toggleClass('active', !!mySignals.hand);
+        $('.debate-advocem-btn').toggleClass('active', !!mySignals.advocem);
     }
 
     // Master: create a debate room
@@ -1429,7 +1803,7 @@
             debateRoster = [{
                 clientId: myClientId, peerId: null, pushId: myClientId, name: myDebateName,
                 role: 'master', zone: 'audience', index: -1,
-                signal: null, speaking: false, breakout: false,
+                signals: {}, speaking: false, breakout: false,
                 joinSeq: 0, comaster: null, honorary: false, pending: false
             }];
             embedDirector();
@@ -1447,16 +1821,18 @@
         navigator.clipboard.writeText($('.debate-link-val').val());
     });
 
-    // Join screen: preview camera/mic before entering
+    // Join screen: preview camera/mic before entering (fallback — the preview now
+    // auto-starts with the join screen and this button is hidden then)
     $('.debate-preview-btn').click(function() {
-        embedPreview();
+        if (!previewIframe) embedPreview();
         $(this).text('Podgląd włączony');
     });
 
     // Join screen: pick a device — switches the live preview and carries over into the room
     $('.debate-join-cam-select').change(function() {
         joinCamDeviceIndex = parseInt($(this).val(), 10);
-        postToFrame(previewIframe, { changeVideoDevice: joinCamDeviceIndex });
+        // VDO.Ninja's changeVideoDevice is 0-based while our UI index is 1-based (see changeAudioDevice below).
+        postToFrame(previewIframe, { changeVideoDevice: joinCamDeviceIndex - 1 });
     });
     $('.debate-join-mic-select').change(function() {
         joinMicDeviceIndex = parseInt($(this).val(), 10);
@@ -1493,12 +1869,20 @@
         $(this).toggleClass('is-off', !camOn).attr('title', camOn ? 'Wyłącz kamerę' : 'Włącz kamerę');
     });
 
+    // Corner self-preview eye toggle — the ONLY thing that mutates selfPreviewUserHidden;
+    // updateSelfPreview() then recomputes visibility (and is a no-op while we're on stage).
+    $(document).on('click', '.debate-self-preview-eye', function() {
+        selfPreviewUserHidden = !selfPreviewUserHidden;
+        updateSelfPreview();
+    });
+
     // In-room device pickers are the dropdown menus attached to the mic/cam split
     // buttons (see fillDeviceMenu); the join-screen preview keeps its own <select>s.
     $(document).on('click', '.debate-cam-menu .dropdown-item', function() {
         var idx = parseInt($(this).attr('data-index'), 10);
         markActiveDevice($('.debate-cam-menu'), idx);
-        postToPublish({ changeVideoDevice: idx });
+        // VDO.Ninja's changeVideoDevice is 0-based while our UI index is 1-based (see changeAudioDevice below).
+        postToPublish({ changeVideoDevice: idx - 1 });
     });
     $(document).on('click', '.debate-mic-menu .dropdown-item', function() {
         var idx = parseInt($(this).attr('data-index'), 10);
@@ -1506,11 +1890,16 @@
         postToPublish({ changeAudioDevice: idx });
     });
 
-    // Debater signals — click again to cancel (toggle)
+    // Debater signals — click again to cancel (toggle); hand and ad vocem are
+    // independent, so raising one never lowers the other. Team seats only: the
+    // buttons are hidden for everyone else (body.is-debater), this guards the code path too.
     function toggleSignal(kind) {
-        mySignal = (mySignal === kind) ? null : kind;
-        if (isDebateMaster) setSignal(myClientId, mySignal);
-        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'signal', kind: mySignal });
+        var me = myEntry();
+        if (!me || !isDebaterZone(me.zone)) return;
+        var on = !mySignals[kind];
+        mySignals[kind] = on;
+        if (isDebateMaster) setSignal(myClientId, kind, on);
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'signal', kind: kind, on: on });
         updateSignalButtons();
     }
     $('.debate-hand-btn').click(function() { toggleSignal('hand'); });
@@ -1612,6 +2001,7 @@
         waitingRoomOn = false;
         $('.debate-waitroom-btn').removeClass('active').text('Włącz poczekalnię');
         $('body').removeClass('is-debate-master is-publishing is-comaster-primary');
+        closeDebugView();  // jw. — kontener czyszczony bez pośrednictwa embedVdo()
         $('.debate-video-frame').empty();
         $('.debate-video').removeClass('debate-video--has-frame');
         debateIframe = null;
@@ -1652,12 +2042,26 @@
         if (debateIframe && e.source === debateIframe.contentWindow) {
             App.vlog('[VDO← debate]', d);
             if (d.loudness !== undefined) handleLoudness(d.loudness);
+            // Zmiana topologii sceny (nowy strumień, zmiana slotów, wejście/wyjście ze
+            // sceny) mogła dorenderować kafelki spoza naszego filtra — narzuć go na nowo.
+            if (d.action === 'guest-connected' || d.action === 'view-connection' ||
+                d.action === 'slot-updated' || d.action === 'scene-connected' ||
+                d.action === 'push-connection' || d.action === 'add-to-scene' ||
+                d.action === 'remove-from-scene') {
+                applySpeakerView(true);
+            }
         } else if (publishIframe && e.source === publishIframe.contentWindow) {
             App.vlog('[VDO← publish]', d);
-            if (d.deviceList) populateDevices(d.deviceList);
+            if (d.deviceList) {
+                populateDevices(d.deviceList);
+                if (deviceListHasLabels(d.deviceList)) stopDeviceListPoll('publish');
+            }
         } else if (previewIframe && e.source === previewIframe.contentWindow) {
             App.vlog('[VDO← preview]', d);
-            if (d.deviceList) populateJoinDevices(d.deviceList);
+            if (d.deviceList) {
+                populateJoinDevices(d.deviceList);
+                if (deviceListHasLabels(d.deviceList)) stopDeviceListPoll('preview');
+            }
         } else if (directorIframe && e.source === directorIframe.contentWindow) {
             // The director iframe reports back its own actions — most importantly
             // {action:'add-to-scene'/'remove-from-scene'} after an addScene command
@@ -1697,7 +2101,7 @@
             var sp = !!loudIds[pushIdFor(e.pushId)];
             if (sp !== !!e.speaking) { e.speaking = sp; changed = true; }
         });
-        if (changed) { renderZones(); broadcastSpeaking(); updatePrewarm(); }
+        if (changed) { renderZones(); broadcastSpeaking(); updatePrewarm(); applySpeakerView(); }
     }
     function broadcastSpeaking() {
         var ids = debateRoster.filter(function(e) { return e.speaking; }).map(function(e) { return e.pushId; });
@@ -1705,6 +2109,65 @@
             if (!connAdmitted(peerId)) return;
             safeSend(c, { type: 'speaking', pushIds: ids });
         });
+    }
+
+    // Kto jest WIDOCZNY na scenie, narzuca aplikacja — nie &activespeaker VDO (patrz
+    // buildViewUrl). Źródłem prawdy jest stan `speaking` rosteru (u mastera z detekcji
+    // głośności, u pozostałych z broadcastu 'speaking'), nakładany lokalnie na własny
+    // iframe sceny komendami DOM {target, replace/add}. To warstwa niezależna od
+    // addScene/prewarm poniżej: skład sceny 2 decyduje, czyje media w ogóle płyną
+    // (podgrzanie wideo + natychmiastowa słyszalność wtrąceń), a ten filtr — co widać.
+    var speakerViewSids = null; // ostatnio narzucona lista widocznych sid (null = jeszcze nic)
+
+    function applySpeakerView(reapply) {
+        // A breakout room's stage has no curated scene to filter (see buildViewUrl) —
+        // everyone forwarded into it is just shown, full stop.
+        if (!debateIframe || viewUrlBreakoutZone) return;
+        var sids = [];
+        debateRoster.forEach(function(e) {
+            if (e.speaking && e.zone) sids.push(pushIdFor(e.pushId));
+        });
+        // Cisza nie czyści widoku — ostatni mówca zostaje na ekranie (spójnie z
+        // updatePrewarm); przy re-aplikacji ponawiamy ostatni znany układ, bo scena
+        // mogła właśnie dorenderować kafelki podgrzanych (a milczących) przeciwników.
+        if (!sids.length) {
+            if (!reapply || !speakerViewSids || !speakerViewSids.length) return;
+            sids = speakerViewSids;
+        }
+        if (!reapply && speakerViewSids && sids.join(',') === speakerViewSids.join(',')) return;
+        speakerViewSids = sids;
+        // replace atomowo usuwa wszystkie pozostałe kafelki; ewentualni równocześni
+        // mówcy (np. wtrącenie w trakcie) dochodzą add-em.
+        postToVdo({ target: sids[0], replace: true });
+        for (var i = 1; i < sids.length; i++) postToVdo({ target: sids[i], add: true });
+        updateSelfPreview(); // zmienił się skład sceny → przelicz, czy jesteśmy na niej
+    }
+
+    // Corner self-view PiP. Source is the existing publishIframe (the hidden send
+    // iframe also renders our local camera self-view) — see embedPublish. The only
+    // persisted state is the user's eye toggle; on-stage auto-hide is derived fresh
+    // every call and never touches selfPreviewUserHidden, so leaving the stage restores
+    // exactly the state the user last chose (open, or collapsed-to-eye). Requirement 4.
+    var selfPreviewUserHidden = false;
+    function amIOnSpeakerStage() {
+        // speakerViewSids === null = a fresh scene iframe still shows the full grid
+        // (everyone, us included); with an active publish that counts as "on stage" too.
+        if (!speakerViewSids) return true;
+        return speakerViewSids.indexOf(pushIdFor(myPushId)) !== -1;
+    }
+    function updateSelfPreview() {
+        var $w = $('.debate-self-preview');
+        if (!$w.length) return;
+        // W trybie debug publishIframe jest wypożyczony do pływającego okna — widget
+        // pokazywałby pustą ramkę z okiem, więc znika (selfPreviewUserHidden nietknięte,
+        // wraca po zamknięciu trybu).
+        var state = (!publishIframe || debugFrames) ? 'none'
+            : amIOnSpeakerStage() ? 'onstage'
+            : (selfPreviewUserHidden ? 'collapsed' : 'open');
+        $w.attr('data-state', state);
+        $w.find('.debate-self-preview-eye')
+            .toggleClass('is-closed', selfPreviewUserHidden)
+            .attr('title', selfPreviewUserHidden ? 'Pokaż podgląd' : 'Ukryj podgląd');
     }
 
     // Selektywne "podgrzewanie" (addScene) strony przeciwnej do aktualnie mówiącej —
@@ -1757,9 +2220,13 @@
             delete warmConfirmed[sid];
             delete warmPending[sid];
             syncPrewarm();
-        } else if (d.action === 'control-box' || (d.action === 'push-connection' && d.value)) {
+        } else if (d.action === 'control-box' || d.action === 'guest-connected' || (d.action === 'push-connection' && d.value)) {
             // Nowy gość właśnie dostał panel u reżysera — dopiero teraz addScene może
-            // zadziałać; ponów zaległe dodania.
+            // zadziałać; ponów zaległe dodania. guest-connected to jedyne z tych trzech
+            // udokumentowane wprost (docs.vdo.ninja/guides/iframe-api-documentation/
+            // detecting-user-joins-disconnects) jako odpalane przy KAŻDYM połączeniu
+            // gościa — dorzucone na wypadek, gdyby control-box/push-connection(true)
+            // nie odpaliły ponownie przy powrocie z pokoju narad.
             delete warmPending[d.streamID];
             syncPrewarm();
         } else if (d.action === 'push-connection' && !d.value && sid) {
@@ -2081,11 +2548,10 @@
             renderZones();
             updateMyEmbed();
             var me = myEntry();
-            // The master can clear a raised hand/ad-vocem from the management panel —
-            // without resyncing from our own roster entry, our toggle button would stay
-            // lit and the next click would re-send the same (already-cleared) value.
-            mySignal = me ? me.signal : null;
-            updateSignalButtons();
+            // The master (or marshal) can clear a raised hand/ad-vocem remotely —
+            // without resyncing from our own roster entry, our toggle buttons would
+            // stay lit and the next click would re-send the same (already-cleared) value.
+            syncMySignals(me);
             // Whether I should be hosting the standby hub is derived from my own entry
             // in every roster broadcast, not a separate point-to-point message — right
             // after a promotion the designated comaster usually isn't even connected
@@ -2097,6 +2563,7 @@
             debateRoster.forEach(function(e) { e.speaking = (data.pushIds || []).indexOf(e.pushId) !== -1; });
             renderZones();
             updatePrewarm();
+            applySpeakerView();
         }
     }
 
@@ -2117,6 +2584,11 @@
             App.core.navigate('debate');
             $('.debate-empty').hide();
             $('.debate-join').show();
+            // The preview starts by itself, so the camera+mic prompt appears the
+            // moment you land on the join screen — and coming from the vdo.ninja
+            // iframe, its grant is the one the publish iframe reuses later.
+            embedPreview();
+            $('.debate-preview-btn').hide();
         } else {
             var slaveUrl = window.location.href;
             $('.slave-session-link-val').val(slaveUrl);
