@@ -2115,12 +2115,13 @@
     var warmDesired = {};   // sid -> true: kogo chcemy mieć w scenie 2
     var warmConfirmed = {}; // sid -> true: kogo reżyser potwierdził jako dodanego
     var warmPending = {};   // sid -> timestamp ostatniego toggle (tłumi dublowanie w locie)
+    var lastSpeakingZones = null; // ostatni niepusty speakingZones — patrz updatePrewarm
 
-    function resetPrewarmState() { warmDesired = {}; warmConfirmed = {}; warmPending = {}; }
+    function resetPrewarmState() { warmDesired = {}; warmConfirmed = {}; warmPending = {}; lastSpeakingZones = null; }
 
     function sendSceneToggle(sid) {
         var now = Date.now();
-        if (warmPending[sid] && now - warmPending[sid] < 2000) return; // komenda w locie
+        if (warmPending[sid] && now - warmPending[sid] < 1000) return; // komenda w locie
         warmPending[sid] = now;
         postToFrame(directorIframe, { action: 'addScene', target: sid, value: 2, cib: nextCib() });
     }
@@ -2167,12 +2168,20 @@
         if (!directorIframe) return;
         var speakingZones = {};
         debateRoster.forEach(function(e) { if (e.speaking && e.zone) speakingZones[e.zone] = true; });
-        // Nikt teraz nie mówi — zostaw ostatnio pokazywaną osobę widoczną (nie czyść
-        // sceny), zamiast gasić obraz na czas ciszy między mówcami. Skład sceny zmienia
-        // się dopiero, gdy realnie zacznie mówić ktoś nowy.
-        if (!Object.keys(speakingZones).length) return;
+        // Nikt teraz nie mówi — zostaw ostatnio mówiącą strefę jako bazę (nie czyść
+        // sceny), zamiast gasić obraz na czas ciszy między mówcami. ALE dalej przeliczamy
+        // target z niej na żywo (zonePushIds/INTERJECT_OPPONENTS poniżej) zamiast całkiem
+        // pomijać funkcję — inaczej ktoś wracający z pokoju narad w trakcie ciszy (typowy
+        // moment na powrót: między wypowiedziami) nigdy nie wróciłby do scen 2, bo
+        // warmDesired zamrażałoby się na składzie sprzed jego wyjścia aż do najbliższej
+        // zmiany speaking, która — bez bycia w scenie — może nigdy nie nadejść.
+        if (Object.keys(speakingZones).length) {
+            lastSpeakingZones = speakingZones;
+        } else if (!lastSpeakingZones) {
+            return; // jeszcze nikt nigdy nie mówił — nie ma czego podgrzewać
+        }
         var target = {};
-        Object.keys(speakingZones).forEach(function(zone) {
+        Object.keys(lastSpeakingZones).forEach(function(zone) {
             // Mówiąca strefa nigdy nie może wypaść z target — inaczej w momencie
             // przejścia "podgrzany przeciwnik" → "teraz mówi" dostałaby toggle
             // (czyli zostałaby wyrzucona ze sceny) w trakcie własnej wypowiedzi.
