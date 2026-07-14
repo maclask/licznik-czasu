@@ -382,14 +382,13 @@
         return vdoRoom() + 'bo' + zone;
     }
     // Which breakout room (if any) MY OWN view stage should be showing right now —
-    // null once forward() has moved us back out (see doForward/setBreakout).
+    // null once setBreakout() has moved us back out.
     function myBreakoutZone() {
         var me = myEntry();
         return (me && me.breakout) ? me.zone : null;
     }
     // Who's actually inside a given zone's breakout room right now — the &view list
-    // for buildViewUrl's breakout link, since there's no director there to curate a
-    // scene (see doForward/breakoutDirectorIframes: they only ever send &forward).
+    // for buildViewUrl's breakout link, since there's no director there to curate a scene.
     function breakoutOccupantSids(zone) {
         return debateRoster.filter(function(e) { return e.zone === zone && e.breakout; })
             .map(function(e) { return pushIdFor(e.pushId); });
@@ -423,8 +422,7 @@
             // as someone who MIGHT publish and gates it behind its own "Join Room" click
             // (autoplay-policy workaround), which is exactly the blank stage this was
             // built to avoid. There's also no director in a breakout room to curate a
-            // &scene (breakoutDirectorIframes only ever send &forward — see doForward),
-            // so instead we name the exact streams to show via &view (comma-separated
+            // &scene, so instead we name the exact streams to show via &view (comma-separated
             // per docs.vdo.ninja/advanced-settings/mixer-scene-parameters/view.md) and add
             // &solo, which — like &scene — marks the link as viewer-only and skips the
             // join gate (docs .../and-solo.md: "&solo and &scene ... tells the system not
@@ -445,8 +443,8 @@
     // hidden iframe. &webcam picks "Join Room with Camera" and &autostart skips the entry
     // screen. What they see of the room — including their own video, once addScene'd —
     // comes back through the always-present buildViewUrl() iframe, same as everyone else.
-    function buildPublishUrl(name, pushId) {
-        var room = encodeURIComponent(vdoRoom());
+    function buildPublishUrl(name, pushId, breakoutZone) {
+        var room = encodeURIComponent(breakoutZone ? breakoutRoomId(breakoutZone) : vdoRoom());
         // &cover makes the self-view tile fill the corner preview (display-only, same
         // as the join screen's &cover — it does not touch the stream we publish).
         // &pushloudness bakes the loudness subscription into the URL itself (rather than
@@ -458,27 +456,13 @@
             '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover&pushloudness';
     }
 
-    // A second, invisible iframe that holds director permissions purely so we can send
-    // &forward commands for breakout rooms — kept off-screen so its own control panel
-    // (record/mute/scene buttons) never leaks into our UI. The master's visible iframe
-    // above stays a plain scene viewer / publisher, unchanged.
+    // An invisible iframe that holds director permissions for the main room — kept
+    // off-screen so its own control panel (record/mute/scene buttons) never leaks into
+    // our UI. Used for addScene (see updatePrewarm) to keep the opposing side warm
+    // before they're cut to. The master's visible iframe stays a plain scene viewer /
+    // publisher, unchanged. Breakout rooms have no director at all — see embedPublish /
+    // publishBreakoutZone for how occupants move in and out of them.
     var directorIframe = null;
-    // A director's &forward command only works on guests currently inside that director's
-    // own room — VDO.Ninja hands "ownership" of a guest to whichever room it's forwarded
-    // into. So pulling someone back out of a breakout room needs a director actually
-    // sitting in that breakout room; the main room's director can no longer see them by
-    // then. One extra invisible director iframe per zone covers that.
-    var breakoutDirectorIframes = {};
-
-    // Które strefy należą do którego formatu — Oxford: proposition/opposition,
-    // BP: og/oo/cg/co; judges (i audience) dotyczą obu i nigdy nie są filtrowane.
-    var ZONE_FORMAT = { proposition: 'oxford', opposition: 'oxford', og: 'bp', oo: 'bp', cg: 'bp', co: 'bp' };
-    function relevantZones() {
-        var fmt = App.core.getCurrentFormat();
-        return Object.keys(ZONE_SLOTS).filter(function(zone) {
-            return !ZONE_FORMAT[zone] || ZONE_FORMAT[zone] === fmt;
-        });
-    }
 
     // Kto realnie może wtrącić się, gdy mówi dana strefa. Sędziowie/widownia
     // celowo nie mają tu wpisu — brak wpisu = brak podgrzewania, zgodnie z
@@ -489,9 +473,10 @@
         oo: ['og', 'cg'], co: ['og', 'cg']
     };
     function zonePushIds(zone) {
-        // Excludes anyone currently in a breakout room: their stream isn't in the main
-        // room at all (forwarded away — see doForward), so targeting them with addScene
-        // has no control-box to act on and would just misfire once they're back.
+        // Excludes anyone currently in a breakout room: their publish iframe is pointed
+        // at that room's own &room instead (see embedPublish/publishBreakoutZone), so
+        // their stream isn't in the main room at all — targeting them with addScene has
+        // no control-box to act on and would just misfire once they're back.
         return debateRoster.filter(function(e) { return e.zone === zone && !e.breakout; }).map(function(e) { return e.pushId; });
     }
 
@@ -503,20 +488,10 @@
             VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&novideo&noaudio&cleanoutput&hidemenu"></iframe>');
         $('body').append($f);
         directorIframe = $f.get(0);
-        $.each(relevantZones().filter(zoneHasBreakout), function(i, zone) {
-            var broom = encodeURIComponent(breakoutRoomId(zone));
-            var $bf = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
-                VDO_BASE + '?director=' + broom + VDO_DIRECTOR_BITRATE + '&novideo&noaudio&cleanoutput&hidemenu"></iframe>');
-            $('body').append($bf);
-            breakoutDirectorIframes[zone] = $bf.get(0);
-        });
     }
     function removeDirector() {
-        // director + jego breakouty powstają razem, więc jeden warunek starczy za oba
         if (directorIframe) closeDebugView();
         if (directorIframe) { $(directorIframe).remove(); directorIframe = null; }
-        $.each(breakoutDirectorIframes, function(zone, iframe) { $(iframe).remove(); });
-        breakoutDirectorIframes = {};
         resetPrewarmState();
         resetSelfSpeech();
     }
@@ -641,10 +616,11 @@
     // changes (a master handoff mints a new peer id, and the &excludeaudio baked into
     // the old URL would keep pointing at the previous stream, bringing the self-echo
     // back for the ex-master once they take a seat again) or when we enter/leave a
-    // breakout room — doForward() moves our OWN publish stream to/from that room, but
-    // this viewer iframe is a separate connection that has to be re-pointed at it too,
-    // otherwise nobody sees any video once inside ("pokój narad" stays blank). A
-    // teammate joining/leaving that SAME breakout room does NOT rebuild — see
+    // breakout room — updateMyEmbed() rebuilds our OWN publish iframe to move our stream
+    // to/from that room (see publishBreakoutZone), but this viewer iframe is a separate
+    // connection that has to be re-pointed at it too, otherwise nobody sees any video
+    // once inside ("pokój narad" stays blank). A teammate joining/leaving that SAME
+    // breakout room does NOT rebuild — see
     // syncBreakoutView, which adds/removes just that one stream live instead.
     var viewUrlPushId = null;      // myPushId baked into the current iframe's URL
     var viewUrlBreakoutZone = null; // breakout zone (or null for the main room) baked in
@@ -713,15 +689,21 @@
 
     // Hidden send-only iframe for when we've taken a debater/judge slot — see
     // buildPublishUrl for why this has to be separate from the visible viewer iframe.
+    // Rebuilt (removePublish + embedPublish) whenever our own breakout room stops
+    // matching publishBreakoutZone — see updateMyEmbed — since VDO.Ninja has no "change
+    // room" self-command; moving between rooms means a fresh iframe with &room pointed
+    // at the destination, same tradeoff as embedVdo's viewUrlPushId/viewUrlBreakoutZone.
     var publishIframe = null;
-    function embedPublish(name, pushId) {
+    var publishBreakoutZone = null; // breakout zone baked into the current publishIframe's URL (null = main room)
+    function embedPublish(name, pushId, breakoutZone) {
         if (publishIframe) return;
         closeDebugView();
         // Camera/microphone must be delegated to the cross-origin vdo.ninja iframe with
         // "*" (bare "camera" means 'self' only, which silently blocks getUserMedia there).
         var allow = 'camera *; microphone *; display-capture *; autoplay; fullscreen; picture-in-picture';
+        publishBreakoutZone = breakoutZone || null;
         var $f = $('<iframe class="vdo-publish-iframe" allow="' + allow + '" src="' +
-            buildPublishUrl(name, pushId) + '"></iframe>');
+            buildPublishUrl(name, pushId, publishBreakoutZone) + '"></iframe>');
         // Into the self-preview widget, NOT body: this same iframe doubles as the corner
         // self-view, and moving an iframe in the DOM later would reload it (restarting
         // getUserMedia). The widget just keeps it off-screen when the preview is hidden.
@@ -729,6 +711,10 @@
         publishIframe = $f.get(0);
         publishIframe.onload = function() {
             pollDeviceList('publish', function() { return publishIframe; });
+            // A fresh iframe (first embed, breakout rebuild, or a debug-view reload)
+            // always starts with camera/mic ON — VDO gives no readback to restore from,
+            // so push our own last-known toggle state back onto it.
+            applyLocalMediaState();
         };
         updateSelfPreview();
     }
@@ -736,8 +722,13 @@
         if (publishIframe) closeDebugView();  // wyjmij z okna debug, zanim skasujemy iframe
         stopDeviceListPoll('publish');
         if (publishIframe) { $(publishIframe).remove(); publishIframe = null; }
+        publishBreakoutZone = null;
         updateSelfPreview();
         resetSelfSpeech();
+    }
+    function applyLocalMediaState() {
+        postToPublish({ mic: micOn });
+        postToPublish({ camera: camOn });
     }
 
     function vdoFrameLabel(iframe) {
@@ -745,9 +736,6 @@
         if (iframe === publishIframe) return 'publish';
         if (iframe === directorIframe) return 'director';
         if (iframe === previewIframe) return 'preview';
-        var breakoutZone = null;
-        $.each(breakoutDirectorIframes, function(zone, f) { if (f === iframe) breakoutZone = zone; });
-        if (breakoutZone) return 'director-breakout-' + breakoutZone;
         return 'iframe';
     }
     function postToFrame(iframe, obj) {
@@ -774,7 +762,6 @@
 
     function liveVdoFrames() {
         var frames = [debateIframe, publishIframe, directorIframe, previewIframe];
-        $.each(breakoutDirectorIframes, function(zone, f) { frames.push(f); });
         return frames.filter(function(f) { return !!f; });
     }
     // src niesie stan z chwili utworzenia (&excludeaudio=<sid>, &label, &push), więc nie
@@ -1260,30 +1247,28 @@
     // Breakout rooms: only debaters/judges (never the audience or the marshal's own
     // zone) may use them, and only for whichever zone they're currently seated in.
     // Leaving the seat (or being moved to a different one) always pulls them back to
-    // the main room first.
-    function doForward(entry) {
-        if (!entry) return;
-        // entry.breakout already reflects the *new* state, so it also tells us which
-        // room the guest is coming from: the main room when entering, that zone's
-        // breakout room when leaving — see the directorIframe comment above.
-        var dest = entry.breakout ? breakoutRoomId(entry.zone) : vdoRoom();
-        var source = entry.breakout ? directorIframe : breakoutDirectorIframes[entry.zone];
-        postToFrame(source, { action: 'forward', target: pushIdFor(entry.pushId), value: dest });
-        // Room membership just changed — re-evaluate scene-2 warm targets right away
-        // instead of waiting for the next incidental loudness tick: entering breakout
-        // must drop this sid immediately (see zonePushIds), and returning must pick it
-        // back up immediately if their zone is already speaking (a teammate carried on
-        // without them), rather than sitting un-warmed until someone's volume changes.
-        updatePrewarm();
-    }
+    // the main room first. Entering/leaving is realized by the occupant's OWN publish
+    // iframe switching &room (see updateMyEmbed/embedPublish/publishBreakoutZone) —
+    // here we only flip entry.breakout and re-render; the occupant's own browser (master
+    // or, over the roster broadcast, a participant) notices the mismatch and rebuilds.
     function resetBreakout(entry) {
-        if (entry && entry.breakout) { entry.breakout = false; doForward(entry); }
+        if (entry && entry.breakout) {
+            entry.breakout = false;
+            // Room membership just changed — re-evaluate scene-2 warm targets right away
+            // instead of waiting for the next incidental loudness tick: leaving breakout
+            // must pick this sid back up immediately if their zone is already speaking (a
+            // teammate carried on without them), rather than sitting un-warmed until
+            // someone's volume changes.
+            updatePrewarm();
+        }
     }
     function setBreakout(clientId, on) {
         var e = findEntry(clientId);
         if (!e || !zoneHasBreakout(e.zone)) return;
         e.breakout = !!on;
-        doForward(e);
+        // See resetBreakout above — entering breakout must drop this sid from the warm
+        // set immediately (see zonePushIds), too.
+        updatePrewarm();
         renderDebate();
     }
     function requestBreakout(on) {
@@ -1698,9 +1683,16 @@
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
-            if (mode === 'publish') embedPublish(myDebateName, myPushId); else removePublish();
+            if (mode === 'publish') embedPublish(myDebateName, myPushId, myBreakoutZone()); else removePublish();
             $('body').toggleClass('is-publishing', mode === 'publish');
             if (mode === 'publish') { setMicBtn(true); camOn = true; $('.debate-cam-btn').removeClass('is-off').attr('title', 'Wyłącz kamerę'); }
+        } else if (mode === 'publish' && publishBreakoutZone !== myBreakoutZone()) {
+            // Already publishing, but our own breakout room no longer matches what's
+            // baked into the iframe's URL (entered/left a "pokój narad") — rebuild it
+            // pointed at the new room. Mic/cam state survives via applyLocalMediaState
+            // (see embedPublish).
+            removePublish();
+            embedPublish(myDebateName, myPushId, myBreakoutZone());
         }
         updateControlsVisibility();
     }
@@ -2008,10 +2000,6 @@
             // in the director's room. These drive the prewarm reconciliation.
             App.vlog('[VDO← director]', d);
             handleDirectorEvent(d);
-        } else {
-            $.each(breakoutDirectorIframes, function(zone, f) {
-                if (f && e.source === f.contentWindow) App.vlog('[VDO← director-breakout-' + zone + ']', d);
-            });
         }
     });
 
