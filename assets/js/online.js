@@ -2058,7 +2058,16 @@
         // updatePrewarm); przy re-aplikacji ponawiamy ostatni znany układ, bo scena
         // mogła właśnie dorenderować kafelki podgrzanych (a milczących) przeciwników.
         if (!sids.length) {
-            if (!reapply || !speakerViewSids || !speakerViewSids.length) return;
+            if (reapply && speakerViewSids === null) {
+                // Świeży iframe, a jeszcze NIKT nigdy nie mówił — scena zostaje
+                // nieskurowana (wszyscy na 0kbps), więc naszego kafelka i tak tam
+                // realnie nie widać. Przejdź z null na pustą listę, żeby
+                // amIOnSpeakerStage() przestało zakładać, że jesteśmy na scenie,
+                // i podgląd własny się pokazał zamiast wisieć schowany w nieskończoność.
+                speakerViewSids = [];
+                updateSelfPreview();
+            }
+            if (!reapply || !speakerViewSids.length) return;
             sids = speakerViewSids;
         }
         if (!reapply && speakerViewSids && sids.join(',') === speakerViewSids.join(',')) return;
@@ -2077,8 +2086,12 @@
     // exactly the state the user last chose (open, or collapsed-to-eye). Requirement 4.
     var selfPreviewUserHidden = false;
     function amIOnSpeakerStage() {
-        // speakerViewSids === null = a fresh scene iframe still shows the full grid
-        // (everyone, us included); with an active publish that counts as "on stage" too.
+        // speakerViewSids === null only briefly, between embedVdo() resetting it and the
+        // fresh iframe's onload firing applySpeakerView(true) — treat that narrow window
+        // as "on stage" so the corner preview doesn't flash on top of a loading iframe.
+        // applySpeakerView flips it to [] (not null) the moment the scene is actually
+        // evaluated, even with nobody speaking, so this never freezes true indefinitely —
+        // see the null-check there.
         if (!speakerViewSids) return true;
         return speakerViewSids.indexOf(pushIdFor(myPushId)) !== -1;
     }
