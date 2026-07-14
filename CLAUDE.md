@@ -36,7 +36,7 @@ Three plain `<script>`s load in order (`app.js` → `stopwatch.js` → `online.j
 
 - **`app.js`** defines the contract: `App.state` (the only fields both layers touch — `isSlaveSession`, `slaveShowControls`, `applyingState`), a no-op `App.onStateChange`, and an empty `App.core`.
 - **`stopwatch.js`** (core) fills `App.core` at the end of its IIFE with the functions `online.js` needs: `getFullState`, `applyState`, `navigate`, `showAlert`, `showWarn`, `reset`, `startPrepTime`, `isPrepActive`, `getCurrentFormat`. Everything else stays local to its closure.
-- **`online.js`** overrides `App.onStateChange` to broadcast state deltas to peers, and reaches into core only via `App.core.*` / `App.state.*`.
+- **`online.js`** overrides `App.onStateChange` to broadcast state deltas to peers, and reaches into core only via `App.core.*` / `App.state.*`. It also overrides `App.onVerboseChange` — `App.verbose` (set from the console) is an accessor that toggles `body.is-verbose` and fires that hook, which is how the VDO.Ninja debug view (floating windows holding the live iframes, toggled by `.vdo-debug-btn`) appears and tears itself down.
 
 Dependency direction is one-way: the core knows nothing about sessions or debate — its single seam to the online layer is `App.onStateChange`, which it calls after every state mutation. Keep it that way: any new cross-file need goes through `App`, and the `<script>` order in `index.html` **is** the dependency contract.
 

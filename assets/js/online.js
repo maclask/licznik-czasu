@@ -461,6 +461,7 @@
 
     function embedDirector() {
         if (directorIframe) return;
+        closeDebugView();
         var room = encodeURIComponent(vdoRoom());
         var $f = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
             VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
@@ -476,6 +477,8 @@
         updateSelfSpeechDetection();
     }
     function removeDirector() {
+        // director + jego breakouty powstają razem, więc jeden warunek starczy za oba
+        if (directorIframe) closeDebugView();
         if (directorIframe) { $(directorIframe).remove(); directorIframe = null; }
         $.each(breakoutDirectorIframes, function(zone, iframe) { $(iframe).remove(); });
         breakoutDirectorIframes = {};
@@ -493,6 +496,7 @@
     // second prompt at seat-taking. Grants DO carry between successive vdo.ninja
     // iframes on the same page, so the later publish iframe starts silently.
     function embedPreview() {
+        closeDebugView();
         var allow = 'camera *; microphone *; autoplay; fullscreen; picture-in-picture';
         $('.debate-join-preview').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' +
@@ -507,6 +511,7 @@
         startMicMeter();
     }
     function clearPreview() {
+        if (previewIframe) closeDebugView();
         stopDeviceListPoll('preview');
         $('.debate-join-preview').empty();
         previewIframe = null;
@@ -670,10 +675,12 @@
     var viewUrlPushId = null;  // myPushId baked into the current iframe's URL
     function embedVdo() {
         if (debateIframe && viewUrlPushId !== myPushId) {
+            closeDebugView();  // scena może siedzieć w oknie debug — najpierw wróć nią na miejsce
             $('.debate-video-frame').empty();
             debateIframe = null;
         }
-        if (debateIframe) return;
+        if (debateIframe) return;  // zwykły no-op przy renderze rosteru — trybu debug nie ruszamy
+        closeDebugView();
         viewUrlPushId = myPushId;
         speakerViewSids = null; // świeży iframe = czysty grid, filtr narzucimy od zera
         updateSelfPreview();    // świeży grid pokazuje też nas → podgląd chowamy do czasu applySpeakerView
@@ -701,6 +708,7 @@
     var publishIframe = null;
     function embedPublish(name, pushId) {
         if (publishIframe) return;
+        closeDebugView();
         // Camera/microphone must be delegated to the cross-origin vdo.ninja iframe with
         // "*" (bare "camera" means 'self' only, which silently blocks getUserMedia there).
         var allow = 'camera *; microphone *; display-capture *; autoplay; fullscreen; picture-in-picture';
@@ -717,6 +725,7 @@
         updateSelfPreview();
     }
     function removePublish() {
+        if (publishIframe) closeDebugView();  // wyjmij z okna debug, zanim skasujemy iframe
         stopDeviceListPoll('publish');
         if (publishIframe) { $(publishIframe).remove(); publishIframe = null; }
         updateSelfPreview();
@@ -740,6 +749,170 @@
     }
     function postToVdo(obj) { postToFrame(debateIframe, obj); }
     function postToPublish(obj) { postToFrame(publishIframe, obj); }
+
+    // ── Widok debugowy (przycisk .vdo-debug-btn — TYMCZASOWY) ───────────────────
+    // Każdy żywy iframe VDO.Ninja ląduje w pływającym okienku w rzędzie u dołu ekranu,
+    // z URL-a zdjęte są parametry czyszczące UI → widać pełny, domyślny interfejs
+    // VDO.Ninja (u mistrza: prawdziwy panel reżysera). Okna trzymają TE SAME elementy
+    // iframe (przeniesione), nie kopie: kopia z tym samym &push to konflikt strumienia,
+    // a kopia sceny/reżysera to drugi pełny odbiór pokoju. Cena: i przeniesienie w DOM,
+    // i zmiana src przeładowują iframe, więc wejście/wyjście z trybu przerywa na chwilę
+    // nadawanie (publish wznawia się sam — &webcam&autostart zostają w URL-u). Dla
+    // narzędzia debugowego to akceptowalne.
+    var DEBUG_WIN_W = 360, DEBUG_WIN_H = 230, DEBUG_GAP = 8;
+    var DEBUG_WIN_MIN_W = 220, DEBUG_WIN_MIN_H = 140;
+    var debugFrames = null;  // [{iframe, originalSrc, parent, nextSibling}] gdy tryb otwarty
+
+    function liveVdoFrames() {
+        var frames = [debateIframe, publishIframe, directorIframe, previewIframe];
+        $.each(breakoutDirectorIframes, function(zone, f) { frames.push(f); });
+        return frames.filter(function(f) { return !!f; });
+    }
+    // src niesie stan z chwili utworzenia (&excludeaudio=<sid>, &label, &push), więc nie
+    // przebudowujemy go builderami — zdejmujemy wyłącznie parametry chowające UI. Reszta
+    // zostaje: &videodevice=0&audiodevice=0 dalej blokuje scenie sięganie po naszą kamerę,
+    // a parametry bitrate dalej trzymają jakość, którą chcemy podglądać.
+    function debugSrc(src) {
+        return src.replace(/&(cleanoutput|hidemenu|transparent|cover)\b/g, '');
+    }
+    function openDebugView() {
+        var frames = liveVdoFrames();
+        if (!frames.length) {
+            App.core.showWarn('Brak aktywnych iframe\'ów VDO.Ninja');
+            return;
+        }
+        debugFrames = [];
+        var perRow = Math.max(1, Math.floor((window.innerWidth - DEBUG_GAP) / (DEBUG_WIN_W + DEBUG_GAP)));
+        frames.forEach(function(iframe, i) {
+            debugFrames.push({
+                iframe: iframe,
+                originalSrc: iframe.src,
+                parent: iframe.parentNode,
+                nextSibling: iframe.nextSibling
+            });
+            // Rząd liczony od dołu, ale zapisany jako left/top — drag ma potem ruszać
+            // jedną parą współrzędnych, bez mieszania bottom z top. Rozmiar też idzie
+            // inline: uchwyt skalowania nadpisuje właśnie te wartości.
+            var row = Math.floor(i / perRow), col = i % perRow;
+            var $win = $(
+                '<div class="vdo-debug-win">' +
+                '<div class="vdo-debug-title">' +
+                '<span class="vdo-debug-label"></span>' +
+                '<button type="button" class="vdo-debug-min" title="Zwiń">–</button>' +
+                '</div>' +
+                '<div class="vdo-debug-body"></div>' +
+                '<div class="vdo-debug-grip" title="Zmień rozmiar"></div>' +
+                '</div>'
+            );
+            $win.css({
+                left: (DEBUG_GAP + col * (DEBUG_WIN_W + DEBUG_GAP)) + 'px',
+                top: (window.innerHeight - DEBUG_GAP - DEBUG_WIN_H - row * (DEBUG_WIN_H + DEBUG_GAP)) + 'px',
+                width: DEBUG_WIN_W + 'px',
+                height: DEBUG_WIN_H + 'px'
+            });
+            $win.find('.vdo-debug-label').text(vdoFrameLabel(iframe));
+            $('body').append($win);
+            // Kolejność nie jest kosmetyczna: odpięty iframe nie ma browsing contextu, więc
+            // podmiana src nic nie ładuje — ładowanie odpala dopiero wstawienie do okna.
+            // Odwrotna kolejność (src w DOM, potem przenosiny) przeładowałaby iframe dwa razy.
+            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            iframe.src = debugSrc(iframe.src);
+            $win.find('.vdo-debug-body').append(iframe);
+        });
+        updateSelfPreview();
+        updateDebugBtn();
+        App.vlog('[debug] otwarty widok debugowy', debugFrames.length + ' iframe(ów)');
+    }
+    // No-op gdy tryb zamknięty. MUSI polecieć przed każdą przebudową/usunięciem iframe'ów
+    // (patrz wywołania w embed*/remove* i w ścieżkach teardownu) — inaczej np. embedVdo
+    // wyczyściłby pusty .debate-video-frame i zbudował drugą scenę obok tej, która wciąż
+    // gra w okienku debug (podwójne audio), a remove* zostawiłyby osierocone wrappery.
+    function closeDebugView() {
+        if (!debugFrames) return;
+        debugFrames.forEach(function(rec) {
+            // Ta sama sztuczka co przy otwieraniu: src wracamy na odpiętym iframe (bez
+            // ładowania), a wstawienie w stare miejsce robi jedno przeładowanie.
+            if (rec.iframe.parentNode) rec.iframe.parentNode.removeChild(rec.iframe);
+            rec.iframe.src = rec.originalSrc;
+            var ref = (rec.nextSibling && rec.nextSibling.parentNode === rec.parent) ? rec.nextSibling : null;
+            rec.parent.insertBefore(rec.iframe, ref);
+        });
+        debugFrames = null;
+        $('.vdo-debug-win').remove();
+        updateSelfPreview();
+        updateDebugBtn();  // tryb zamyka się też sam, przy każdej przebudowie iframe'ów
+    }
+    // Tryb odpala przycisk .vdo-debug-btn, widoczny wyłącznie przy App.verbose = true. Przycisk
+    // stoi w trzech miejscach (wiersz tworzenia debaty, ekran dołączania, overlay wideo), bo żadne
+    // pojedyncze nie jest widoczne dla obu ról przez cały czas: zakładkę Udostępnianie uczestnik
+    // ma zablokowaną (body.is-debate), a ekran dołączania znika po wejściu do pokoju.
+    function toggleDebugView() {
+        if (debugFrames) closeDebugView(); else openDebugView();
+    }
+    function updateDebugBtn() {
+        var on = !!debugFrames;
+        // Tylko klasa i tytuł — etykiety zostają takie, jak w markupie (overlay ma "DBG").
+        $('.vdo-debug-btn').toggleClass('active', on)
+            .attr('title', on ? 'Zamknij widok debugowy' : 'Widok debugowy iframe\'ów VDO.Ninja');
+    }
+    $(document).on('click', '.vdo-debug-btn', toggleDebugView);
+    // Same przyciski chowa CSS (body.is-verbose); tu zostaje sprzątanie po wyłączeniu
+    // flagi — inaczej okna wisiałyby na ekranie bez czegokolwiek, czym je zamknąć.
+    App.onVerboseChange = function(on) {
+        if (!on) closeDebugView();
+    };
+
+    // Wspólny gest dla paska (przesuwanie) i uchwytu (skalowanie). Pointer Events z
+    // setPointerCapture: bez capture iframe pod kursorem połyka pointermove i okno gubi
+    // się przy szybszym ruchu. Na czas gestu klasa na body gasi pointer-events w iframe'ach
+    // okien — kursor nie może wpaść do środka VDO.
+    function startWinGesture(el, oe, onMove) {
+        var startX = oe.clientX, startY = oe.clientY;
+        function move(ev) { onMove(ev.clientX - startX, ev.clientY - startY); }
+        function up(ev) {
+            el.removeEventListener('pointermove', move);
+            el.removeEventListener('pointerup', up);
+            el.removeEventListener('pointercancel', up);
+            try { el.releasePointerCapture(ev.pointerId); } catch (err) {}
+            $('body').removeClass('vdo-debug-dragging');
+        }
+        try { el.setPointerCapture(oe.pointerId); } catch (err) {}
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+        $('body').addClass('vdo-debug-dragging');
+    }
+    $(document).on('pointerdown', '.vdo-debug-title', function(e) {
+        if ($(e.target).closest('.vdo-debug-min').length) return;  // klik w zwijanie to nie drag
+        var win = this.parentNode;
+        var left0 = win.offsetLeft, top0 = win.offsetTop;
+        startWinGesture(this, e.originalEvent || e, function(dx, dy) {
+            win.style.left = (left0 + dx) + 'px';
+            win.style.top = (top0 + dy) + 'px';
+        });
+        e.preventDefault();
+    });
+    $(document).on('pointerdown', '.vdo-debug-grip', function(e) {
+        var win = this.parentNode;
+        var w0 = win.offsetWidth, h0 = win.offsetHeight;
+        startWinGesture(this, e.originalEvent || e, function(dx, dy) {
+            win.style.width = Math.max(DEBUG_WIN_MIN_W, w0 + dx) + 'px';
+            win.style.height = Math.max(DEBUG_WIN_MIN_H, h0 + dy) + 'px';
+        });
+        e.preventDefault();
+    });
+    // Zwijanie: wysokość jest inline (od skalowania), więc klasa CSS by jej nie nadpisała
+    // — chowamy przez 'auto' i wracamy do zapamiętanej. Sama treść zwiniętego okna jedzie
+    // poza ekran w pełnym rozmiarze (CSS), a nie w display:none, żeby publish nie przestał
+    // nadawać — ta sama zasada co przy podglądzie PiP.
+    $(document).on('click', '.vdo-debug-min', function() {
+        var $win = $(this).closest('.vdo-debug-win');
+        var min = !$win.hasClass('is-min');
+        if (min) $win.data('h', $win.get(0).style.height);
+        $win.toggleClass('is-min', min)
+            .css('height', min ? 'auto' : ($win.data('h') || DEBUG_WIN_H + 'px'));
+        $(this).text(min ? '+' : '–').attr('title', min ? 'Rozwiń' : 'Zwiń');
+    });
 
     function setMicBtn(on) {
         micOn = on;
@@ -906,6 +1079,7 @@
             updateControlsVisibility();
         } else if (data.action === 'waiting') {
             // Waiting room: pull back anything already revealed and park on the hold screen
+            closeDebugView();  // ta ścieżka czyści scenę z pominięciem embedVdo()
             $('.debate-stage').hide();
             $('.debate-video-frame').empty();
             $('.debate-video').removeClass('debate-video--has-frame');
@@ -1750,6 +1924,7 @@
         waitingRoomOn = false;
         $('.debate-waitroom-btn').removeClass('active').text('Włącz poczekalnię');
         $('body').removeClass('is-debate-master is-publishing is-comaster-primary');
+        closeDebugView();  // jw. — kontener czyszczony bez pośrednictwa embedVdo()
         $('.debate-video-frame').empty();
         $('.debate-video').removeClass('debate-video--has-frame');
         debateIframe = null;
@@ -1904,7 +2079,10 @@
     function updateSelfPreview() {
         var $w = $('.debate-self-preview');
         if (!$w.length) return;
-        var state = !publishIframe ? 'none'
+        // W trybie debug publishIframe jest wypożyczony do pływającego okna — widget
+        // pokazywałby pustą ramkę z okiem, więc znika (selfPreviewUserHidden nietknięte,
+        // wraca po zamknięciu trybu).
+        var state = (!publishIframe || debugFrames) ? 'none'
             : amIOnSpeakerStage() ? 'onstage'
             : (selfPreviewUserHidden ? 'collapsed' : 'open');
         $w.attr('data-state', state);

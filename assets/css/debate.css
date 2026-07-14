@@ -487,6 +487,97 @@ body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
    even while the preview is visually hidden (never display:none — that throttles the send). */
 .vdo-director-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
 
+/* Przyciski widoku debugowego istnieją tylko w trybie verbose — klasę na body stawia
+   setter App.verbose (app.js), więc `App.verbose = true` z konsoli odsłania je od razu.
+   Wariant z overlaya wideo jest .dv-btn, który bazowo ma display:none. */
+.vdo-debug-btn { display: none; }
+body.is-verbose .vdo-debug-btn { display: inline-block; }
+body.is-verbose .vdo-debug-btn.dv-btn { display: flex; }
+.vdo-debug-btn.dv-btn.active { background: rgba(255, 255, 255, 0.22); opacity: 1; }
+
+/* ── Widok debugowy: pływające okna z żywymi iframe'ami VDO.Ninja.
+   Okna trzymają TE SAME elementy iframe (przeniesione, nie kopie — patrz openDebugView),
+   więc reguła parkująca .vdo-director-iframe poza ekranem musi tu przegrać: selektor
+   potomny .vdo-debug-win iframe ma wyższą specyficzność i wraca do normalnego layoutu.
+   Pozycję i rozmiar okna trzyma style inline (drag + uchwyt skalowania). ── */
+.vdo-debug-win {
+  position: fixed;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1b1b1b;
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.55);
+}
+.vdo-debug-title {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #333;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;  /* inaczej przeglądarka zjada pointermove na rzecz scrolla */
+}
+.vdo-debug-title:active { cursor: grabbing; }
+.vdo-debug-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vdo-debug-min {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.vdo-debug-min:hover { background: rgba(255, 255, 255, 0.32); }
+.vdo-debug-body { flex: 1 1 auto; position: relative; background: #000; }
+.vdo-debug-win iframe {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+/* Uchwyt skalowania: własny element, nie CSS `resize` — iframe przykrywa róg okna i
+   połknąłby natywny uchwyt. Leży nad iframe'em, gest obsługuje ten sam setPointerCapture. */
+.vdo-debug-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  z-index: 1;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.5) 50%);
+}
+/* Zwinięte okno: zostaje sam pasek, a treść jedzie poza ekran w pełnym rozmiarze —
+   nigdy display:none, bo iframe publish przestałby nadawać (ta sama zasada, co przy
+   .debate-self-preview-frame). Wyjście z flow zbija wysokość okna do samego paska. */
+.vdo-debug-win.is-min .vdo-debug-body {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  width: 360px;
+  height: 200px;
+}
+.vdo-debug-win.is-min .vdo-debug-grip { display: none; }
+/* Podczas dragu kursor nie może wpaść do iframe'a (połknąłby pointermove mimo capture) */
+body.vdo-debug-dragging .vdo-debug-win iframe { pointer-events: none; }
+
 /* Prep time: label the clock so it's obviously not a protected speech timer */
 body.is-prep-time .timer { position: relative; }
 body.is-prep-time .timer::before {

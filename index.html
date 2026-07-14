@@ -323,6 +323,9 @@
                       <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
                     </div>
                   </div>
+                  <!-- Przełącznik widoku debugowego iframe'ów VDO.Ninja (openDebugView w online.js).
+                       Wszystkie .vdo-debug-btn są ukryte, dopóki App.verbose = true (body.is-verbose). -->
+                  <button type="button" class="btn btn-outline-secondary vdo-debug-btn">Debug VDO</button>
                   <button type="button" class="btn btn-secondary debate-create-btn" disabled>Utwórz debatę</button>
                 </div>
                 <div class="debate-links mt-2" style="display:none">
@@ -383,6 +386,9 @@
             <div class="d-flex flex-wrap align-items-center" style="gap:0.5rem">
               <button type="button" class="btn btn-outline-secondary btn-sm debate-preview-btn">Włącz podgląd</button>
               <button type="button" class="btn btn-secondary debate-join-btn">Dołącz</button>
+              <!-- Ten sam przełącznik debugowy co w zakładce Udostępnianie — sesja slave
+                   nie widzi tamtego (body.is-slave chowa .master-sharing) -->
+              <button type="button" class="btn btn-outline-secondary btn-sm vdo-debug-btn">Debug VDO</button>
             </div>
             <small class="debate-join-error text-danger d-block mt-1"></small>
           </div>
@@ -486,6 +492,10 @@
                   <button type="button" class="btn dv-btn debate-leave-btn" title="Opuść pokój">
                     <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                   </button>
+
+                  <!-- Przełącznik debugowy dostępny w trakcie debaty — jedyne miejsce, które widzi
+                       i mistrz, i uczestnik (temu zakładkę Udostępnianie blokuje is-debate) -->
+                  <button type="button" class="btn dv-btn dv-text-btn vdo-debug-btn" title="Widok debugowy iframe'ów VDO.Ninja">DBG</button>
 
                   <button type="button" class="btn dv-btn debate-settings-btn" title="Ustawienia" data-toggle="modal" data-target="#debate-settings-modal">
                     <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
