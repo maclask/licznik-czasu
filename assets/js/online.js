@@ -449,9 +449,13 @@
         var room = encodeURIComponent(vdoRoom());
         // &cover makes the self-view tile fill the corner preview (display-only, same
         // as the join screen's &cover — it does not touch the stream we publish).
+        // &pushloudness bakes the loudness subscription into the URL itself (rather than
+        // a one-off postMessage after load) so it survives any iframe reload — notably
+        // the debug view (Ctrl+Alt+D), which strips/restores &cleanoutput&hidemenu and
+        // reloads this iframe both ways. See handleSelfLoudness.
         return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
             '&push=' + encodeURIComponent(pushIdFor(pushId)) +
-            '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover';
+            '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover&pushloudness';
     }
 
     // A second, invisible iframe that holds director permissions purely so we can send
@@ -506,7 +510,6 @@
             $('body').append($bf);
             breakoutDirectorIframes[zone] = $bf.get(0);
         });
-        updateSelfSpeechDetection();
     }
     function removeDirector() {
         // director + jego breakouty powstają razem, więc jeden warunek starczy za oba
@@ -515,7 +518,7 @@
         $.each(breakoutDirectorIframes, function(zone, iframe) { $(iframe).remove(); });
         breakoutDirectorIframes = {};
         resetPrewarmState();
-        updateSelfSpeechDetection();
+        resetSelfSpeech();
     }
 
     // Local self-view for the join screen — lets the user test camera/mic before
@@ -532,7 +535,7 @@
         var allow = 'camera *; microphone *; autoplay; fullscreen; picture-in-picture';
         $('.debate-join-preview').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' +
-            VDO_BASE + '?webcam&autostart&cleanoutput&transparent&cover"></iframe>'
+            VDO_BASE + '?webcam&autostart&cleanoutput&transparent&cover&pushloudness"></iframe>'
         );
         previewIframe = $('.debate-join-preview iframe').get(0);
         if (previewIframe) {
@@ -540,7 +543,6 @@
                 pollDeviceList('preview', function() { return previewIframe; });
             };
         }
-        startMicMeter();
     }
     function clearPreview() {
         if (previewIframe) closeDebugView();
@@ -549,7 +551,19 @@
         previewIframe = null;
         $('.debate-join-cam-select').hide().empty();
         $('.debate-join-mic-select').hide().empty();
-        stopMicMeter();
+        $('.mic-level-meter').hide();
+        $('.mic-level-fill').css('width', '0%');
+    }
+    // Preview isn't in a room (no &push), so its loudness object has exactly one
+    // key — a randomly generated streamID — unlike publish's roster-keyed one.
+    function handlePreviewLoudness(loud) {
+        var keys = loud && Object.keys(loud);
+        if (!keys || !keys.length) return; // empty snapshot — see handleSelfLoudness's mode note
+        var level = loud[keys[0]];
+        // VDO's loudness scale: &noisegate docs put ~100 at "loudly speaking" and
+        // under 5 at "quiet background" — maps directly onto a 0–100% bar width.
+        $('.mic-level-meter').show();
+        $('.mic-level-fill').css('width', Math.max(0, Math.min(100, Math.round(level))) + '%');
     }
 
     // A getDeviceList answered before the user clicks "Allow" returns placeholder
@@ -577,117 +591,40 @@
         return split.cams.concat(split.mics).some(function(d) { return !!d.label; });
     }
 
-    // Mic level meter — grabbed independently of the VDO iframe (which owns the camera
-    // preview) since a cross-origin iframe won't hand us its audio stream to analyse.
-    var micMeterStream = null, micMeterCtx = null, micMeterRaf = null, micMeterTimeoutId = null;
-    function startMicMeter() {
-        console.log('[Debata] startMicMeter() called');
-        stopMicMeter();
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            console.log('[Debata] no navigator.mediaDevices.getUserMedia available');
-            $('.debate-join-error').text('Mikrofon: przeglądarka nie udostępnia getUserMedia (kontekst niezabezpieczony?)').show();
-            return;
-        }
-        console.log('[Debata] calling getUserMedia({audio:true})…');
-        micMeterTimeoutId = setTimeout(function() {
-            micMeterTimeoutId = null;
-            console.warn('[Debata] getUserMedia(audio) did not respond within 6s');
-            $('.debate-join-error').text('Mikrofon: przeglądarka nie odpowiada na prośbę o dostęp (sprawdź rozszerzenia blokujące lub ustawienia prywatności systemu)').show();
-        }, 6000);
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-            if (micMeterTimeoutId) { clearTimeout(micMeterTimeoutId); micMeterTimeoutId = null; }
-            console.log('[Debata] mic stream granted', stream);
-            micMeterStream = stream;
-            micMeterCtx = new (window.AudioContext || window.webkitAudioContext)();
-            var source = micMeterCtx.createMediaStreamSource(stream);
-            var analyser = micMeterCtx.createAnalyser();
-            analyser.fftSize = 256;
-            source.connect(analyser);
-            var data = new Uint8Array(analyser.frequencyBinCount);
-            $('.mic-level-meter').show();
-            (function tick() {
-                analyser.getByteTimeDomainData(data);
-                var sum = 0;
-                for (var i = 0; i < data.length; i++) {
-                    var v = (data[i] - 128) / 128;
-                    sum += v * v;
-                }
-                var rms = Math.sqrt(sum / data.length);
-                $('.mic-level-fill').css('width', Math.min(100, Math.round(rms * 250)) + '%');
-                micMeterRaf = requestAnimationFrame(tick);
-            })();
-        }).catch(function(err) {
-            if (micMeterTimeoutId) { clearTimeout(micMeterTimeoutId); micMeterTimeoutId = null; }
-            console.error('[Debata] Mic meter error:', err);
-            $('.debate-join-error').text('Mikrofon: ' + err.name + (err.message ? ' — ' + err.message : '')).show();
-        });
-    }
-    function stopMicMeter() {
-        if (micMeterTimeoutId) { clearTimeout(micMeterTimeoutId); micMeterTimeoutId = null; }
-        if (micMeterRaf) { cancelAnimationFrame(micMeterRaf); micMeterRaf = null; }
-        if (micMeterCtx) { try { micMeterCtx.close(); } catch (e) {} micMeterCtx = null; }
-        if (micMeterStream) { micMeterStream.getTracks().forEach(function(t) { t.stop(); }); micMeterStream = null; }
-        $('.mic-level-meter').hide();
-        $('.mic-level-fill').css('width', '0%');
-    }
+    // Mic level meter (join screen) — fed by the preview iframe's own outbound audio
+    // pipeline (&pushloudness) rather than a second getUserMedia() on the same physical
+    // mic: on some hardware (exclusive-mode drivers, DSP/array mics on Windows) opening
+    // a device VDO.Ninja already has open either fails or silently hands back a stream
+    // of pure silence — see handlePreviewLoudness / embedPreview.
 
     // Self-speech detection for the master's own voice. handleLoudness() only sees
     // audio VDO.Ninja actually RECEIVES on our iframe — and WebRTC never loops our own
     // outgoing mic back to us as a received track, so the master can never detect
     // themselves speaking that way (relevant whenever the master also takes a seat).
-    // This measures the local mic directly instead, same technique as startMicMeter().
-    var SELF_SPEECH_THRESH = 0.03;
+    // publishIframe's own outbound audio pipeline reports OUR loudness back to us
+    // (streamID-keyed, same &pushloudness mechanism as the mic meter above) — see
+    // handleSelfLoudness / embedPublish.
+    var SELF_SPEECH_THRESH = 5; // same units/scale as handleLoudness's THRESH below
     var SELF_SPEECH_HANGOVER_MS = 1000; // avoid flicker during natural pauses in speech
-    var selfSpeechStream = null, selfSpeechCtx = null, selfSpeechRaf = null, selfSpeechHangoverTimer = null;
+    var selfSpeechHangoverTimer = null;
     var amSelfSpeaking = false;
-    function startSelfSpeechDetection() {
-        if (selfSpeechStream || selfSpeechCtx) return; // already running
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-            selfSpeechStream = stream;
-            selfSpeechCtx = new (window.AudioContext || window.webkitAudioContext)();
-            var source = selfSpeechCtx.createMediaStreamSource(stream);
-            var analyser = selfSpeechCtx.createAnalyser();
-            analyser.fftSize = 256;
-            source.connect(analyser);
-            var data = new Uint8Array(analyser.frequencyBinCount);
-            (function tick() {
-                if (!selfSpeechCtx) return; // stopped mid-flight
-                analyser.getByteTimeDomainData(data);
-                var sum = 0;
-                for (var i = 0; i < data.length; i++) {
-                    var v = (data[i] - 128) / 128;
-                    sum += v * v;
-                }
-                var rms = Math.sqrt(sum / data.length);
-                if (rms > SELF_SPEECH_THRESH) {
-                    if (selfSpeechHangoverTimer) { clearTimeout(selfSpeechHangoverTimer); selfSpeechHangoverTimer = null; }
-                    if (!amSelfSpeaking) { amSelfSpeaking = true; reportSelfSpeaking(true); }
-                } else if (amSelfSpeaking && !selfSpeechHangoverTimer) {
-                    selfSpeechHangoverTimer = setTimeout(function() {
-                        selfSpeechHangoverTimer = null;
-                        amSelfSpeaking = false;
-                        reportSelfSpeaking(false);
-                    }, SELF_SPEECH_HANGOVER_MS);
-                }
-                selfSpeechRaf = requestAnimationFrame(tick);
-            })();
-        }).catch(function(err) {
-            console.error('[Debata] Self-speech meter error:', err);
-        });
+    function handleSelfLoudness(loud) {
+        if (!isDebateMaster || !loud) return; // guard mirrors old startSelfSpeechDetection() gating
+        var level = loud[pushIdFor(myPushId)];
+        if (level != null && level > SELF_SPEECH_THRESH) {
+            if (selfSpeechHangoverTimer) { clearTimeout(selfSpeechHangoverTimer); selfSpeechHangoverTimer = null; }
+            if (!amSelfSpeaking) { amSelfSpeaking = true; reportSelfSpeaking(true); }
+        } else if (amSelfSpeaking && !selfSpeechHangoverTimer) {
+            selfSpeechHangoverTimer = setTimeout(function() {
+                selfSpeechHangoverTimer = null;
+                amSelfSpeaking = false;
+                reportSelfSpeaking(false);
+            }, SELF_SPEECH_HANGOVER_MS);
+        }
     }
-    function stopSelfSpeechDetection() {
+    function resetSelfSpeech() {
         if (selfSpeechHangoverTimer) { clearTimeout(selfSpeechHangoverTimer); selfSpeechHangoverTimer = null; }
-        if (selfSpeechRaf) { cancelAnimationFrame(selfSpeechRaf); selfSpeechRaf = null; }
-        if (selfSpeechCtx) { try { selfSpeechCtx.close(); } catch (e) {} selfSpeechCtx = null; }
-        if (selfSpeechStream) { selfSpeechStream.getTracks().forEach(function(t) { t.stop(); }); selfSpeechStream = null; }
         if (amSelfSpeaking) { amSelfSpeaking = false; reportSelfSpeaking(false); }
-    }
-    // Only relevant while we're both master (own the directorIframe needed for addScene)
-    // and seated/publishing (there's an own voice to detect in the first place).
-    function updateSelfSpeechDetection() {
-        if (isDebateMaster && myEmbedMode === 'publish') startSelfSpeechDetection();
-        else stopSelfSpeechDetection();
     }
     function reportSelfSpeaking(speaking) {
         var me = myEntry();
@@ -800,6 +737,7 @@
         stopDeviceListPoll('publish');
         if (publishIframe) { $(publishIframe).remove(); publishIframe = null; }
         updateSelfPreview();
+        resetSelfSpeech();
     }
 
     function vdoFrameLabel(iframe) {
@@ -1763,7 +1701,6 @@
             if (mode === 'publish') embedPublish(myDebateName, myPushId); else removePublish();
             $('body').toggleClass('is-publishing', mode === 'publish');
             if (mode === 'publish') { setMicBtn(true); camOn = true; $('.debate-cam-btn').removeClass('is-off').attr('title', 'Wyłącz kamerę'); }
-            updateSelfSpeechDetection();
         }
         updateControlsVisibility();
     }
@@ -2056,12 +1993,14 @@
                 populateDevices(d.deviceList);
                 if (deviceListHasLabels(d.deviceList)) stopDeviceListPoll('publish');
             }
+            if (d.loudness !== undefined) handleSelfLoudness(d.loudness);
         } else if (previewIframe && e.source === previewIframe.contentWindow) {
             App.vlog('[VDO← preview]', d);
             if (d.deviceList) {
                 populateJoinDevices(d.deviceList);
                 if (deviceListHasLabels(d.deviceList)) stopDeviceListPoll('preview');
             }
+            if (d.loudness !== undefined) handlePreviewLoudness(d.loudness);
         } else if (directorIframe && e.source === directorIframe.contentWindow) {
             // The director iframe reports back its own actions — most importantly
             // {action:'add-to-scene'/'remove-from-scene'} after an addScene command
