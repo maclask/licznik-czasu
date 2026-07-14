@@ -418,9 +418,11 @@
     // comes back through the always-present buildViewUrl() iframe, same as everyone else.
     function buildPublishUrl(name, pushId) {
         var room = encodeURIComponent(vdoRoom());
+        // &cover makes the self-view tile fill the corner preview (display-only, same
+        // as the join screen's &cover — it does not touch the stream we publish).
         return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
             '&push=' + encodeURIComponent(pushIdFor(pushId)) +
-            '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu';
+            '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover';
     }
 
     // A second, invisible iframe that holds director permissions purely so we can send
@@ -674,6 +676,7 @@
         if (debateIframe) return;
         viewUrlPushId = myPushId;
         speakerViewSids = null; // świeży iframe = czysty grid, filtr narzucimy od zera
+        updateSelfPreview();    // świeży grid pokazuje też nas → podgląd chowamy do czasu applySpeakerView
         var allow = 'autoplay; fullscreen; picture-in-picture';
         $('.debate-video-frame').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl() + '"></iframe>'
@@ -703,15 +706,20 @@
         var allow = 'camera *; microphone *; display-capture *; autoplay; fullscreen; picture-in-picture';
         var $f = $('<iframe class="vdo-publish-iframe" allow="' + allow + '" src="' +
             buildPublishUrl(name, pushId) + '"></iframe>');
-        $('body').append($f);
+        // Into the self-preview widget, NOT body: this same iframe doubles as the corner
+        // self-view, and moving an iframe in the DOM later would reload it (restarting
+        // getUserMedia). The widget just keeps it off-screen when the preview is hidden.
+        $('.debate-self-preview-frame').append($f);
         publishIframe = $f.get(0);
         publishIframe.onload = function() {
             pollDeviceList('publish', function() { return publishIframe; });
         };
+        updateSelfPreview();
     }
     function removePublish() {
         stopDeviceListPoll('publish');
         if (publishIframe) { $(publishIframe).remove(); publishIframe = null; }
+        updateSelfPreview();
     }
 
     function vdoFrameLabel(iframe) {
@@ -1610,6 +1618,13 @@
         $(this).toggleClass('is-off', !camOn).attr('title', camOn ? 'Wyłącz kamerę' : 'Włącz kamerę');
     });
 
+    // Corner self-preview eye toggle — the ONLY thing that mutates selfPreviewUserHidden;
+    // updateSelfPreview() then recomputes visibility (and is a no-op while we're on stage).
+    $(document).on('click', '.debate-self-preview-eye', function() {
+        selfPreviewUserHidden = !selfPreviewUserHidden;
+        updateSelfPreview();
+    });
+
     // In-room device pickers are the dropdown menus attached to the mic/cam split
     // buttons (see fillDeviceMenu); the join-screen preview keeps its own <select>s.
     $(document).on('click', '.debate-cam-menu .dropdown-item', function() {
@@ -1871,6 +1886,31 @@
         // mówcy (np. wtrącenie w trakcie) dochodzą add-em.
         postToVdo({ target: sids[0], replace: true });
         for (var i = 1; i < sids.length; i++) postToVdo({ target: sids[i], add: true });
+        updateSelfPreview(); // zmienił się skład sceny → przelicz, czy jesteśmy na niej
+    }
+
+    // Corner self-view PiP. Source is the existing publishIframe (the hidden send
+    // iframe also renders our local camera self-view) — see embedPublish. The only
+    // persisted state is the user's eye toggle; on-stage auto-hide is derived fresh
+    // every call and never touches selfPreviewUserHidden, so leaving the stage restores
+    // exactly the state the user last chose (open, or collapsed-to-eye). Requirement 4.
+    var selfPreviewUserHidden = false;
+    function amIOnSpeakerStage() {
+        // speakerViewSids === null = a fresh scene iframe still shows the full grid
+        // (everyone, us included); with an active publish that counts as "on stage" too.
+        if (!speakerViewSids) return true;
+        return speakerViewSids.indexOf(pushIdFor(myPushId)) !== -1;
+    }
+    function updateSelfPreview() {
+        var $w = $('.debate-self-preview');
+        if (!$w.length) return;
+        var state = !publishIframe ? 'none'
+            : amIOnSpeakerStage() ? 'onstage'
+            : (selfPreviewUserHidden ? 'collapsed' : 'open');
+        $w.attr('data-state', state);
+        $w.find('.debate-self-preview-eye')
+            .toggleClass('is-closed', selfPreviewUserHidden)
+            .attr('title', selfPreviewUserHidden ? 'Pokaż podgląd' : 'Ukryj podgląd');
     }
 
     // Selektywne "podgrzewanie" (addScene) strony przeciwnej do aktualnie mówiącej —
