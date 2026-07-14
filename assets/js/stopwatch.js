@@ -453,6 +453,43 @@
         }
     }
 
+    // --- Confetti ---
+
+    var confettiColors = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#9d4edd'];
+
+    function launchConfetti() {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        var container = document.createElement('div');
+        container.className = 'confetti-container';
+        document.body.appendChild(container);
+
+        var pieceCount = 150, maxDuration = 4500, maxDelay = 400;
+        for (var i = 0; i < pieceCount; i++) {
+            var piece = document.createElement('div');
+            piece.className = 'confetti-piece';
+            var size = 6 + Math.random() * 6;
+            piece.style.left = (Math.random() * 100) + 'vw';
+            piece.style.width = size + 'px';
+            piece.style.height = (size * 0.4) + 'px';
+            piece.style.background = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+
+            var drift = (Math.random() - 0.5) * 200;
+            var rotation = 360 + Math.random() * 720;
+            var duration = 2500 + Math.random() * 2000;
+            var delay = Math.random() * maxDelay;
+
+            piece.animate([
+                { transform: 'translate(0, -20px) rotate(0deg)' },
+                { transform: 'translate(' + drift + 'px, 105vh) rotate(' + rotation + 'deg)' }
+            ], { duration: duration, delay: delay, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)', fill: 'forwards' });
+
+            container.appendChild(piece);
+        }
+
+        setTimeout(function () { container.remove(); }, maxDuration + maxDelay);
+    }
+
     // --- Time input mask (MM:SS) ---
 
     function applyTimeMask(input) {
@@ -678,6 +715,19 @@
         }
     });
 
+    // Ctrl+K is handled separately (on keydown, so preventDefault reliably suppresses
+    // any browser default) instead of in the switch above — plain 'k' is already taken
+    // by the joker toggle.
+    $(window).on('keydown', function (e) {
+        if ($(e.target).is(':input')) return;
+        if (e.ctrlKey && (e.key === 'k' || e.key === 'K')) {
+            e.preventDefault();
+            if (e.repeat) return;
+            launchConfetti();
+            App.onConfetti();
+        }
+    });
+
     // --- State sync (seam for online.js) ---
 
     function getFullState() {
@@ -826,6 +876,7 @@
         reset: reset,
         startPrepTime: startPrepTime,
         isPrepActive: function () { return isPrepTime; },
-        getCurrentFormat: function () { return currentFormat; }
+        getCurrentFormat: function () { return currentFormat; },
+        launchConfetti: launchConfetti
     };
 })(jQuery, window.App);

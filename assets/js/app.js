@@ -9,6 +9,8 @@
 //   App.state          — the few state fields both layers read/write
 //   App.onStateChange   — hook the core calls after every mutation; online.js
 //                         overrides it to broadcast the delta to peers
+//   App.onConfetti      — hook the core calls on a local confetti burst; online.js
+//                         overrides it to relay the burst to peers
 //   App.core            — core functions online.js needs (filled in by stopwatch.js)
 (function () {
     window.App = window.App || {};
@@ -21,6 +23,12 @@
 
     // No-op until the online layer is loaded and connects.
     App.onStateChange = function (delta) {};
+
+    // Fired when this browser triggers the confetti burst locally (e.g. via its own
+    // keyboard shortcut) — a transient one-off event, not part of getFullState/applyState,
+    // so a late-joining peer never replays it. No-op until online.js overrides it to
+    // relay the burst to peers.
+    App.onConfetti = function () {};
 
     // Populated by stopwatch.js at the end of its IIFE.
     App.core = {};

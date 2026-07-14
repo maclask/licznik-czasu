@@ -501,3 +501,19 @@ body {
   flex: 1;
 }
 
+/* ── Confetti ─────────────────────────────────────────────── */
+.confetti-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  border-radius: 1px;
+  will-change: transform;
+}
+

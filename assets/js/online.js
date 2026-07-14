@@ -162,6 +162,17 @@
         }
     };
 
+    // Transient, not part of getFullState/applyState — relayed once, never replayed to
+    // a late joiner. Slaves forward to the master; the master (handleMasterConnection)
+    // fans it back out to everyone else.
+    App.onConfetti = function() {
+        if (App.state.isSlaveSession) {
+            if (masterConn) safeSend(masterConn, {type: 'confetti'});
+        } else if (sessionPeer) {
+            eachConn(function(c, peerId) { if (connAdmitted(peerId)) safeSend(c, {type: 'confetti'}); });
+        }
+    };
+
     // One shared validator for every room-name input (create session / join / create debate)
     function bindRoomNameInput($input, $btn) {
         $input.on('input', function() {
@@ -272,6 +283,9 @@
                 }
             } else if (data.type === 'breakout') {
                 if (sender) setBreakout(sender.clientId, data.on);
+            } else if (data.type === 'confetti') {
+                App.core.launchConfetti();
+                eachConn(function(c, peerId) { if (c !== conn && connAdmitted(peerId)) safeSend(c, {type: 'confetti'}); });
             }
         });
         conn.on('close', function() {
@@ -2514,6 +2528,7 @@
             updatePrewarm();
             applySpeakerView();
         }
+        else if (data.type === 'confetti') App.core.launchConfetti();
     }
 
     // Auto-join if URL contains ?s=sessionName (plain viewer or debate participant)
