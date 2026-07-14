@@ -379,7 +379,20 @@
     function nextCib() { return 'c' + (++cibCounter) + '_' + Date.now(); }
 
     function breakoutRoomId(zone) {
-        return vdoRoom() + '-bo-' + zone;
+        return vdoRoom() + 'bo' + zone;
+    }
+    // Which breakout room (if any) MY OWN view stage should be showing right now —
+    // null once forward() has moved us back out (see doForward/setBreakout).
+    function myBreakoutZone() {
+        var me = myEntry();
+        return (me && me.breakout) ? me.zone : null;
+    }
+    // Who's actually inside a given zone's breakout room right now — the &view list
+    // for buildViewUrl's breakout link, since there's no director there to curate a
+    // scene (see doForward/breakoutDirectorIframes: they only ever send &forward).
+    function breakoutOccupantSids(zone) {
+        return debateRoster.filter(function(e) { return e.zone === zone && e.breakout; })
+            .map(function(e) { return pushIdFor(e.pushId); });
     }
 
     // &scene and &push are mutually exclusive on a single VDO.Ninja link — per
@@ -395,15 +408,31 @@
     // scene through this link. &videodevice=0&audiodevice=0 stops VDO.Ninja from touching
     // local camera/mic on THIS iframe at all — that only ever happens on the publish
     // iframe below, so viewers on hardware without either can still join and watch.
-    function buildViewUrl() {
-        var room = encodeURIComponent(vdoRoom());
+    function buildViewUrl(breakoutZone) {
+        var room = encodeURIComponent(breakoutZone ? breakoutRoomId(breakoutZone) : vdoRoom());
         // This viewer has no idea the publish iframe's stream is "us", so once we're
-        // addScene'd it would play our own mic back with full WebRTC latency (delayed
-        // self-echo). &excludeaudio drops just that stream's audio while keeping its
-        // video on stage. (docs.vdo.ninja/advanced-settings/audio-parameters/noaudio.md
-        // misspells it "exludeaudio" — the correct spelling is what works.)
+        // addScene'd (or, in a breakout room, listed in &view below) it would play our
+        // own mic back with full WebRTC latency (delayed self-echo). &excludeaudio
+        // drops just that stream's audio while keeping its video on stage.
+        // (docs.vdo.ninja/advanced-settings/audio-parameters/noaudio.md misspells it
+        // "exludeaudio" — the correct spelling is what works.)
         // Harmless for audience: the id simply never publishes.
         var selfMute = myPushId ? '&excludeaudio=' + encodeURIComponent(pushIdFor(myPushId)) : '';
+        if (breakoutZone) {
+            // A bare &room=X guest link isn't actually viewer-only — VDO.Ninja treats it
+            // as someone who MIGHT publish and gates it behind its own "Join Room" click
+            // (autoplay-policy workaround), which is exactly the blank stage this was
+            // built to avoid. There's also no director in a breakout room to curate a
+            // &scene (breakoutDirectorIframes only ever send &forward — see doForward),
+            // so instead we name the exact streams to show via &view (comma-separated
+            // per docs.vdo.ninja/advanced-settings/mixer-scene-parameters/view.md) and add
+            // &solo, which — like &scene — marks the link as viewer-only and skips the
+            // join gate (docs .../and-solo.md: "&solo and &scene ... tells the system not
+            // to be a publisher, but a viewer").
+            var sids = breakoutOccupantSids(breakoutZone);
+            return VDO_BASE + '?room=' + room + '&solo&view=' + encodeURIComponent(sids.join(',')) +
+                VDO_CLEAN + '&animated=0&videodevice=0&audiodevice=0' + selfMute;
+        }
         // Celowo BEZ &activespeaker: jego detekcja jest lokalna per viewer i oparta na
         // odbieranym audio, więc przez powyższy &excludeaudio mówca nigdy nie widział
         // własnego kafelka. Kto jest widoczny, narzuca aplikacja — patrz applySpeakerView().
@@ -456,7 +485,10 @@
         oo: ['og', 'cg'], co: ['og', 'cg']
     };
     function zonePushIds(zone) {
-        return debateRoster.filter(function(e) { return e.zone === zone; }).map(function(e) { return e.pushId; });
+        // Excludes anyone currently in a breakout room: their stream isn't in the main
+        // room at all (forwarded away — see doForward), so targeting them with addScene
+        // has no control-box to act on and would just misfire once they're back.
+        return debateRoster.filter(function(e) { return e.zone === zone && !e.breakout; }).map(function(e) { return e.pushId; });
     }
 
     function embedDirector() {
@@ -464,13 +496,13 @@
         closeDebugView();
         var room = encodeURIComponent(vdoRoom());
         var $f = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
-            VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
+            VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&novideo&noaudio&cleanoutput&hidemenu"></iframe>');
         $('body').append($f);
         directorIframe = $f.get(0);
         $.each(relevantZones().filter(zoneHasBreakout), function(i, zone) {
             var broom = encodeURIComponent(breakoutRoomId(zone));
             var $bf = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' +
-                VDO_BASE + '?director=' + broom + VDO_DIRECTOR_BITRATE + '&cleanoutput&hidemenu"></iframe>');
+                VDO_BASE + '?director=' + broom + VDO_DIRECTOR_BITRATE + '&novideo&noaudio&cleanoutput&hidemenu"></iframe>');
             $('body').append($bf);
             breakoutDirectorIframes[zone] = $bf.get(0);
         });
@@ -668,27 +700,37 @@
     }
 
     // The visible stage — a plain scene viewer, never swapped on publish/view role
-    // changes (see buildViewUrl for why it can't also publish). Rebuilt only when
-    // myPushId changes: a master handoff mints a new peer id, and the &exludeaudio
-    // baked into the old URL would keep pointing at the previous stream, bringing
-    // the self-echo back for the ex-master once they take a seat again.
-    var viewUrlPushId = null;  // myPushId baked into the current iframe's URL
+    // changes (see buildViewUrl for why it can't also publish). Rebuilt when myPushId
+    // changes (a master handoff mints a new peer id, and the &excludeaudio baked into
+    // the old URL would keep pointing at the previous stream, bringing the self-echo
+    // back for the ex-master once they take a seat again) or when we enter/leave a
+    // breakout room — doForward() moves our OWN publish stream to/from that room, but
+    // this viewer iframe is a separate connection that has to be re-pointed at it too,
+    // otherwise nobody sees any video once inside ("pokój narad" stays blank). A
+    // teammate joining/leaving that SAME breakout room does NOT rebuild — see
+    // syncBreakoutView, which adds/removes just that one stream live instead.
+    var viewUrlPushId = null;      // myPushId baked into the current iframe's URL
+    var viewUrlBreakoutZone = null; // breakout zone (or null for the main room) baked in
+    var viewUrlBreakoutSids = '';   // breakout &view targets currently shown (joined string)
     function embedVdo() {
-        if (debateIframe && viewUrlPushId !== myPushId) {
+        var bzone = myBreakoutZone();
+        if (debateIframe && (viewUrlPushId !== myPushId || viewUrlBreakoutZone !== bzone)) {
             closeDebugView();  // scena może siedzieć w oknie debug — najpierw wróć nią na miejsce
             $('.debate-video-frame').empty();
             debateIframe = null;
         }
-        if (debateIframe) return;  // zwykły no-op przy renderze rosteru — trybu debug nie ruszamy
+        if (debateIframe) { syncBreakoutView(bzone); return; }  // zwykły no-op przy renderze rosteru — trybu debug nie ruszamy
         closeDebugView();
         viewUrlPushId = myPushId;
+        viewUrlBreakoutZone = bzone;
+        viewUrlBreakoutSids = bzone ? breakoutOccupantSids(bzone).join(',') : '';
         speakerViewSids = null; // świeży iframe = czysty grid, filtr narzucimy od zera
         updateSelfPreview();    // świeży grid pokazuje też nas → podgląd chowamy do czasu applySpeakerView
         var allow = 'autoplay; fullscreen; picture-in-picture';
         $('.debate-video-frame').html(
-            '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl() + '"></iframe>'
+            '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl(bzone) + '"></iframe>'
         );
-        $('.debate-video').addClass('debate-video--has-frame');
+        $('.debate-video').addClass('debate-video--has-frame').toggleClass('debate-video--breakout', !!bzone);
         debateIframe = $('.debate-video-frame iframe').get(0);
         if (debateIframe) {
             debateIframe.onload = function() {
@@ -701,6 +743,35 @@
                 applySpeakerView(true);
             };
         }
+    }
+
+    // Keeps an already-open breakout stage in sync as teammates join/leave, without
+    // reloading the iframe (see embedVdo). No director/&scene is running in a breakout
+    // room, so &view's static list can't be updated by re-declaring it — instead we ask
+    // the viewer to fetch the new stream (requestStream) and show it (target/add), or
+    // drop a departed one (target/remove). Both are documented IFRAME API viewer
+    // commands (docs.vdo.ninja/guides/iframe-api-documentation).
+    function syncBreakoutView(bzone) {
+        if (!bzone || !debateIframe) return;
+        var current = breakoutOccupantSids(bzone);
+        var joined = current.join(',');
+        if (joined === viewUrlBreakoutSids) return;
+        var prevSet = {};
+        (viewUrlBreakoutSids ? viewUrlBreakoutSids.split(',') : []).forEach(function(sid) {
+            if (sid) prevSet[sid] = true;
+        });
+        var curSet = {};
+        current.forEach(function(sid) {
+            curSet[sid] = true;
+            if (!prevSet[sid]) {
+                postToVdo({ requestStream: sid });
+                postToVdo({ target: sid, add: true });
+            }
+        });
+        Object.keys(prevSet).forEach(function(sid) {
+            if (!curSet[sid]) postToVdo({ target: sid, remove: true });
+        });
+        viewUrlBreakoutSids = joined;
     }
 
     // Hidden send-only iframe for when we've taken a debater/judge slot — see
@@ -1260,6 +1331,12 @@
         var dest = entry.breakout ? breakoutRoomId(entry.zone) : vdoRoom();
         var source = entry.breakout ? directorIframe : breakoutDirectorIframes[entry.zone];
         postToFrame(source, { action: 'forward', target: pushIdFor(entry.pushId), value: dest });
+        // Room membership just changed — re-evaluate scene-2 warm targets right away
+        // instead of waiting for the next incidental loudness tick: entering breakout
+        // must drop this sid immediately (see zonePushIds), and returning must pick it
+        // back up immediately if their zone is already speaking (a teammate carried on
+        // without them), rather than sitting un-warmed until someone's volume changes.
+        updatePrewarm();
     }
     function resetBreakout(entry) {
         if (entry && entry.breakout) { entry.breakout = false; doForward(entry); }
@@ -2043,7 +2120,9 @@
     var speakerViewSids = null; // ostatnio narzucona lista widocznych sid (null = jeszcze nic)
 
     function applySpeakerView(reapply) {
-        if (!debateIframe) return;
+        // A breakout room's stage has no curated scene to filter (see buildViewUrl) —
+        // everyone forwarded into it is just shown, full stop.
+        if (!debateIframe || viewUrlBreakoutZone) return;
         var sids = [];
         debateRoster.forEach(function(e) {
             if (e.speaking && e.zone) sids.push(pushIdFor(e.pushId));
@@ -2141,9 +2220,13 @@
             delete warmConfirmed[sid];
             delete warmPending[sid];
             syncPrewarm();
-        } else if (d.action === 'control-box' || (d.action === 'push-connection' && d.value)) {
+        } else if (d.action === 'control-box' || d.action === 'guest-connected' || (d.action === 'push-connection' && d.value)) {
             // Nowy gość właśnie dostał panel u reżysera — dopiero teraz addScene może
-            // zadziałać; ponów zaległe dodania.
+            // zadziałać; ponów zaległe dodania. guest-connected to jedyne z tych trzech
+            // udokumentowane wprost (docs.vdo.ninja/guides/iframe-api-documentation/
+            // detecting-user-joins-disconnects) jako odpalane przy KAŻDYM połączeniu
+            // gościa — dorzucone na wypadek, gdyby control-box/push-connection(true)
+            // nie odpaliły ponownie przy powrocie z pokoju narad.
             delete warmPending[d.streamID];
             syncPrewarm();
         } else if (d.action === 'push-connection' && !d.value && sid) {

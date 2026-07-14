@@ -90,6 +90,24 @@ body.is-slave .slave-sharing { display: block; }
   overflow: hidden;
 }
 
+/* Breakout: my own stage temporarily shows that team's/judges' room instead of
+   the main scene (see embedVdo/buildViewUrl in online.js) — label it the same
+   way is-prep-time labels the clock, so it reads as "different room", not a
+   frozen/broken video. */
+.debate-video--breakout::before {
+  content: 'Pokój narad';
+  position: absolute;
+  top: -1.4rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6c757d;
+}
+.debate-video--breakout .debate-video-frame { border-color: #6c757d; }
+
 .debate-video-frame .vdo-iframe {
   width: 100%;
   height: 100%;
