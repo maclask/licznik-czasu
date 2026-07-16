@@ -6,18 +6,27 @@
 .session-lost-alert { display: none; }
 .session-links { display: none; }
 
-body.is-slave #settings-link {
+/* A debate slave (joined a room straight from a shared link) has no use for
+   plain settings — the debate stage has its own gear icon / modal instead. A
+   plain-session slave still needs Ustawienia to reach its connected-viewer
+   status block below, so this only locks out the debate case. */
+body.is-debate #settings-link {
   opacity: 0.35;
   pointer-events: none;
   filter: grayscale(1);
 }
-body.is-slave #sharing .panel-header { text-align: center; }
 
-/* Sharing panel: master vs slave content */
-.master-sharing { display: block; }
-.slave-sharing { display: none; }
-body.is-slave .master-sharing { display: none; }
-body.is-slave .slave-sharing { display: block; }
+/* Plain-session slave: the settings themselves are the master's to control,
+   so grey the whole panel out except the connected-viewer status block,
+   which lives outside .settings-rows and stays fully interactive. */
+body.is-slave .settings-rows {
+  opacity: 0.4;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+body.is-slave .s-slave-status {
+  display: block;
+}
 
 /* Sharing columns */
 .sharing-col-title {
@@ -26,7 +35,6 @@ body.is-slave .slave-sharing { display: block; }
   color: #000;
   margin-bottom: 0.75rem;
 }
-.sharing-col-join { border-left: 1px solid rgba(0, 0, 0, 0.07); padding-left: 3rem; }
 .session-join-error { display: none; }
 
 /* ── Online debate  ──────────────────────────────────────── */
@@ -698,13 +706,6 @@ body.glassmorphic .debate-chat-box .debate-chat-send { border-left: 1px solid rg
 .debate-chat--judges .debate-chat-log { background: #f2eaff; }
 .debate-chat--audience .debate-chat-log { background: #eafaf0; }
 
-/* Debate participants only ever need the debate view */
-body.is-debate #sharing-link-item {
-  opacity: 0.35;
-  pointer-events: none;
-  filter: grayscale(1);
-}
-
 /* ── Mobile (≤768 px) ───────────────────────────────────── */
 @media (max-width: 768px) {
   .container {
@@ -753,23 +754,13 @@ body.is-debate #sharing-link-item {
   }
 
   #settings,
-  #help,
-  #sharing {
+  #help {
     padding: 0;
     align-items: stretch;
   }
 
-  .sharing-col { padding: 0; }
-  .sharing-col-join { border-left: none; border-top: 1px solid rgba(0,0,0,0.07); padding-top: 1rem; margin-top: 1rem; }
-
   .debate-lobby-grid { grid-template-columns: 1fr; gap: 0; }
   .debate-lobby-join { border-left: none; border-top: 1px solid rgba(0,0,0,0.07); padding-left: 0; padding-top: 1rem; margin-top: 1rem; }
-
-  /* Neutralise Bootstrap row's negative margins so panel-body padding shows */
-  #sharing .row {
-    margin-left: 0;
-    margin-right: 0;
-  }
 
   /* Nav icons: tighten horizontal padding so all 5 fit on narrow screens */
   .navbar-nav .nav-link {
@@ -777,19 +768,22 @@ body.is-debate #sharing-link-item {
     padding-right: 0.35rem;
   }
 
-  /* Sharing form controls: bump up from 0.875rem btn-sm/input-group-sm default */
-  #sharing .form-control,
-  #sharing .btn {
+  /* Share/join form controls: bump up from 0.875rem btn-sm/input-group-sm default */
+  .s-share-col .form-control,
+  .s-share-col .btn,
+  .s-join-col .form-control,
+  .s-join-col .btn {
     font-size: 1rem;
     height: auto;
   }
 
-  #sharing .input-group {
+  .s-share-col .input-group,
+  .s-join-col .input-group {
     width: 100% !important;
   }
 
-  #sharing .session-name-input,
-  #sharing .session-join-input {
+  .session-name-input,
+  .session-join-input {
     width: auto !important;
     max-width: none !important;
     flex: 1;

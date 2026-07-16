@@ -94,8 +94,7 @@ body {
 
 /* ── Settings & Help layout ──────────────────────────────── */
 #settings,
-#help,
-#sharing {
+#help {
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -160,6 +159,12 @@ body {
   flex-wrap: wrap;
 }
 
+.icon-btn-svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: block;
+}
+
 .s-setting-line {
   display: flex;
   align-items: center;
@@ -170,19 +175,59 @@ body {
   margin-bottom: 0;
 }
 
-.s-check-col {
+/* .no-gutters > [class*="col-"] resets left/right padding to 0 with a
+   higher-specificity selector, so these need a class+class selector
+   (matched on the same element) to actually win. */
+.s-row.no-gutters > .s-check-col {
   display: flex;
   flex-direction: column;
   justify-content: space-around;
   padding-left: 1.5rem;
+  padding-right: 1rem;
 }
 
 @media (max-width: 767px) {
-  .s-check-col {
+  .s-row.no-gutters > .s-check-col {
     padding-left: 0;
+    padding-right: 0;
     margin-top: 0.75rem;
     gap: 0.75rem;
   }
+}
+
+/* Share / join columns, next to the checkboxes */
+.s-row.no-gutters > .s-share-col,
+.s-row.no-gutters > .s-join-col {
+  padding-left: 1rem;
+  padding-right: 1rem;
+  border-left: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+@media (max-width: 767px) {
+  .s-row.no-gutters > .s-share-col,
+  .s-row.no-gutters > .s-join-col {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 1rem;
+    border-left: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+  }
+}
+
+/* Generated link is just for copying, not reading — clip it instead of
+   letting its length force the input (and the row) wider. Needs to beat
+   .input-group > .form-control's own width/flex-grow (same specificity,
+   so matched the same way here to win on cascade order). */
+.input-group > .session-link-val,
+.input-group > .slave-session-link-val {
+  width: 112px;
+  flex: 0 1 auto;
+  text-overflow: ellipsis;
+}
+
+/* Connected-viewer status (slave): shown instead of the settings above */
+.s-slave-status {
+  display: none;
 }
 
 .input-motion {
@@ -363,10 +408,6 @@ body {
 
 .icon {
   opacity: 0.75;
-}
-
-#sharing-link svg {
-  display: block;
 }
 
 .tooltip {

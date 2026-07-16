@@ -420,9 +420,9 @@
     // --- Navigation ---
 
     function navigate(section) {
-        $('#timer, #settings, #help, #sharing, #debate').hide();
+        $('#timer, #settings, #help, #debate').hide();
         $('#' + section).show();
-        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '', sharing: 'Udostępnianie', debate: 'Debata online' };
+        var titles = { settings: 'Ustawienia', help: 'Pomoc', timer: '', debate: 'Debata online' };
         $('#section-title').text(titles[section] || '');
     }
 
@@ -523,7 +523,6 @@
     $('.bp-only').hide();
     $('#settings').hide();
     $('#help').hide();
-    $('#sharing').hide();
     $('#debate').hide();
     // Drop focus from a just-clicked button so Space toggles the timer, not the button —
     // but only on mouse click, so keyboard Tab navigation still works.
@@ -700,7 +699,6 @@
     $('#timer-link').click(function () { navigate('timer'); });
     $('#settings-link').click(function () { navigate('settings'); });
     $('#help-link').click(function () { navigate('help'); });
-    $('#sharing-link').click(function () { navigate('sharing'); });
     $('#debate-link').click(function () { navigate('debate'); });
 
     $(window).keyup(function (e) {

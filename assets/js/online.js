@@ -220,6 +220,7 @@
         createHub(name, $btn, function(id) {
             var link = window.location.origin + window.location.pathname + '?s=' + id;
             $('.session-link-val').val(link);
+            $('.s-join-default').hide();
             $('.session-links').show();
             $('#session-qr').empty();
             new QRCode(document.getElementById('session-qr'), {text: link, width: 128, height: 128});
