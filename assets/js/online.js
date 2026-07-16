@@ -507,10 +507,12 @@
             VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&novideo&noaudio&cleanoutput&hidemenu"></iframe>');
         $('body').append($f);
         directorIframe = $f.get(0);
+        watchdogTimer = setInterval(watchdogTick, 2000);
     }
     function removeDirector() {
         if (directorIframe) closeDebugView();
         if (directorIframe) { $(directorIframe).remove(); directorIframe = null; }
+        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
         resetPrewarmState();
         resetSelfSpeech();
     }
@@ -1127,6 +1129,15 @@
         } else if (data.action === 'kick') {
             window.alert('Prowadzący usunął Cię z pokoju debaty');
             window.location.replace(window.location.origin + window.location.pathname);
+        } else if (data.action === 'republish') {
+            // Master's watchdog: our publish iframe never reached the director (blocked
+            // ICE/TURN) — a fresh connection is the same fix a manual re-join gives.
+            // Only meaningful while actually publishing outside a breakout room (in a
+            // breakout there's no director/addScene at all — see zonePushIds).
+            if (myEmbedMode === 'publish' && !myBreakoutZone()) {
+                removePublish();
+                embedPublish(myDebateName, myPushId, myBreakoutZone());
+            }
         }
     }
 
@@ -2189,9 +2200,54 @@
     var warmPending = {};   // sid -> timestamp ostatniego toggle (tłumi dublowanie w locie)
     var lastSpeakingZones = null; // ostatni niepusty speakingZones — patrz updatePrewarm
 
+    // Watchdog na "gość niewidoczny dla reżysera" (docs.vdo.ninja/common-errors-and-known-issues/
+    // appearing-then-disappearing-guest): handshake gościa z reżyserem czasem nie domyka się
+    // (blokada UDP/TURN) i addScene nigdy nie ma na czym zadziałać — stan wisi w nieskończoność,
+    // aż ktoś ręcznie dołączy od nowa. Ten mechanizm automatyzuje dokładnie ten ręczny fix:
+    // gdy sid siedzi w warmDesired dłużej niż WATCHDOG_MS bez potwierdzenia, każemy jego
+    // właścicielowi przebudować publish iframe (świeże połączenie WebRTC z reżyserem).
+    var warmUnconfirmedSince = {}; // sid -> ts, odkąd jest chciany-a-niepotwierdzony
+    var lastRepublishReq = {};     // sid -> ts ostatniego żądania republish (cooldown)
+    var republishAttempts = {};    // sid -> licznik prób w bieżącym incydencie
+    var WATCHDOG_MS = 6000;            // grace ≥ czas na normalny ICE + retry przez syncPrewarm
+    var REPUBLISH_COOLDOWN_MS = 15000; // nie zapętlać przeładowań przy trwale zablokowanej sieci
+    var MAX_REPUBLISH = 3;             // limit prób na incydent
+    var watchdogTimer = null;          // setInterval, żyje dopóki istnieje directorIframe
+
     function resetPrewarmState() {
         warmDesired = {}; warmConfirmed = {}; warmPending = {}; lastSpeakingZones = null;
         sceneLoudSpeaking = {}; selfReportedSpeaking = {};
+        warmUnconfirmedSince = {}; lastRepublishReq = {}; republishAttempts = {};
+    }
+
+    // Dla `sid` z warmDesired, który za długo nie doczekał się potwierdzenia od reżysera —
+    // każ jego właścicielowi przebudować publish iframe. Cooldown + MAX_REPUBLISH chronią
+    // przed pętlą przeładowań, gdy sieć (TURN) jest trwale niedostępna.
+    function watchdogTick() {
+        if (!directorIframe) return;
+        var now = Date.now();
+        Object.keys(warmUnconfirmedSince).forEach(function(sid) {
+            if (now - warmUnconfirmedSince[sid] < WATCHDOG_MS) return;
+            if (lastRepublishReq[sid] && now - lastRepublishReq[sid] < REPUBLISH_COOLDOWN_MS) return;
+            var attempts = republishAttempts[sid] || 0;
+            if (attempts >= MAX_REPUBLISH) return;
+            var e = debateRoster.filter(function(entry) { return pushIdFor(entry.pushId) === sid; })[0];
+            if (!e) return;
+            lastRepublishReq[sid] = now;
+            republishAttempts[sid] = attempts + 1;
+            App.vlog('[watchdog] republish', sid);
+            if (e.clientId === myClientId) {
+                // Własny sid mastera: nie ma połączenia PeerJS do samego siebie, więc
+                // przebudowa leci lokalnie, tak samo jak dla zwykłego uczestnika.
+                removePublish();
+                embedPublish(myDebateName, myPushId, myBreakoutZone());
+            } else {
+                sendToPeer(e.peerId, { type: 'cmd', action: 'republish' });
+            }
+            if (republishAttempts[sid] >= MAX_REPUBLISH) {
+                App.core.showWarn('Uczestnik ' + (e.name || '') + ' nie łączy się z reżyserem — możliwa blokada sieci/TURN');
+            }
+        });
     }
 
     function sendSceneToggle(sid) {
@@ -2204,10 +2260,17 @@
     function syncPrewarm() {
         if (!directorIframe) return; // tylko master ma uprawnienia reżysera
         Object.keys(warmDesired).forEach(function(sid) {
-            if (!warmConfirmed[sid]) sendSceneToggle(sid);
+            if (!warmConfirmed[sid]) {
+                if (!warmUnconfirmedSince[sid]) warmUnconfirmedSince[sid] = Date.now();
+                sendSceneToggle(sid);
+            }
         });
         Object.keys(warmConfirmed).forEach(function(sid) {
             if (!warmDesired[sid]) sendSceneToggle(sid);
+        });
+        // Przestał być chciany, zanim zdążył się potwierdzić — watchdog ma go przestać liczyć.
+        Object.keys(warmUnconfirmedSince).forEach(function(sid) {
+            if (!warmDesired[sid]) delete warmUnconfirmedSince[sid];
         });
     }
 
@@ -2218,6 +2281,9 @@
         if (d.action === 'add-to-scene' && String(d.value) === '2' && sid) {
             warmConfirmed[sid] = true;
             delete warmPending[sid];
+            delete warmUnconfirmedSince[sid];
+            delete lastRepublishReq[sid];
+            delete republishAttempts[sid];
             syncPrewarm(); // jeśli w międzyczasie przestał być chciany — od razu zdejmij
         } else if (d.action === 'remove-from-scene' && String(d.value) === '2' && sid) {
             delete warmConfirmed[sid];
