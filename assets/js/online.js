@@ -482,9 +482,16 @@
         // a one-off postMessage after load) so it survives any iframe reload — notably
         // the debug view (Ctrl+Alt+D), which strips/restores &cleanoutput&hidemenu and
         // reloads this iframe both ways. See handleSelfLoudness.
+        // &meshcast routes this publisher's stream through a hosted distribution server
+        // instead of raw P2P; viewers (buildViewUrl scene) auto-pull the server feed over
+        // the peer-to-peer one. Both sides then only make OUTBOUND connections, so the
+        // symmetric-NAT / blocked-UDP failure on the guest→scene path disappears — the
+        // "appearing then disappearing guest" reproduced at the raw VDO level (director
+        // sees the guest, but addScene'ing them flickers then drops on the scene). Trade:
+        // a little latency + reliance on the Meshcast server. See connectionProblem.md.
         return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
             '&push=' + encodeURIComponent(pushIdFor(pushId)) + '&view' +
-            '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover&pushloudness';
+            '&webcam&autostart&meshcast' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover&pushloudness';
     }
 
     // An invisible iframe that holds director permissions for the main room — kept
