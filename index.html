@@ -310,36 +310,6 @@
                 <small class="session-join-error text-danger d-block mt-1"></small>
               </div>
             </div>
-
-            <!-- Create online debate (below session creation) -->
-            <div class="debate-setup">
-              <div class="sharing-col debate-create-col">
-                <p class="sharing-col-title">Utwórz debatę online</p>
-                <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
-                  <input type="text" class="form-control debate-master-name-input" placeholder="Twoje imię" maxlength="40" autocomplete="off" style="width:130px">
-                  <div class="input-group" style="width:auto">
-                    <input type="text" class="form-control debate-name-input" placeholder="nazwa pokoju" style="width:130px">
-                    <div class="input-group-append">
-                      <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
-                    </div>
-                  </div>
-                  <!-- Przełącznik widoku debugowego iframe'ów VDO.Ninja (openDebugView w online.js).
-                       Wszystkie .vdo-debug-btn są ukryte, dopóki App.verbose = true (body.is-verbose). -->
-                  <button type="button" class="btn btn-outline-secondary vdo-debug-btn">Debug VDO</button>
-                  <button type="button" class="btn btn-secondary debate-create-btn" disabled>Utwórz debatę</button>
-                </div>
-                <div class="debate-links mt-2" style="display:none">
-                  <div class="input-group">
-                    <input type="text" class="form-control debate-link-val" readonly>
-                    <div class="input-group-append">
-                      <button class="btn btn-outline-secondary debate-copy-btn" type="button">Kopiuj</button>
-                    </div>
-                  </div>
-                  <div id="debate-qr" class="mt-2 d-flex justify-content-center"></div>
-                </div>
-                <p class="debate-created-hint" style="display:none">Debata gotowa — przejdź do zakładki „Debata online".</p>
-              </div>
-            </div>
           </div>
 
           <!-- Slave: QR + link -->
@@ -362,35 +332,81 @@
 
       <div id="debate">
 
-        <!-- Empty state: the debate is created in the Sharing tab -->
-        <div class="debate-empty">
+        <!-- Lobby: create a room (left) or join an existing one (right). Shown whenever
+             no debate is active. A URL joiner (?s=…&d=1) gets body.is-url-join, which
+             collapses this to just the join column's media panel. -->
+        <div class="debate-lobby">
           <div class="panel-header"><h2>Debata online</h2></div>
-          <p class="debate-empty-hint">Aby rozpocząć, utwórz debatę w zakładce „Udostępnianie".</p>
-        </div>
+          <div class="debate-lobby-grid">
 
-        <!-- Participant: join form (name + camera/mic test) -->
-        <div class="debate-join" style="display:none">
-          <div class="panel-header"><h2>Dołącz do debaty</h2></div>
-          <div class="debate-join-body">
-            <div class="s-setting-line">
-              <span class="s-label">Imię</span>
-              <input type="text" class="form-control debate-join-name" placeholder="Twoje imię" maxlength="40" autocomplete="off">
+            <!-- LEFT: create a debate room -->
+            <div class="debate-lobby-col debate-lobby-create">
+              <p class="sharing-col-title">Stwórz pokój debaty online</p>
+              <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                <div class="input-group" style="width:auto">
+                  <input type="text" class="form-control debate-name-input" placeholder="nazwa pokoju" style="width:130px">
+                  <div class="input-group-append">
+                    <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-secondary debate-create-btn" disabled>Stwórz pokój</button>
+                <!-- Przełącznik widoku debugowego iframe'ów VDO.Ninja (openDebugView w online.js).
+                     Wszystkie .vdo-debug-btn są ukryte, dopóki App.verbose = true (body.is-verbose). -->
+                <button type="button" class="btn btn-outline-secondary btn-sm vdo-debug-btn">Debug VDO</button>
+              </div>
+              <!-- After create: shareable link + QR for participants -->
+              <div class="debate-links mt-3" style="display:none">
+                <div class="input-group">
+                  <input type="text" class="form-control debate-link-val" readonly>
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-secondary debate-copy-btn" type="button">Kopiuj</button>
+                  </div>
+                </div>
+                <div id="debate-qr" class="mt-2 d-flex justify-content-center"></div>
+              </div>
+              <!-- After create: host name + camera/mic check, then enter the stage -->
+              <div class="debate-media-panel debate-create-setup mt-3" style="display:none">
+                <div class="s-setting-line">
+                  <span class="s-label">Imię</span>
+                  <input type="text" class="form-control debate-join-name" placeholder="Twoje imię" maxlength="40" autocomplete="off">
+                </div>
+                <p class="debate-join-hint">Sprawdź kamerę i mikrofon:</p>
+                <div class="debate-join-preview"></div>
+                <div class="mic-level-meter" style="display:none"><div class="mic-level-fill"></div></div>
+                <div class="d-flex flex-wrap align-items-center mb-2" style="gap:0.5rem">
+                  <select class="form-control form-control-sm debate-join-cam-select" style="width:auto;display:none"></select>
+                  <select class="form-control form-control-sm debate-join-mic-select" style="width:auto;display:none"></select>
+                </div>
+                <button type="button" class="btn btn-secondary debate-enter-btn">Wejdź do debaty</button>
+              </div>
             </div>
-            <p class="debate-join-hint">Sprawdź kamerę i mikrofon przed dołączeniem:</p>
-            <div class="debate-join-preview"></div>
-            <div class="mic-level-meter" style="display:none"><div class="mic-level-fill"></div></div>
-            <div class="d-flex flex-wrap align-items-center mb-2" style="gap:0.5rem">
-              <select class="form-control form-control-sm debate-join-cam-select" style="width:auto;display:none"></select>
-              <select class="form-control form-control-sm debate-join-mic-select" style="width:auto;display:none"></select>
+
+            <!-- RIGHT: join an existing debate room -->
+            <div class="debate-lobby-col debate-lobby-join">
+              <p class="sharing-col-title">Dołącz do istniejącego pokoju</p>
+              <div class="debate-join-connect d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                <input type="text" class="form-control debate-join-room-input" placeholder="nazwa pokoju" style="max-width:150px">
+                <button type="button" class="btn btn-secondary debate-connect-btn" disabled>Dołącz</button>
+              </div>
+              <small class="debate-connect-error text-danger d-block mt-1"></small>
+              <!-- After connect: your name + camera/mic check, then enter -->
+              <div class="debate-media-panel debate-join-setup mt-3" style="display:none">
+                <div class="s-setting-line">
+                  <span class="s-label">Imię</span>
+                  <input type="text" class="form-control debate-join-name" placeholder="Twoje imię" maxlength="40" autocomplete="off">
+                </div>
+                <p class="debate-join-hint">Sprawdź kamerę i mikrofon przed dołączeniem:</p>
+                <div class="debate-join-preview"></div>
+                <div class="mic-level-meter" style="display:none"><div class="mic-level-fill"></div></div>
+                <div class="d-flex flex-wrap align-items-center mb-2" style="gap:0.5rem">
+                  <select class="form-control form-control-sm debate-join-cam-select" style="width:auto;display:none"></select>
+                  <select class="form-control form-control-sm debate-join-mic-select" style="width:auto;display:none"></select>
+                </div>
+                <button type="button" class="btn btn-secondary debate-join-btn">Dołącz</button>
+                <small class="debate-join-error text-danger d-block mt-1"></small>
+              </div>
             </div>
-            <div class="d-flex flex-wrap align-items-center" style="gap:0.5rem">
-              <button type="button" class="btn btn-outline-secondary btn-sm debate-preview-btn">Włącz podgląd</button>
-              <button type="button" class="btn btn-secondary debate-join-btn">Dołącz</button>
-              <!-- Ten sam przełącznik debugowy co w zakładce Udostępnianie — sesja slave
-                   nie widzi tamtego (body.is-slave chowa .master-sharing) -->
-              <button type="button" class="btn btn-outline-secondary btn-sm vdo-debug-btn">Debug VDO</button>
-            </div>
-            <small class="debate-join-error text-danger d-block mt-1"></small>
+
           </div>
         </div>
 
@@ -595,6 +611,7 @@
                   <button type="button" class="close" data-dismiss="modal" aria-label="Zamknij"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body debate-settings-body">
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-invite-btn">Kopiuj link zaproszenia</button>
                   <button type="button" class="btn btn-outline-secondary btn-sm debate-roster-btn">Zarządzanie uczestnikami</button>
                   <button type="button" class="btn btn-outline-secondary btn-sm debate-muteall-btn">Wycisz wszystkich</button>
                   <div class="custom-control custom-checkbox">

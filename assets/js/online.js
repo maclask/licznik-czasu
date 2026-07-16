@@ -21,6 +21,7 @@
     var expelledClientIds = {};   // clientId -> 'kick' | 'rejected', refused re-admission until the room resets
     var debateIframe = null;      // the live VDO.Ninja <iframe> element (for postMessage)
     var previewIframe = null;     // the join-screen preview <iframe> (separate instance, own postMessage channel)
+    var previewScope = null;      // the lobby media panel currently hosting the live preview (create-side or join-side)
     var joinCamDeviceIndex = null, joinMicDeviceIndex = null; // device picked on the join screen, carried into the live room
     var myPushId = null;          // this browser's stable VDO push id — fixed for the whole debate
                                    // (participants: PeerJS id at join; master: clientId)
@@ -188,6 +189,7 @@
     bindRoomNameInput($('.session-name-input'), $('.session-create-btn'));
     bindRoomNameInput($('.session-join-input'), $('.session-join-btn'));
     bindRoomNameInput($('.debate-name-input'), $('.debate-create-btn'));
+    bindRoomNameInput($('.debate-join-room-input'), $('.debate-connect-btn'));
 
     // Shared PeerJS hub creation (plain sharing + online debate): the connect cycle,
     // button feedback and error handling are identical — only the on-open setup differs.
@@ -535,14 +537,18 @@
     // origin; Chrome's "Allow this time" isn't delegated), which used to cause a
     // second prompt at seat-taking. Grants DO carry between successive vdo.ninja
     // iframes on the same page, so the later publish iframe starts silently.
-    function embedPreview() {
+    // panel is the lobby media panel (.debate-create-setup or .debate-join-setup) the
+    // preview belongs to — there are two, but only ever one live at a time, so all the
+    // preview's satellite UI (device selects, mic meter) is looked up within previewScope.
+    function embedPreview(panel) {
         closeDebugView();
+        previewScope = panel;
         var allow = 'camera *; microphone *; autoplay; fullscreen; picture-in-picture';
-        $('.debate-join-preview').html(
+        panel.find('.debate-join-preview').html(
             '<iframe class="vdo-iframe" allow="' + allow + '" src="' +
             VDO_BASE + '?webcam&autostart&cleanoutput&transparent&cover&pushloudness"></iframe>'
         );
-        previewIframe = $('.debate-join-preview iframe').get(0);
+        previewIframe = panel.find('.debate-join-preview iframe').get(0);
         if (previewIframe) {
             previewIframe.onload = function() {
                 pollDeviceList('preview', function() { return previewIframe; });
@@ -552,8 +558,11 @@
     function clearPreview() {
         if (previewIframe) closeDebugView();
         stopDeviceListPoll('preview');
-        $('.debate-join-preview').empty();
         previewIframe = null;
+        previewScope = null;
+        // Clear both panels' satellite UI — only one held a live preview, but resetting
+        // both is cheap and keeps a stale meter/select from lingering on either side.
+        $('.debate-join-preview').empty();
         $('.debate-join-cam-select').hide().empty();
         $('.debate-join-mic-select').hide().empty();
         $('.mic-level-meter').hide();
@@ -565,10 +574,11 @@
         var keys = loud && Object.keys(loud);
         if (!keys || !keys.length) return; // empty snapshot — see handleSelfLoudness's mode note
         var level = loud[keys[0]];
+        var $p = previewScope || $('.debate-media-panel');
         // VDO's loudness scale: &noisegate docs put ~100 at "loudly speaking" and
         // under 5 at "quiet background" — maps directly onto a 0–100% bar width.
-        $('.mic-level-meter').show();
-        $('.mic-level-fill').css('width', Math.max(0, Math.min(100, Math.round(level))) + '%');
+        $p.find('.mic-level-meter').show();
+        $p.find('.mic-level-fill').css('width', Math.max(0, Math.min(100, Math.round(level))) + '%');
     }
 
     // A getDeviceList answered before the user clicks "Allow" returns placeholder
@@ -1003,8 +1013,9 @@
 
     function populateJoinDevices(list) {
         var split = splitDeviceList(list);
-        fillDeviceSelect($('.debate-join-cam-select'), split.cams, 'Kamera');
-        fillDeviceSelect($('.debate-join-mic-select'), split.mics, 'Mikrofon');
+        var $p = previewScope || $('.debate-media-panel');
+        fillDeviceSelect($p.find('.debate-join-cam-select'), split.cams, 'Kamera');
+        fillDeviceSelect($p.find('.debate-join-mic-select'), split.mics, 'Mikrofon');
     }
 
     function fillDeviceSelect($sel, devices, fallback) {
@@ -1777,6 +1788,9 @@
         $('.debate-name-input').val(name).trigger('input');
     });
 
+    // Master: create the room in the background (hub + director) and reveal the invite
+    // link/QR plus a camera check. The host stays in the lobby — real entry to the stage
+    // happens on .debate-enter-btn, so their name/devices are set before they go live.
     $('.debate-create-btn').click(function() {
         var name = $('.debate-name-input').val().trim().toLowerCase();
         if (!/^[a-zA-Z0-9]+$/.test(name)) return;
@@ -1788,7 +1802,7 @@
             myGeneration = 0;
             nextJoinSeq = 1;
             expelledClientIds = {};
-            myDebateName = $('.debate-master-name-input').val().trim() || 'Prowadzący';
+            myDebateName = 'Prowadzący';   // finalized from the name input on .debate-enter-btn
             markWasMaster(id);
             debateRoster = [{
                 clientId: myClientId, peerId: null, pushId: myClientId, name: myDebateName,
@@ -1798,24 +1812,44 @@
             }];
             embedDirector();
             $('body').addClass('is-debate-master');
-            $('.debate-empty').hide();
-            $('.debate-stage').show();
-            updateShareLinks();
-            myEmbedMode = null;
-            renderDebate(); // seeds the scene iframe via updateMyEmbed
-            $btn.text('Debata aktywna');
+            updateShareLinks();  // fills + shows the link/QR in the create column
+            $('.debate-name-input, .debate-random-btn').prop('disabled', true);
+            $btn.text('Pokój utworzony');
+            var $panel = $('.debate-create-setup');
+            $panel.show();
+            embedPreview($panel);
         });
+    });
+
+    // Master: leave the lobby for the stage, finalizing the host's chosen name.
+    $('.debate-enter-btn').click(function() {
+        var name = $(this).closest('.debate-media-panel').find('.debate-join-name').val().trim() || 'Prowadzący';
+        myDebateName = name;
+        if (debateRoster[0]) debateRoster[0].name = name;
+        clearPreview();
+        $('.debate-lobby').hide();
+        $('.debate-stage').show();
+        myEmbedMode = null;
+        renderDebate();  // seeds the scene iframe via updateMyEmbed, broadcasts the roster
     });
 
     $('.debate-copy-btn').click(function() {
         navigator.clipboard.writeText($('.debate-link-val').val());
     });
 
-    // Join screen: preview camera/mic before entering (fallback — the preview now
-    // auto-starts with the join screen and this button is hidden then)
-    $('.debate-preview-btn').click(function() {
-        if (!previewIframe) embedPreview();
-        $(this).text('Podgląd włączony');
+    // Master (mid-debate): re-copy the invite link from the settings modal, since the
+    // lobby that first showed it is hidden once the stage is up.
+    $('.debate-invite-btn').click(function() {
+        navigator.clipboard.writeText($('.debate-link-val').val());
+        App.core.showAlert('Skopiowano link zaproszenia');
+    });
+
+    // Join column: connect to a room by name, then reveal the name + camera check. Actual
+    // entry to the roster happens on .debate-join-btn (same two-step as the URL flow).
+    $('.debate-connect-btn').click(function() {
+        var room = $('.debate-join-room-input').val().trim().toLowerCase();
+        if (!/^[a-z0-9]+$/.test(room)) return;
+        startDebateJoin(room);
     });
 
     // Join screen: pick a device — switches the live preview and carries over into the room
@@ -1833,13 +1867,14 @@
     // roster broadcast — which the master only sends once we're in (immediately, unless
     // the waiting room is on, in which case a {cmd:'waiting'} arrives instead).
     $('.debate-join-btn').click(function() {
-        var name = $('.debate-join-name').val().trim();
-        if (!name) { $('.debate-join-error').text('Podaj imię').show(); return; }
-        $('.debate-join-error').hide();
+        var $err = $(this).closest('.debate-media-panel').find('.debate-join-error');
+        var name = $(this).closest('.debate-media-panel').find('.debate-join-name').val().trim();
+        if (!name) { $err.text('Podaj imię').show(); return; }
+        $err.hide();
 
         myDebateName = name;
         clearPreview();
-        $('.debate-join').hide();
+        $('.debate-lobby').hide();
         $('.debate-waiting-hint').text('Dołączanie…');
         $('.debate-waiting').show();
         myEmbedMode = null;
@@ -1999,10 +2034,13 @@
         removeDirector();
         $('.debate-stage').hide();
         $('.debate-roster-modal').modal('hide');
-        $('.debate-empty').show();
+        // Back to a fresh lobby so the host can create again.
+        clearPreview();
+        $('.debate-create-setup').hide();
         $('.debate-links').hide();
-        $('.debate-created-hint').hide();
-        $('.debate-create-btn').text('Utwórz debatę').prop('disabled', false);
+        $('.debate-lobby').show();
+        $('.debate-name-input, .debate-random-btn').prop('disabled', false);
+        $('.debate-create-btn').text('Stwórz pokój').prop('disabled', false);
         App.core.showAlert('Pokój zamknięty');
     });
 
@@ -2358,6 +2396,73 @@
         }
     }
 
+    // Connect to a debate room as a participant, then reveal the name + camera check so
+    // devices can be tested before entering the roster (the actual join is .debate-join-btn).
+    // Shared by the lobby's "Dołącz" button (isUrlJoin falsy) and the ?s=…&d=1 auto-join
+    // (isUrlJoin true — a shared link that may be stale, so a failed probe reloads rather
+    // than prompting a re-type). connectToRoom probes forward from generation 0 to find
+    // wherever the room currently lives.
+    function startDebateJoin(room, isUrlJoin) {
+        debateSessionId = room;
+        App.state.isSlaveSession = true;
+        $('body').addClass('is-slave is-debate');
+        $('.timer-controls').hide();
+        App.core.navigate('debate');
+
+        var $panel = $('.debate-join-setup');
+        // The preview auto-starts, so the camera+mic prompt appears immediately — and
+        // coming from the vdo.ninja iframe, its grant is the one the publish iframe
+        // reuses later (see embedPreview).
+        $panel.show();
+        embedPreview($panel);
+
+        $('.debate-connect-error').text('');
+        $('.debate-join-room-input, .debate-connect-btn').prop('disabled', true);
+        $('.debate-connect-btn').text('Łączenie…');
+        $('.session-status').text('Łączenie z sesją…').show();
+
+        myPeer = new Peer();
+        keepSignalingAlive(myPeer);
+        myPeer.on('open', function(myId) {
+            console.log('[Session] Slave peer opened:', myId);
+            myPushId = myId;
+            connectToRoom(0, function(gen, conn) {
+                attachMasterConn(conn, gen, null);
+                console.log('[Session] Connected to master! (generation', gen, ')');
+                $('.session-status').hide();
+                $('.debate-connect-btn').text('Połączono');
+                if (debatePendingJoin) {
+                    sendJoinMessage(debatePendingJoin.name);
+                    debatePendingJoin = null;
+                }
+            }, function() {
+                if (isUrlJoin) {
+                    $('.session-status').text('Nie udało się połączyć z pokojem debaty').show();
+                    setTimeout(function() {
+                        $('.session-status').text('Odświeżanie strony…');
+                        setTimeout(function() {
+                            window.location.replace(window.location.origin + window.location.pathname);
+                        }, 3000);
+                    }, 5000);
+                } else {
+                    // Room name typed by hand — let them fix it and retry in place.
+                    $('.session-status').hide();
+                    clearPreview();
+                    $panel.hide();
+                    $('.debate-connect-error').text('Nie udało się połączyć — sprawdź nazwę pokoju');
+                    $('.debate-join-room-input, .debate-connect-btn').prop('disabled', false);
+                    $('.debate-connect-btn').text('Dołącz');
+                    if (myPeer) { myPeer.destroy(); myPeer = null; }
+                }
+            });
+        });
+        myPeer.on('error', function(err) {
+            console.error('[Session] Peer error:', err.type);
+            $('.session-status').text('Błąd: ' + err.type).show();
+            if (!isUrlJoin) $('.debate-connect-error').text('Błąd połączenia: ' + err.type);
+        });
+    }
+
     // Create/destroy the standby PeerJS hub at genName(myGeneration + 1). Called from
     // handleSlaveData whenever a roster broadcast shows my own entry's comaster status
     // has changed. A connection landing on it is itself proof of failover (see below),
@@ -2401,7 +2506,6 @@
         $('.debate-links').show();
         $('#debate-qr').empty();
         new QRCode(document.getElementById('debate-qr'), { text: link, width: 128, height: 128 });
-        $('.debate-created-hint').show();
         try { window.history.replaceState(null, '', link); } catch (e) {}
     }
 
@@ -2661,28 +2765,24 @@
         if (!s || !/^[a-z0-9]+$/.test(s)) return;
         var isDebate = params.get('d') === '1';
 
+        if (isDebate) {
+            // The room is known from the link — collapse the lobby to just the join
+            // panel (is-url-join) and run the same connect flow as the "Dołącz" button.
+            $('body').addClass('is-url-join');
+            $('.debate-join-room-input').val(s);
+            startDebateJoin(s, true);
+            return;
+        }
+
+        // Plain viewer (clock mirroring).
         App.state.isSlaveSession = true;
         $('body').addClass('is-slave');
         $('.timer-controls').hide();
+        var slaveUrl = window.location.href;
+        $('.slave-session-link-val').val(slaveUrl);
+        new QRCode(document.getElementById('slave-qr'), {text: slaveUrl, width: 256, height: 256});
 
-        if (isDebate) {
-            debateSessionId = s;
-            $('body').addClass('is-debate');
-            App.core.navigate('debate');
-            $('.debate-empty').hide();
-            $('.debate-join').show();
-            // The preview starts by itself, so the camera+mic prompt appears the
-            // moment you land on the join screen — and coming from the vdo.ninja
-            // iframe, its grant is the one the publish iframe reuses later.
-            embedPreview();
-            $('.debate-preview-btn').hide();
-        } else {
-            var slaveUrl = window.location.href;
-            $('.slave-session-link-val').val(slaveUrl);
-            new QRCode(document.getElementById('slave-qr'), {text: slaveUrl, width: 256, height: 256});
-        }
-
-        console.log('[Session] Joining session:', s, isDebate ? '(debata)' : '');
+        console.log('[Session] Joining session:', s);
         $('.session-status').text('Łączenie z sesją…').show();
 
         myPeer = new Peer();
@@ -2690,43 +2790,19 @@
         myPeer.on('open', function(myId) {
             console.log('[Session] Slave peer opened:', myId);
             myPushId = myId;
-
-            if (isDebate) {
-                // The room may have moved forward through several generations since
-                // this link was first shared (or since our own last visit) — probe
-                // forward from the original id until we find wherever it lives now.
-                connectToRoom(0, function(gen, conn) {
-                    attachMasterConn(conn, gen, null);
-                    console.log('[Session] Connected to master! (generation', gen, ')');
-                    $('.session-status').hide();
-                    if (debatePendingJoin) {
-                        sendJoinMessage(debatePendingJoin.name);
-                        debatePendingJoin = null;
-                    }
-                }, function() {
-                    $('.session-status').text('Nie udało się połączyć z pokojem debaty').show();
-                    setTimeout(function() {
-                        $('.session-status').text('Odświeżanie strony…');
-                        setTimeout(function() {
-                            window.location.replace(window.location.origin + window.location.pathname);
-                        }, 3000);
-                    }, 5000);
-                });
-            } else {
-                var conn = myPeer.connect(s, {serialization: 'json'});
-                conn.on('open', function() {
-                    console.log('[Session] Connected to master!');
-                    $('.session-status').hide();
-                    App.core.showAlert('Połączono z sesją');
-                });
-                conn.on('error', function(err) {
-                    console.error('[Session] Conn error:', err);
-                    $('.session-status').text('Błąd połączenia: ' + err.type).show();
-                });
-                attachMasterConn(conn, 0, null, function() {
-                    $('.session-lost-alert').fadeIn(50);
-                });
-            }
+            var conn = myPeer.connect(s, {serialization: 'json'});
+            conn.on('open', function() {
+                console.log('[Session] Connected to master!');
+                $('.session-status').hide();
+                App.core.showAlert('Połączono z sesją');
+            });
+            conn.on('error', function(err) {
+                console.error('[Session] Conn error:', err);
+                $('.session-status').text('Błąd połączenia: ' + err.type).show();
+            });
+            attachMasterConn(conn, 0, null, function() {
+                $('.session-lost-alert').fadeIn(50);
+            });
         });
         myPeer.on('error', function(err) {
             console.error('[Session] Peer error:', err.type);

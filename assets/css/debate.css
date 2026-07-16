@@ -38,27 +38,24 @@ body.is-slave .slave-sharing { display: block; }
   padding: 0 2rem 1.5rem;
 }
 
-.debate-join-body {
-  padding: 1.4rem 1.5rem;
-  max-width: 640px;
+/* Debate lobby: two columns (create | join), shown before a room is active. */
+.debate-lobby-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  max-width: 900px;
   margin: 0 auto;
   width: 100%;
 }
+.debate-lobby-join { border-left: 1px solid rgba(0, 0, 0, 0.07); padding-left: 2.5rem; }
+.debate-media-panel { max-width: 420px; }
+.debate-connect-error:empty { display: none; }
 
-/* Debate creation lives under the session-creation block in the Sharing tab */
-.debate-create-col {
-  border-top: 1px solid rgba(0, 0, 0, 0.07);
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-}
-.debate-created-hint { color: #6c757d; margin-top: 0.5rem; }
-
-/* Empty state for the Debata tab before a room exists */
-.debate-empty-hint {
-  text-align: center;
-  color: #6c757d;
-  padding: 1.5rem;
-}
+/* A URL joiner (?s=…&d=1) only ever wants the join panel — hide the create side. */
+body.is-url-join .debate-lobby-create,
+body.is-url-join .debate-join-connect { display: none; }
+body.is-url-join .debate-lobby-grid { grid-template-columns: 1fr; }
+body.is-url-join .debate-lobby-join { border-left: none; padding-left: 0; }
 
 /* Hold screen: joining / waiting-room admission */
 .debate-waiting-hint {
@@ -764,6 +761,9 @@ body.is-debate #sharing-link-item {
 
   .sharing-col { padding: 0; }
   .sharing-col-join { border-left: none; border-top: 1px solid rgba(0,0,0,0.07); padding-top: 1rem; margin-top: 1rem; }
+
+  .debate-lobby-grid { grid-template-columns: 1fr; gap: 0; }
+  .debate-lobby-join { border-left: none; border-top: 1px solid rgba(0,0,0,0.07); padding-left: 0; padding-top: 1rem; margin-top: 1rem; }
 
   /* Neutralise Bootstrap row's negative margins so panel-body padding shows */
   #sharing .row {
