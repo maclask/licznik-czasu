@@ -464,14 +464,23 @@
     // comes back through the always-present buildViewUrl() iframe, same as everyone else.
     function buildPublishUrl(name, pushId, breakoutZone) {
         var room = encodeURIComponent(breakoutZone ? breakoutRoomId(breakoutZone) : vdoRoom());
-        // &cover makes the self-view tile fill the corner preview (display-only, same
+        // &view with NO value = "publish, but auto-play no one else's stream" — the
+        // publisher stays a publisher (unlike &scene/&solo, which drop the &push, see
+        // buildViewUrl) but its local layout never fills with the room grid. Without it,
+        // a &push&webcam guest is a full room participant that renders every OTHER guest's
+        // tile too, so the moment a second person published, this iframe — which doubles
+        // as the corner self-preview (see embedPublish) — turned into a split screen of
+        // us + them. &view=(empty) leaves only our own self-view, which is a local camera
+        // mirror, not a received stream, so it survives (docs.vdo.ninja/advanced-settings/
+        // mixer-scene-parameters/view.md: "no values provided ... only publishing allowed").
+        // &cover makes that self-view tile fill the corner preview (display-only, same
         // as the join screen's &cover — it does not touch the stream we publish).
         // &pushloudness bakes the loudness subscription into the URL itself (rather than
         // a one-off postMessage after load) so it survives any iframe reload — notably
         // the debug view (Ctrl+Alt+D), which strips/restores &cleanoutput&hidemenu and
         // reloads this iframe both ways. See handleSelfLoudness.
         return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
-            '&push=' + encodeURIComponent(pushIdFor(pushId)) +
+            '&push=' + encodeURIComponent(pushIdFor(pushId)) + '&view' +
             '&webcam&autostart' + VDO_PUBLISH_BITRATE + '&cleanoutput&hidemenu&cover&pushloudness';
     }
 
