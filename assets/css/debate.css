@@ -1,0 +1,912 @@
+/* debate.css — collaboration layer styles: PeerJS session + VDO.Ninja online
+   debate + theme switcher. Loaded after style.css, so the page's :root custom
+   properties and @import-ed fonts are already in scope. */
+
+/* ── Session ────────────────────────────────────────────────── */
+.session-lost-alert { display: none; }
+.session-links { display: none; }
+
+/* A debate slave (joined a room straight from a shared link) has no use for
+   plain settings — the debate stage has its own gear icon / modal instead. A
+   plain-session slave still needs Ustawienia to reach its connected-viewer
+   status block below, so this only locks out the debate case. */
+body.is-debate #settings-link {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+
+/* Plain-session slave: the settings themselves are the master's to control,
+   so grey the whole panel out except the connected-viewer status block,
+   which lives outside .settings-rows and stays fully interactive. */
+body.is-slave .settings-rows {
+  opacity: 0.4;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+body.is-slave .s-slave-status {
+  display: block;
+}
+
+/* Sharing columns */
+.sharing-col-title {
+  font-size: 1rem;
+  font-weight: 300;
+  color: #000;
+  margin-bottom: 0.75rem;
+}
+.session-join-error { display: none; }
+
+/* ── Online debate  ──────────────────────────────────────── */
+#debate {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 2rem 1.5rem;
+}
+
+/* Debate lobby: two columns (create | join), shown before a room is active. */
+.debate-lobby-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+.debate-lobby-join { border-left: 1px solid rgba(0, 0, 0, 0.07); padding-left: 2.5rem; }
+.debate-media-panel { max-width: 420px; }
+.debate-connect-error:empty { display: none; }
+
+/* A URL joiner (?s=…&d=1) only ever wants the join panel — hide the create side. */
+body.is-url-join .debate-lobby-create,
+body.is-url-join .debate-join-connect { display: none; }
+body.is-url-join .debate-lobby-grid { grid-template-columns: 1fr; }
+body.is-url-join .debate-lobby-join { border-left: none; padding-left: 0; }
+
+/* Hold screen: joining / waiting-room admission */
+.debate-waiting-hint {
+  text-align: center;
+  color: #6c757d;
+  padding: 1.5rem;
+}
+
+/* .debate-video is the positioning context: the frame (rounded, clipped) and the
+   controls overlay are siblings so the overlay is never wiped by embedVdo()
+   replacing the frame's contents, and dropdown menus opening out of the overlay
+   are never clipped by the frame's own overflow:hidden. */
+.debate-video {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto 1rem;
+  aspect-ratio: 16 / 9;
+}
+
+.debate-video:not(.debate-video--has-frame) { display: none; }
+
+.debate-video-frame {
+  position: absolute;
+  inset: 0;
+  background: #fafafa;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Breakout: my own stage temporarily shows that team's/judges' room instead of
+   the main scene (see embedVdo/buildViewUrl in online.js) — label it the same
+   way is-prep-time labels the clock, so it reads as "different room", not a
+   frozen/broken video. */
+.debate-video--breakout::before {
+  content: 'Pokój narad';
+  position: absolute;
+  top: -1.4rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6c757d;
+}
+.debate-video--breakout .debate-video-frame { border-color: #6c757d; }
+
+.debate-video-frame .vdo-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* ── Self-view PiP: corner preview of our own published camera. The widget only
+   ever holds children that intercept pointer events (the eye button), so it stays
+   pointer-events:none and clicks fall through to the video underneath. Visibility is
+   driven entirely by data-state, set by updateSelfPreview() in online.js. ── */
+.debate-self-preview {
+  position: absolute;
+  top: clamp(6px, 2.2vmin, 14px);
+  right: clamp(6px, 2.2vmin, 14px);
+  width: clamp(84px, 30%, 148px);
+  aspect-ratio: 16 / 9;
+  z-index: 6;
+  pointer-events: none;
+  display: none;
+}
+/* "onstage" keeps the widget in flow (iframe must keep streaming) but hides every
+   visible part; "none" (no publish iframe) drops it entirely. */
+.debate-self-preview[data-state="open"],
+.debate-self-preview[data-state="collapsed"],
+.debate-self-preview[data-state="onstage"] { display: block; }
+
+.debate-self-preview-frame {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  background: #000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+/* Hidden preview states use visibility (not display:none): the iframe stays laid out
+   and full-size so its WebRTC capture is never throttled. */
+.debate-self-preview[data-state="onstage"] .debate-self-preview-frame,
+.debate-self-preview[data-state="collapsed"] .debate-self-preview-frame {
+  visibility: hidden;
+}
+.debate-self-preview-frame .vdo-publish-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.debate-self-preview-eye {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: clamp(20px, 4.5vmin, 26px);
+  height: clamp(20px, 4.5vmin, 26px);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.62);
+  color: #fff;
+  opacity: 0.9;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.debate-self-preview-eye:hover { background: rgba(20, 20, 20, 0.82); opacity: 1; }
+/* On stage the whole widget is hidden — the eye button carries no media, so it can
+   safely display:none (only the frame needs to stay laid out). */
+.debate-self-preview[data-state="onstage"] .debate-self-preview-eye { display: none; }
+.debate-self-preview-eye .dv-icon { width: 64%; height: 64%; }
+.debate-self-preview-eye .dv-icon-off { display: none; }
+.debate-self-preview-eye.is-closed .dv-icon-on { display: none; }
+.debate-self-preview-eye.is-closed .dv-icon-off { display: block; }
+
+/* ── Video overlay controls: mic/cam/signals/settings, monochrome icon
+   buttons on a translucent dark bar (needs its own contrast against arbitrary
+   video content, independent of the page theme) ─────────────────────── */
+.debate-video-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(6px, 2vmin, 14px);
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  /* nowrap: an auto-width flex container that's both absolutely positioned and
+     allowed to wrap gets its shrink-to-fit width computed wrong in Chromium (it
+     collapses to ~half the available width and wraps well before it needs to).
+     No overflow-x fallback here: setting overflow-x to anything but visible forces
+     overflow-y to auto too (per spec), which clips the dropup device menus. */
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  max-width: calc(100% - 16px);
+  padding: 4px 6px;
+  background: rgba(20, 20, 20, 0.6);
+  backdrop-filter: blur(6px);
+  border-radius: 999px;
+}
+
+.dv-group { display: none; }
+body.is-publishing .dv-mic-group,
+body.is-debate-master .dv-mic-group,
+body.is-publishing .dv-cam-group,
+body.is-debate-master .dv-cam-group { display: flex; }
+
+.dv-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: clamp(24px, 5vmin, 30px);
+  height: clamp(24px, 5vmin, 30px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  opacity: 0.85;
+}
+.dv-group .dv-btn { display: flex; }
+.dv-btn:hover, .dv-btn:focus { background: rgba(255, 255, 255, 0.15); color: #fff; opacity: 1; }
+.dv-btn:not(:disabled):not(.disabled):active { background: rgba(255, 255, 255, 0.22); color: #fff; }
+
+.dv-icon { width: 60%; height: 60%; }
+.dv-caret { width: clamp(15px, 3.5vmin, 18px); }
+.dv-caret .dv-icon { width: 65%; height: 65%; }
+/* Use our own chevron SVG instead of Bootstrap's default ::after caret triangle */
+.dv-caret.dropdown-toggle::after { display: none; }
+/* Always shown (not hidden) — greyed out and inert when there's no device list
+   to switch between, per fillDeviceMenu() in online.js */
+.dv-caret:disabled { opacity: 0.3; }
+
+.dv-icon-off { display: none; }
+.dv-btn.is-off .dv-icon-on { display: none; }
+.dv-btn.is-off .dv-icon-off { display: block; }
+.dv-btn.is-off { color: #ff5252; opacity: 1; background: rgba(255, 82, 82, 0.18); }
+.dv-btn.is-off:hover { background: rgba(255, 82, 82, 0.28); }
+
+.dv-text-btn { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
+
+/* Signals (question / ad vocem): team seats only (body.is-debater, set in
+   updateMyEmbed) — judges, the marshal and the audience never see them.
+   Breakout: team seats and judges (body.has-breakout) — the marshal has no room
+   to confer in. Leave: anyone publishing. */
+.debate-hand-btn, .debate-advocem-btn, .debate-breakout-btn, .debate-leave-btn { display: none; }
+body.is-debater .debate-hand-btn,
+body.is-debater .debate-advocem-btn,
+body.has-breakout .debate-breakout-btn { display: flex; }
+body.is-publishing:not(.is-debate-master) .debate-leave-btn { display: flex; }
+
+.debate-hand-btn.active,
+.debate-advocem-btn.active,
+.debate-breakout-btn.active {
+  background: rgba(255, 255, 255, 0.9);
+  color: #222;
+  opacity: 1;
+}
+
+/* Settings (master only) */
+.debate-settings-btn { display: none; }
+body.is-debate-master .debate-settings-btn { display: flex; }
+
+.debate-settings-body { display: flex; flex-direction: column; gap: 0.6rem; align-items: stretch; }
+
+/* ── Debate stage: 3-column layout ──────────────────────── */
+/* Lives at the top of the centre column (not full-width above the grid), so
+   the proposition/opposition zones flank it on either side. */
+.debate-motion {
+  margin: 0 0 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #222;
+}
+.debate-motion:empty::before {
+  content: 'Debata';
+  color: #999;
+}
+
+.debate-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 2.2fr) minmax(140px, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.debate-side { display: flex; flex-direction: column; }
+
+.debate-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Clock + joker stay together; logos sit below by default (short/no motion) and
+   move beside the clock when the motion is long enough to wrap — see
+   updateMotionLayout() in online.js, which toggles debate-center--long-motion. */
+.debate-clock-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.debate-clock-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1rem;
+}
+.debate-clock-row .img-grid { padding: 0; }
+
+.debate-center--long-motion .debate-clock-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Cap logo size inside the centre column */
+.debate-center .img-container {
+  max-height: clamp(40px, 9vmin, 84px);
+  max-width: clamp(40px, 9vmin, 110px);
+}
+.debate-center .img-container img { max-height: clamp(40px, 9vmin, 84px); }
+
+.debate-zone { margin-bottom: 1.25rem; }
+.debate-zone-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 0.5rem;
+}
+
+.slot-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.slot { display: flex; align-items: center; gap: 0.5rem; }
+.slot-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #444;
+  font-size: 0.85rem;
+}
+.slot-name { font-size: 0.95rem; }
+.slot--empty .slot-avatar { border-style: dashed; opacity: 0.45; }
+.slot--empty .slot-name { color: #bbb; }
+
+/* Raised-signal badges beside the name — hand drawing for a question,
+   "AV" for ad vocem, each with its own colour */
+.signal-badge { margin-left: 0.35rem; color: #fff; }
+.signal-badge--hand { background: #e67e22; }
+.signal-badge--advocem { background: #2e6da4; }
+.signal-badge--clickable { cursor: pointer; }
+.signal-badge-icon { width: 0.9em; height: 0.9em; vertical-align: -0.1em; }
+
+.slot-list--audience { flex-direction: row; flex-wrap: wrap; gap: 0.35rem; }
+.aud-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #444;
+}
+
+/* Chat sits in the right column and grows to fill the column's height (stretched
+   to match the taller of the two side columns by .debate-grid) instead of a
+   short fixed box with dead space below it. */
+.debate-side .debate-chat {
+  max-width: none;
+  margin: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.debate-side .debate-chat-box { flex: 1 1 auto; min-height: 0; }
+/* height: 0 (not auto) so message content never sets the log's intrinsic size —
+   the box stays put and the log scrolls instead of stretching the column */
+.debate-side .debate-chat-log { flex: 1 1 auto; height: 0; min-height: 200px; }
+
+@media (max-width: 900px) {
+  .debate-grid { grid-template-columns: 1fr; }
+  .debate-center { order: -1; }
+}
+
+.debate-roster-modal .modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.roster-name { font-weight: 500; }
+.roster-role { color: #6c757d; font-size: 0.9rem; }
+.roster-side { width: auto; }
+.roster-row .roster-side,
+.roster-row .roster-mute,
+.roster-row .roster-admit { margin-left: auto; }
+.roster-row .roster-side ~ .roster-mute,
+.roster-row .roster-signal ~ .roster-side { margin-left: 0; }
+.roster-pending-badge { margin-right: 0.35rem; }
+.roster-signal {
+  background: #c0392b;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.roster-signal:hover { background: #a5322299; color: #fff; }
+
+/* Prep-time control now lives in the settings dialog (#debate-settings-modal) */
+.debate-prep-control {
+  display: flex;
+  gap: 0.5rem;
+}
+.debate-prep-control .input-prep-time { width: 70px; flex: 0 0 auto; }
+.debate-prep-control .debate-prep-btn { flex: 1 1 auto; }
+
+/* Slot + button (take a free position) and speaking mic icon */
+.slot-plus {
+  cursor: pointer;
+  padding: 0;
+  color: #999;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.slot-plus:hover { border-color: #6c757d; color: #6c757d; }
+.slot--me .slot-avatar--me { cursor: pointer; border-color: #2a7; }
+.aud-dot--me { border-color: #2a7; }
+.slot-mic { font-size: 0.85rem; }
+.aud-dot--speaking { border-color: #2a7; box-shadow: 0 0 0 2px rgba(34,170,119,0.3); }
+.aud-dot--comaster { box-shadow: 0 0 0 2px rgba(23,162,184,0.5); }
+
+/* Comaster failover: succession badge (primary) / honorary badge (former master) */
+.comaster-badge { margin-right: 0.35rem; }
+.comaster-hint { display: none; color: #6c757d; text-align: center; margin: 0.5rem 0 0; font-size: 0.9rem; }
+body.is-comaster-primary .comaster-hint { display: block; }
+
+/* Breakout rooms: dim everyone I can no longer hear/see over VDO from a breakout room */
+.slot--dimmed, .aud-dot--dimmed { opacity: 0.3; filter: grayscale(1); }
+.roster-breakout-badge { margin-right: 0.35rem; }
+
+/* Chief judge: first judges slot */
+.chief-judge-badge { margin-left: 0.35rem; }
+
+/* Marshal: master-assigned, shown inline when seated among the judges, or in
+   its own zone otherwise (see .debate-zone--marshal) */
+.marshal-badge { margin-left: 0.35rem; background: #800000; color: #fff; }
+
+/* Master edit mode: drag & drop seat re-assignment */
+.debate-editmode-btn.active { background: #2a7; border-color: #2a7; color: #fff; }
+.slot--draggable, .aud-dot--draggable { cursor: grab; }
+.slot--draggable:active, .aud-dot--draggable:active { cursor: grabbing; }
+body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
+.slot--dragover { outline: 2px dashed #2a7 !important; outline-offset: 2px; }
+
+/* Join-screen camera/mic preview */
+.debate-join-hint { color: #6c757d; margin: 0.75rem 0 0.5rem; }
+.debate-join-preview {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  margin-bottom: 0.5rem;
+}
+/* Director iframes stay parked off-screen: they exist only to send &forward commands.
+   The publish iframe is NOT parked here — it now lives inside the self-preview widget
+   (.debate-self-preview-frame) and is sized/hidden there, so its camera keeps streaming
+   even while the preview is visually hidden (never display:none — that throttles the send). */
+.vdo-director-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
+
+/* Przycisk odczepienia sceny istnieje tylko na App.debug — klasę na body stawia
+   setter App.debug (app.js), więc `App.debug = true/false` z konsoli pokazuje/chowa
+   go od razu, na każdym środowisku. Drugorzędne iframe'y (publish/director/preview)
+   floatują się wtedy same, bez udziału tego przycisku — patrz autoFloatFrame (online.js). */
+.vdo-detach-btn { display: none; }
+body.is-debug .vdo-detach-btn.dv-btn { display: flex; }
+.vdo-detach-btn.active { background: rgba(255, 255, 255, 0.22); opacity: 1; }
+
+/* ── Pływające okna: żywe iframe'y VDO.Ninja floatowane na App.debug, plus panel
+   logów i panel pokoju/URL/ID dostępne na App.verbose (patrz online.js). Wszystkie
+   dzielą klasę .vdo-debug-win — przeciąganie/skalowanie/zwijanie działa dla każdego
+   bez dodatkowego kodu (patrz startWinGesture i .vdo-debug-min niżej).
+   Okna z żywym iframe'em trzymają TEN SAM element (przeniesiony, nie kopię — patrz
+   floatIframe), więc reguła parkująca .vdo-director-iframe poza ekranem musi tu
+   przegrać: selektor potomny .vdo-debug-win iframe ma wyższą specyficzność i wraca
+   do normalnego layoutu. Pozycję i rozmiar okna trzyma style inline (drag + uchwyt
+   skalowania). ── */
+.vdo-debug-win {
+  position: fixed;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1b1b1b;
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.55);
+}
+.vdo-debug-title {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #333;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;  /* inaczej przeglądarka zjada pointermove na rzecz scrolla */
+}
+.vdo-debug-title:active { cursor: grabbing; }
+.vdo-debug-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vdo-debug-min {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.vdo-debug-min:hover { background: rgba(255, 255, 255, 0.32); }
+.vdo-debug-body { flex: 1 1 auto; position: relative; background: #000; }
+.vdo-debug-win iframe {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+/* Uchwyt skalowania: własny element, nie CSS `resize` — iframe przykrywa róg okna i
+   połknąłby natywny uchwyt. Leży nad iframe'em, gest obsługuje ten sam setPointerCapture. */
+.vdo-debug-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  z-index: 1;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.5) 50%);
+}
+/* Zwinięte okno: zostaje sam pasek, a treść jedzie poza ekran w pełnym rozmiarze —
+   nigdy display:none, bo iframe publish przestałby nadawać (ta sama zasada, co przy
+   .debate-self-preview-frame). Wyjście z flow zbija wysokość okna do samego paska. */
+.vdo-debug-win.is-min .vdo-debug-body {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  width: 360px;
+  height: 200px;
+}
+.vdo-debug-win.is-min .vdo-debug-grip { display: none; }
+/* Podczas dragu kursor nie może wpaść do iframe'a (połknąłby pointermove mimo capture) */
+body.vdo-debug-dragging .vdo-debug-win iframe { pointer-events: none; }
+
+/* ── Zawartość panelu logów (.vlog-panel) i panelu pokoju/URL/ID (.vinfo-panel) —
+   oba to .vdo-debug-win bez iframe'a w środku, więc tylko własna treść .vdo-debug-body. ── */
+.vlog-body, .vinfo-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #ddd;
+  font-family: 'Chivo Mono', monospace;
+  font-size: 0.72rem;
+}
+.vlog-filters {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.vlog-filters label { display: flex; align-items: center; gap: 3px; margin: 0; cursor: pointer; white-space: nowrap; }
+.vlog-clear-btn { margin-left: auto; padding: 1px 8px; font-size: 0.68rem; }
+.vlog-types {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  max-height: 4.2em;
+  overflow-y: auto;
+}
+.vlog-types label { display: flex; align-items: center; gap: 3px; margin: 0; cursor: pointer; white-space: nowrap; }
+.vlog-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 8px; }
+.vlog-row {
+  display: flex;
+  gap: 6px;
+  padding: 1px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.vlog-ts { flex: 0 0 auto; color: #888; }
+.vlog-tag { flex: 0 0 auto; color: #7fd0ff; }
+.vlog-payload { flex: 1 1 auto; color: #ccc; }
+
+.vinfo-body { overflow-y: auto; padding: 8px; gap: 10px; }
+.vinfo-section h6 { color: #9ad; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; margin: 0 0 4px; }
+.vinfo-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
+.vinfo-label { flex: 0 0 auto; color: #888; min-width: 90px; }
+.vinfo-value { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vinfo-copy-btn {
+  flex: 0 0 auto;
+  border: 0;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.vinfo-copy-btn:hover { background: rgba(255, 255, 255, 0.28); }
+.vinfo-roster { width: 100%; border-collapse: collapse; }
+.vinfo-roster td {
+  padding: 2px 4px 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+
+/* Prep time: label the clock so it's obviously not a protected speech timer */
+body.is-prep-time .timer { position: relative; }
+body.is-prep-time .timer::before {
+  content: 'Czas przygotowania';
+  position: absolute;
+  top: -1.4rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #c0392b;
+}
+.debate-prep-btn.active { background: #c0392b; border-color: #c0392b; color: #fff; }
+
+.debate-join-preview:empty { display: none; }
+.debate-join-preview .vdo-iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+.mic-level-meter {
+  width: 100%;
+  max-width: 360px;
+  height: 8px;
+  border-radius: 4px;
+  background: #e9ecef;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+.mic-level-fill {
+  height: 100%;
+  width: 0%;
+  background: #2a7;
+  border-radius: 4px;
+  transition: width 60ms linear;
+}
+
+/* Chat: tabs, log and input fused into one bordered box (.debate-chat-box);
+   the log alone scrolls — it must never grow the box with message count */
+.debate-chat {
+  max-width: 640px;
+  margin: 1.25rem auto 0;
+  width: 100%;
+}
+.debate-chat-box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fafafa;
+}
+.debate-chat-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+.debate-chat-box .debate-chat-tab {
+  position: relative;
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0;
+}
+.debate-chat-box .debate-chat-tab + .debate-chat-tab { border-left: 1px solid rgba(0, 0, 0, 0.12); }
+.debate-chat-tab.active { background: #6c757d; border-color: #6c757d; color: #fff; }
+.debate-chat-tab.has-unread::after {
+  content: '';
+  position: absolute;
+  top: 2px; right: 2px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #c0392b;
+}
+.debate-chat-log {
+  height: 160px;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem;
+  background: #fafafa;
+  font-size: 0.95rem;
+  transition: background-color 150ms ease;
+}
+.debate-chat-form { border-top: 1px solid rgba(0, 0, 0, 0.12); }
+.debate-chat-form .debate-chat-input,
+.debate-chat-form .debate-chat-send {
+  border: 0;
+  border-radius: 0;
+}
+.debate-chat-form .debate-chat-send { border-left: 1px solid rgba(0, 0, 0, 0.12); }
+/* Outward focus glow would be clipped by the box's overflow:hidden — keep it inside */
+.debate-chat-form .debate-chat-input:focus { box-shadow: inset 0 0 0 2px rgba(108, 117, 125, 0.25); }
+/* The glassmorphic theme re-rounds every .btn; keep chat buttons flush with the box */
+body.glassmorphic .debate-chat-box .btn { border-radius: 0; border-width: 0; }
+body.glassmorphic .debate-chat-box .debate-chat-tab + .debate-chat-tab,
+body.glassmorphic .debate-chat-box .debate-chat-send { border-left: 1px solid rgba(0, 0, 0, 0.12); }
+.chat-msg { margin-bottom: 0.2rem; word-break: break-word; }
+.chat-msg b { color: #444; }
+
+/* Light tint per chat channel — general stays neutral, each team gets its own hue */
+.debate-chat--proposition .debate-chat-log,
+.debate-chat--og .debate-chat-log,
+.debate-chat--cg .debate-chat-log { background: #eaf3ff; }
+.debate-chat--opposition .debate-chat-log,
+.debate-chat--oo .debate-chat-log,
+.debate-chat--co .debate-chat-log { background: #fdecea; }
+.debate-chat--judges .debate-chat-log { background: #f2eaff; }
+.debate-chat--audience .debate-chat-log { background: #eafaf0; }
+
+/* ── Mobile (≤768 px) ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .container {
+    padding: 0;
+    max-width: 100%;
+    width: 100%;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+
+  .jumbotron {
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0 !important;
+    overflow: hidden;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  /* Nav sits naturally inside the rectangle on mobile */
+  .jumbotron nav {
+    position: static;
+    flex: 0 0 auto;
+  }
+
+  /* Content sections fill remaining height and centre their children */
+  .jumbotron > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+
+  .panel-header {
+    display: none;
+  }
+
+  .panel-body {
+    overflow-y: auto;
+    padding: 1rem;
+  }
+
+  #settings,
+  #help {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .debate-lobby-grid { grid-template-columns: 1fr; gap: 0; }
+  .debate-lobby-join { border-left: none; border-top: 1px solid rgba(0,0,0,0.07); padding-left: 0; padding-top: 1rem; margin-top: 1rem; }
+
+  /* Nav icons: tighten horizontal padding so all 5 fit on narrow screens */
+  .navbar-nav .nav-link {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+
+  /* Share/join form controls: bump up from 0.875rem btn-sm/input-group-sm default */
+  .s-share-col .form-control,
+  .s-share-col .btn,
+  .s-join-col .form-control,
+  .s-join-col .btn {
+    font-size: 1rem;
+    height: auto;
+  }
+
+  .s-share-col .input-group,
+  .s-join-col .input-group {
+    width: 100% !important;
+  }
+
+  .session-name-input,
+  .session-join-input {
+    width: auto !important;
+    max-width: none !important;
+    flex: 1;
+  }
+}
+
+/* ── Glassmorphism Theme ────────────────────────────────── */
+body.glassmorphic {
+ background: radial-gradient(#fff,#c6d1d9);
+}
+
+body.glassmorphic .jumbotron {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border-radius: 19px !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+body.glassmorphic .btn {
+  color: #333;
+  backdrop-filter: blur(4px);
+  border-radius: 7px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5.5px);
+  -webkit-backdrop-filter: blur(5.5px);
+  border: 1px solid rgba(255, 255, 255, 0.21);
+}
+
+body.glassmorphic .btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+body.glassmorphic .btn-primary {
+  background: rgba(102, 126, 234, 0.7);
+  border: 1px solid rgba(102, 126, 234, 0.5);
+  color: white;
+}
+
+body.glassmorphic .btn-primary:hover {
+  background: rgba(102, 126, 234, 0.9);
+}
+
+body.glassmorphic .form-control,
+body.glassmorphic .form-control-sm {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(4px);
+}

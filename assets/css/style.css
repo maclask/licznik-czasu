@@ -1,167 +1,560 @@
-#timer{
-    font-size: 150px;
-}
-#timer .timer{
-	height: 200px;
-	scale: 100%;
-}
-#teza{
-    text-align: center;
-}
-.alert{
-    position: absolute;
-}
-.jumbotron{
-    background: white !important;
-	/*background: #f3f3f5;*/
-    /*box-shadow: 0 15px 35px rgba(50,50,93,.1), 0 5px 15px rgba(0,0,0,.07);*/
-	-webkit-box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
-	box-shadow: 14px 14px 31px #d1d1d3, -14px -14px 31px #ffffff;
-    height: 80vh;
-    display: flex;
-    align-items: center;
-    margin: auto;
-    min-width: 100%;
-	margin-top: 0;
-	overflow: auto;
-}
-.jumbotron > div{
-    margin: auto;
-}
-.input-minuty, .input-minuty-advocem{
-    width: 100px;
-}
-.icon{
-	opacity: 0.75;
-}
-.tooltip {
-    left: 10px;
-    top: 10px;
-}
-#settings .row{
-    margin-bottom: 30px;
-}
-.dropdown{
-	margin: 5% 0;
-}
-.label-settings{
-    ​​font-weight: 300;
-    //font-size: 24px;
-}
-.border-top{
-    padding-top: 25px;
-}
-.timer-controls button{
-    text-transform: uppercase !important;
-}
-.timer-controls{
-	transition-duration: 4s;
-}
-.joker-controls{
-    margin-top: 20px;
-
-}
-.joker-controls button{
-    border-color: rgb(122, 8, 112) !important;
-    color: rgb(122, 8, 112) !important;
-    
-}
-.joker-controls button:hover{
-    background-color: rgb(122, 8, 112) !important;
-    color: #fff !important;
-}
-.joker-timer{
-    font-size: 80px;
-    color: rgb(122, 8, 112);
-    text-align: center;
-}
-.joker-timer p{
-    font-size: 30px;
-    text-transform: uppercase;
-    margin-bottom: -20px;
-    margin-top: 20px;
-
+:root {
+  --timer-size: clamp(60px, 17vmin, 280px);
 }
 
-.timer, .joker-timer {
-	text-align: center;
+@media (max-width: 768px) {
+  :root {
+    --timer-size: clamp(80px, 25vmin, 200px);
+  }
 }
+@import url('https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,100..900;1,100..900&family=Epilogue:ital,wght@0,100..900;1,100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+html, body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+}
+
 body {
+  background: #f3f3f5;
+}
 
-    /*background: #e9ecef !important;*/
-	background: #f3f3f5;
+/* ── Container ─────────────────────────────────────────── */
+.container {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  overflow: visible;
+  padding-left: 15px;
+  padding-right: 15px;
 }
-.img-grid{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    grid-gap: 1rem;
-    max-width: 500px;
-    margin: auto;;
+
+/* ── White rectangle ────────────────────────────────────── */
+.jumbotron {
+  background: white !important;
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0), 0 20px 60px rgba(0, 0, 0, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  height: 80vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: visible;
+  margin: 0;
+  padding: 1.5rem;
 }
+
+.jumbotron > div {
+  width: 100%;
+}
+
+/* ── Navigation — desktop: floats above the rectangle ───── */
+.jumbotron nav {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+}
+
+/* ── Alert ──────────────────────────────────────────────── */
+.alert {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+
+/* ── Timer ──────────────────────────────────────────────── */
+#timer {
+  font-size: var(--timer-size);
+}
+
+#timer .timer,
+.debate-center .timer {
+  scale: 100%;
+}
+
+/* Debate clock lives in the narrower centre column, so scale it down */
+.debate-center .timer {
+  font-size: clamp(40px, 9vmin, 120px);
+  line-height: 1;
+}
+.debate-center .joker-timer {
+  font-size: clamp(22px, 5vmin, 60px);
+}
+
+#motion,
+.motion-text {
+  text-align: center;
+  font-size: clamp(1rem, 2.5vmin, 2rem);
+}
+
+/* ── Settings & Help layout ──────────────────────────────── */
+#settings,
+#help {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 4.5rem;
+}
+
+.panel-header {
+  flex: 0 0 auto;
+  padding: 2rem 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #222;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.4rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+/* Settings rows (Bootstrap-based) */
+.s-row {
+  margin-bottom: 1rem;
+}
+
+.s-label {
+  font-size: 1rem;
+  font-weight: 300;
+  color: #000;
+  white-space: nowrap;
+  padding-right: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .s-label {
+    min-width: 9rem;
+  }
+}
+
+.s-label-top {
+  padding-top: 0.35rem;
+}
+
+.s-format-radios {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.s-btn-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.icon-btn-svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: block;
+}
+
+.s-setting-line {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.s-setting-line:last-child {
+  margin-bottom: 0;
+}
+
+/* .no-gutters > [class*="col-"] resets left/right padding to 0 with a
+   higher-specificity selector, so these need a class+class selector
+   (matched on the same element) to actually win. */
+.s-row.no-gutters > .s-check-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  padding-left: 1.5rem;
+  padding-right: 1rem;
+}
+
+@media (max-width: 767px) {
+  .s-row.no-gutters > .s-check-col {
+    padding-left: 0;
+    padding-right: 0;
+    margin-top: 0.75rem;
+    gap: 0.75rem;
+  }
+}
+
+/* Share / join columns, next to the checkboxes */
+.s-row.no-gutters > .s-share-col,
+.s-row.no-gutters > .s-join-col {
+  padding-left: 1rem;
+  padding-right: 1rem;
+  border-left: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+@media (max-width: 767px) {
+  .s-row.no-gutters > .s-share-col,
+  .s-row.no-gutters > .s-join-col {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 1rem;
+    border-left: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+  }
+}
+
+/* Generated link is just for copying, not reading — clip it instead of
+   letting its length force the input (and the row) wider. Needs to beat
+   .input-group > .form-control's own width/flex-grow (same specificity,
+   so matched the same way here to win on cascade order). */
+.input-group > .session-link-val,
+.input-group > .slave-session-link-val {
+  width: 112px;
+  flex: 0 1 auto;
+  text-overflow: ellipsis;
+}
+
+/* Connected-viewer status (slave): shown instead of the settings above */
+.s-slave-status {
+  display: none;
+}
+
+.input-motion {
+  resize: none;
+  font-size: 1rem;
+}
+
+@media (max-width: 767px) {
+  .s-label {
+    font-weight: 500;
+    white-space: normal;
+    padding-right: 1.5rem;
+    margin-bottom: 0.3rem;
+  }
+  .s-label-top {
+    padding-top: 0;
+  }
+  .s-row > [class*="col-"] + [class*="col-"] {
+    margin-top: 0.5rem;
+  }
+  .s-row > [class*="col-"]:first-child {
+    margin-top: 0;
+  }
+}
+
+/* Logo drop zones */
+.logo-drop-zone {
+  width: 200px;
+  position: relative;
+  border: 2px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.logo-drop-zone.drag-over {
+  border-color: #6c757d;
+  background: rgba(108, 117, 125, 0.07);
+}
+
+.logo-drop-hint {
+  font-size: 0.75rem;
+  color: #999;
+  margin: 0;
+}
+
+#logo-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.logo-slot-controls {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.logo-slot-preview {
+  display: none;
+  max-width: 100%;
+  max-height: 80px;
+  object-fit: contain;
+}
+
+.logo-slot--active .logo-slot-controls,
+.logo-slot--active .logo-drop-hint {
+  display: none;
+}
+
+.logo-slot--active .logo-slot-preview {
+  display: block;
+}
+
+.logo-change-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.78rem;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.5rem;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.logo-slot--active:hover .logo-change-overlay {
+  display: flex;
+}
+
+.logo-add-card { cursor: pointer; }
+.logo-add-card:hover { border-color: #6c757d; background: rgba(108, 117, 125, 0.07); }
+.logo-add-plus { font-size: 2rem; line-height: 1; color: rgba(0, 0, 0, 0.3); }
+
+.logo-remove-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  background: #f3f3f3;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  z-index: 2;
+  font-size: 0;
+  color: transparent;
+}
+.logo-remove-btn::before {
+  content: '×';
+  position: absolute;
+  top: 45%;
+  left: 52%;  
+  transform: translate(-50%, -50%);
+  font-size: 1rem;
+  line-height: 1;
+  color: #888;
+}
+.logo-remove-btn:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+.logo-remove-btn:hover::before {
+  color: #222;
+}
+
+@media (max-width: 768px) {
+  .logo-drop-zone { width: 100%; }
+}
+
+.oxford-setting {
+  transition: opacity 0.2s;
+}
+
+.oxford-setting.settings-hidden {
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+/* ── Settings checkboxes & radios — grey instead of blue ── */
+#settings .custom-control-input:checked ~ .custom-control-label::before {
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+
+#settings .custom-control-input:focus ~ .custom-control-label::before {
+  box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+}
+
+#settings .custom-control-input:focus:not(:checked) ~ .custom-control-label::before {
+  border-color: #adb5bd;
+}
+
+/* ── Settings inputs ────────────────────────────────────── */
+.input-minutes,
+.input-minutes-advocem {
+  width: 6ch;
+  height: auto;
+  padding: 0.25rem 0.4rem;
+  font-size: 1rem;
+}
+
+.s-format-radios {
+  gap: 1.5rem;
+}
+
+.icon {
+  opacity: 0.75;
+}
+
+.tooltip {
+  left: 10px;
+  top: 10px;
+}
+
+.label-settings {
+  font-weight: 300;
+}
+
+.border-top {
+  padding-top: 25px;
+}
+
+/* ── Timer controls ─────────────────────────────────────── */
+.timer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+
+.joker-controls {
+  margin-top: 1rem;
+}
+
+.joker-controls button {
+  color: rgb(122, 8, 112);
+  border-color: rgba(122, 8, 112, 0.25);
+  box-shadow: none;
+}
+
+.joker-controls button:hover {
+  background: rgba(122, 8, 112, 0.08);
+  color: rgb(122, 8, 112);
+  border-color: rgba(122, 8, 112, 0.4);
+  box-shadow: none;
+}
+
+/* ── Joker timer ────────────────────────────────────────── */
+.joker-timer {
+  font-size: calc(var(--timer-size) * 0.6);
+  color: rgb(122, 8, 112);
+  text-align: center;
+}
+
+.joker-timer p {
+  font-size: clamp(0.875rem, 2vmin, 1.5rem);
+  text-transform: uppercase;
+  margin-bottom: -0.2em;
+  margin-top: 0.2em;
+}
+
+.timer,
+.joker-timer {
+  text-align: center;
+}
+
+.timer.bp-overtime {
+  color: #c0392b;
+}
+
+/* ── Logo images ────────────────────────────────────────── */
+.img-grid {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  max-width: 100%;
+}
+
+.img-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(4px, 1vmin, 16px);
+}
+
 .img-container {
-    padding: 1rem;
-    display: none; /*js changes it to grid*/
-    place-items: center;
-    max-width: 250px;
-    margin: auto;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  max-height: var(--timer-size);
+  max-width: var(--timer-size);
+  min-width: 0;
 }
-.img-container::before {
-    content: "";
-    padding-bottom: 100%;
-    display: block;
-    grid-area: 1 / 1 / 2 / 2;
-  }
-  .img-container img{
-    width: 100%;
-    grid-area: 1 / 1 / 2 / 2;
-  }
-.table td, .table th {
 
-    border-top: none !important;
+.img-container img {
+  max-height: var(--timer-size);
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
-.credits{
-    font-weight: 600;
-    text-align: right;
-    
+
+.img-grid[data-count="4"] .img-container,
+.img-grid[data-count="5"] .img-container,
+.img-grid[data-count="6"] .img-container {
+  max-width: clamp(40px, 13vmin, 150px);
+  flex-shrink: 1;
 }
-.adv{
-    width: 100%;
-    float: left;
+
+.img-grid[data-count="4"] .img-container img,
+.img-grid[data-count="5"] .img-container img,
+.img-grid[data-count="6"] .img-container img {
+  max-height: 100%;
 }
-.adv img{
-    float:  left;
+
+/* ── Misc ───────────────────────────────────────────────── */
+.table td,
+.table th {
+  border-top: none !important;
 }
-.adv p{
-    margin: 10px;
+
+.credits {
+  font-weight: 600;
+  text-align: right;
 }
-.container{
-    min-height: 100%;  /* Fallback for browsers do NOT support vh unit */
-    min-height: 100vh; /* These two lines are counted as one :-)       */
-    display: flex;
-    align-items: center;
-    flex-direction: column;
+
+
+/* ── Section title in navbar (mobile only) ──────────────── */
+#section-title {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #222;
+  letter-spacing: -0.01em;
+  flex: 1;
 }
-nav{
-    width: 100%;
-	margin-top: 5%;
+
+/* ── Confetti ─────────────────────────────────────────────── */
+.confetti-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 9999;
 }
-.img-settings img{
-	width: 100px;
+
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  border-radius: 1px;
+  will-change: transform;
 }
-.media{
-	display: flex;
-	align-items: center;
-}
-.media-body{
-	line-height: 0.3rem;
-	padding-left: 0.5rem;
-	color: rgba(1,1,1,0.75);
-}
-.media-body small{
-	font-size: 70%;
-}
-.media-body h4{
-	font-size: 1.2rem;
-	padding: 0;
-	margin: 0;
-}
+

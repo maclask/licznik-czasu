@@ -1,281 +1,645 @@
 <!doctype html>
-
 <html>
 <head>
   <title>Licznik czasu</title>
   <link rel="stylesheet" href="assets/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="assets/css/style.css"/>
-  <link href="assets/css/all.css" rel="stylesheet"> 
+  <link rel="stylesheet" href="assets/css/debate.css"/>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 </head>
 
 <body>
-
   <div class="container">
 
-  <nav class="navbar navbar-expand ">
-<!--
-<a href="#">  
-	<div class="justify-content-start media patron" data-toggle="tooltip" title="Baner zasponsorował Filip Kamiński, zwycięzca licytacji charytatywnej KSM">
-		<img src="img/icon-heart.svg" width="28" height="28" class="icon" alt="Serce"/>
-		<div class="media-body">
-			<small class="title">Wesprzyj fundacje </small>
-			<h4 class="name">Fundacja charytatywna</h4>
-			<small class="description"></small>
-		</div>
-	</div>
-</a>
--->
-<div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
-  <ul class="navbar-nav">
-    <li class="nav-item active" data-toggle="tooltip" title="Licznik">
-      <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.svg" width="28" height="28" class="icon" alt="Licznik"/></a>
-    </li>
-    <li class="nav-item" data-toggle="tooltip" title="Ustawienia">
-      <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.svg" width="28" height="28" class="icon" alt="Ustawienia"/></a>
-    </li>
-    <li class="nav-item" data-toggle="tooltip" title="Pomoc">
-      <a class="nav-link"  id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
-    </li>
-    <li class="nav-item" data-toggle="tooltip" title="Pełen ekran">
-      <a class="nav-link full-screen-btn"   href="#"><img src="img/icon-fullscreen.svg" width="24" height="24" class="icon" alt="Pełen ekran"/></a>
-    </li>
-    
-  </ul>
-</div>
-</nav>
+    <div class="alert alert-success">
+      <strong>Zrobiono!</strong>
+    </div>
 
+    <div class="alert alert-warning toast-warn"></div>
 
-  
-  <div class="alert alert-success">
-    <strong>Zrobiono!</strong>
+    <div class="alert alert-danger session-lost-alert">Utracono połączenie</div>
+    <div class="alert alert-info session-status" style="display:none"></div>
+
+    <div class="jumbotron">
+
+      <nav class="navbar navbar-expand">
+        <span id="section-title" class="navbar-text d-md-none"></span>
+        <div class="collapse navbar-collapse justify-content-end" id="navbarCollapse">
+          <ul class="navbar-nav">
+            <li class="nav-item active" data-toggle="tooltip" title="Licznik">
+              <a class="nav-link" id="timer-link" href="#"><img src="img/icon-clock.svg" width="28" height="28" class="icon" alt="Licznik"/></a>
+            </li>
+            <li class="nav-item" data-toggle="tooltip" title="Ustawienia">
+              <a class="nav-link" id="settings-link" href="#"><img src="img/icon-cog.svg" width="28" height="28" class="icon" alt="Ustawienia"/></a>
+            </li>
+            <li class="nav-item" id="debate-link-item" data-toggle="tooltip" title="Debata online">
+              <a class="nav-link" id="debate-link" href="#">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="black" style="width:26px;height:26px" class="icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h8.25a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H4.5A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+              </a>
+            </li>
+            <li class="nav-item" data-toggle="tooltip" title="Pomoc">
+              <a class="nav-link" id="help-link" href="#"><img src="img/icon-help.svg" width="28" height="28" class="icon" alt="Pomoc"/></a>
+            </li>
+            <li class="nav-item" data-toggle="tooltip" title="Pełen ekran">
+              <a class="nav-link full-screen-btn" href="#"><img src="img/icon-fullscreen.svg" width="24" height="24" class="icon" alt="Pełen ekran"/></a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <div id="timer">
+        <div class="row justify-content-md-center">
+          <h2 id="motion" class="text-uppercase motion-text"></h2>
+        </div>
+        <div class="row justify-content-md-center">
+          <div class="col-lg"></div>
+          <div class="col-lg timer">
+            <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
+          </div>
+          <div class="col-lg">
+            <div class="joker-timer">
+              <p>Joker</p>
+              <span class="joker-minutes text-monospace">0</span>:<span class="joker-seconds text-monospace">00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="img-grid">
+          <div class="img-container"><img class="img1" src="" alt="logo1"/></div>
+          <div class="img-container"><img class="img2" src="" alt="logo2"/></div>
+          <div class="img-container"><img class="img3" src="" alt="logo3"/></div>
+          <div class="img-container"><img class="img4" src="" alt="logo4"/></div>
+          <div class="img-container"><img class="img5" src="" alt="logo5"/></div>
+          <div class="img-container"><img class="img6" src="" alt="logo6"/></div>
+        </div>
+
+        <div class="row justify-content-md-center">
+          <div class="timer-controls">
+            <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
+            <button type="button" class="btn btn-outline-secondary reset">Reset</button>
+            <button type="button" class="btn btn-outline-secondary ad-vocem oxford-only">Ad vocem</button>
+            <button type="button" class="btn btn-outline-secondary joker oxford-joker">Joker</button>
+          </div>
+        </div>
+        <div class="row justify-content-md-center">
+          <div class="timer-controls joker-controls">
+            <button type="button" class="btn btn-outline-secondary joker-start-stop">Start/stop</button>
+            <button type="button" class="btn btn-outline-secondary joker-reset">Reset</button>
+            <button type="button" class="btn btn-outline-secondary joker-off">Zakończ</button>
+          </div>
+        </div>
+      </div>
+      <!--end of timer-->
+
+      <div id="settings">
+        <div class="panel-header">
+          <h2>Ustawienia</h2>
+        </div>
+
+        <div class="panel-body">
+          <div class="settings-rows">
+
+            <!-- Debate format -->
+            <div class="row no-gutters align-items-center s-row">
+              <div class="col-12 col-md-auto s-label">Format debaty</div>
+              <div class="col-12 col-md-auto">
+                <div class="s-format-radios">
+                  <div class="custom-control custom-radio">
+                    <input type="radio" id="formatOxford" name="debateFormat" class="custom-control-input debate-format" value="oxford" checked>
+                    <label class="custom-control-label" for="formatOxford">Oksfordzka</label>
+                  </div>
+                  <div class="custom-control custom-radio">
+                    <input type="radio" id="formatBP" name="debateFormat" class="custom-control-input debate-format" value="bp">
+                    <label class="custom-control-label" for="formatBP">Brytyjska Parlamentarna</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Motion -->
+            <div class="row no-gutters align-items-start s-row">
+              <div class="col-12 col-md-auto s-label s-label-top">Teza</div>
+              <div class="col-12 col-md">
+                <textarea class="input-motion form-control" id="motion-input" name="motion" rows="3" placeholder="wpisz tezę debaty…"></textarea>
+              </div>
+            </div>
+
+            <!-- Speech time / Ad vocem / Sound test + Checkboxes + Share/Join -->
+            <div class="row no-gutters s-row">
+              <div class="col-12 col-md-auto">
+                <div class="s-setting-line">
+                  <span class="s-label">Czas mowy</span>
+                  <input class="input-minutes form-control" id="minutes" name="minutes" value="05:00" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                </div>
+                <div class="s-setting-line oxford-setting">
+                  <span class="s-label">Ad vocem</span>
+                  <input class="input-minutes-advocem form-control" id="minutes-advocem" name="minutes-advocem" value="00:30" type="text" inputmode="numeric" placeholder="MM:SS" maxlength="5" autocomplete="off" data-toggle="tooltip" data-placement="top" title="minuty : sekundy">
+                </div>
+                <div class="s-setting-line">
+                  <span class="s-label">Test dźwięku</span>
+                  <div class="s-btn-group">
+                    <button type="button" class="btn btn-secondary btn-sm sound-test1" data-toggle="tooltip" data-placement="top" title="Czas chroniony" aria-label="Czas chroniony">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-btn-svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                      </svg>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm sound-test2" data-toggle="tooltip" data-placement="top" title="Koniec czasu" aria-label="Koniec czasu">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-btn-svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0M3.124 7.5A8.969 8.969 0 0 1 5.292 3m13.416 0a8.969 8.969 0 0 1 2.168 4.5" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="col-12 col-md-auto s-check-col">
+                <div class="custom-control custom-checkbox">
+                  <input type="checkbox" class="custom-control-input controls-checkbox" id="customCheck1" checked>
+                  <label class="custom-control-label" for="customCheck1">Pokaż przyciski</label>
+                </div>
+                <div class="custom-control custom-checkbox oxford-setting">
+                  <input type="checkbox" class="custom-control-input joker-checkbox" id="jokerCheck">
+                  <label class="custom-control-label" for="jokerCheck">Włącz Jokera</label>
+                </div>
+                <div class="custom-control custom-checkbox">
+                  <input type="checkbox" class="custom-control-input sound-switch" id="customCheck2" checked>
+                  <label class="custom-control-label" for="customCheck2">Włącz dźwięki</label>
+                </div>
+              </div>
+              <div class="col-12 col-md-auto s-share-col">
+                <p class="sharing-col-title">Udostępnij licznik</p>
+                <div class="input-group" style="width:auto">
+                  <input type="text" class="form-control session-name-input" placeholder="nazwa sesji" style="width:110px">
+                  <div class="input-group-append">
+                    <button type="button" class="btn btn-outline-secondary session-random-btn" data-toggle="tooltip" data-placement="top" title="Losuj nazwę" aria-label="Losuj nazwę">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" class="icon-btn-svg">
+                        <rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="8" cy="8" r="1.4" fill="currentColor"/>
+                        <circle cx="16" cy="8" r="1.4" fill="currentColor"/>
+                        <circle cx="12" cy="12" r="1.4" fill="currentColor"/>
+                        <circle cx="8" cy="16" r="1.4" fill="currentColor"/>
+                        <circle cx="16" cy="16" r="1.4" fill="currentColor"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-secondary session-create-btn mt-2" disabled>Udostępnij</button>
+                <div class="custom-control custom-checkbox mt-2">
+                  <input type="checkbox" class="custom-control-input slave-controls-checkbox" id="slaveControlsCheck">
+                  <label class="custom-control-label" for="slaveControlsCheck">Pozwól sterować licznikiem</label>
+                </div>
+              </div>
+              <div class="col-12 col-md-auto s-join-col">
+                <div class="s-join-default">
+                  <p class="sharing-col-title">Podłącz się do licznika</p>
+                  <input type="text" class="form-control session-join-input" placeholder="nazwa sesji" style="width:160px">
+                  <button type="button" class="btn btn-secondary session-join-btn mt-2" disabled>Podłącz</button>
+                  <small class="session-join-error text-danger d-block mt-1"></small>
+                </div>
+                <div class="session-links">
+                  <div id="session-qr" class="d-flex justify-content-center"></div>
+                  <div class="input-group mt-2">
+                    <input type="text" class="form-control session-link-val" readonly>
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary session-copy-btn" type="button">Kopiuj</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Logos -->
+            <div class="row no-gutters align-items-start s-row">
+              <div class="col-12 col-md-auto s-label s-label-top">Loga</div>
+              <div class="col-12 col-md">
+                <div id="logo-slots">
+
+                  <!-- Logo slots are rendered from state by renderLogoSlots() in stopwatch.js -->
+
+                  <!-- Add card -->
+                  <div class="logo-drop-zone logo-add-card" id="logo-add-card">
+                    <span class="logo-add-plus">+</span>
+                    <p class="logo-drop-hint">dodaj kolejne logo</p>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- Interface style -->
+            <div class="row no-gutters align-items-center s-row" id="style-select-row">
+              <div class="col-12 col-md-auto s-label">Styl</div>
+              <div class="col-12 col-md-auto">
+                <select class="form-control form-control-sm" id="style-select" style="width:auto">
+                  <option value="default" selected>Domyślny</option>
+                  <option value="glassmorphic">Glassmorphizm</option>
+                </select>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Connected-viewer status: shown instead of the (greyed-out) settings
+               above when this tab is reached as a joined slave session. -->
+          <div class="s-slave-status">
+            <p class="sharing-col-title">Połączono z licznikiem</p>
+            <div id="slave-qr" class="d-flex justify-content-center mb-2"></div>
+            <div class="d-flex justify-content-center">
+              <div class="input-group" style="width:auto">
+                <input type="text" class="form-control slave-session-link-val" readonly>
+                <div class="input-group-append">
+                  <button class="btn btn-outline-secondary slave-copy-btn" type="button">Kopiuj</button>
+                  <button class="btn btn-outline-danger slave-disconnect-btn" type="button">Rozłącz</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!--end of panel-body-->
+
+        <audio src="audio/end.mp3" type="audio/mp3" id="endoftime"></audio>
+        <audio src="audio/30s.mp3" type="audio/mp3" id="30stoend"></audio>
+      </div>
+      <!--end of settings-->
+
+      <div id="help">
+        <div class="panel-header">
+          <h2>Pomoc</h2>
+        </div>
+        <div class="panel-body">
+          <p>Jak korzystać z licznika w szybki sposób?</p>
+          <table class="table table-borderless">
+            <thead>
+              <tr>
+                <th>Klawisz</th>
+                <th>Akcja</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>Ustawienie licznika głównego w pozycji startowej</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>Ustawienie licznika ad vocem w pozycji startowej</td>
+              </tr>
+              <tr>
+                <td>Spacja</td>
+                <td>Rozpoczęcia/zapauzowanie liczenia</td>
+              </tr>
+              <tr>
+                <td>j</td>
+                <td>Uruchomienie Jokera</td>
+              </tr>
+              <tr>
+                <td>h</td>
+                <td>Rozpoczęcia/zapauzowanie Jokera</td>
+              </tr>
+              <tr>
+                <td>k</td>
+                <td>Zakończenie Jokera</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="row">
+            <div class="col border-top credits">
+              Repozytorium<br/>
+              <a href="https://github.com/maclask/licznik-czasu">github.com/maclask/licznik-czasu</a><br/>
+              &copy; Maciej Laskowski
+            </div>
+          </div>
+          <div class="row">
+            <div class="col border-top credits">
+              Ikony<br/>
+              &copy; 2018 Steve Schoger
+            </div>
+          </div>
+        </div>
+      </div>
+      <!--end of help-->
+
+      <div id="debate">
+
+        <!-- Lobby: create a room (left) or join an existing one (right). Shown whenever
+             no debate is active. A URL joiner (?s=…&d=1) gets body.is-url-join, which
+             collapses this to just the join column's media panel. -->
+        <div class="debate-lobby">
+          <div class="panel-header"><h2>Debata online</h2></div>
+          <div class="debate-lobby-grid">
+
+            <!-- LEFT: create a debate room -->
+            <div class="debate-lobby-col debate-lobby-create">
+              <p class="sharing-col-title">Stwórz pokój debaty online</p>
+              <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                <div class="input-group" style="width:auto">
+                  <input type="text" class="form-control debate-name-input" placeholder="nazwa pokoju" style="width:130px">
+                  <div class="input-group-append">
+                    <button type="button" class="btn btn-outline-secondary debate-random-btn">Losuj</button>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-secondary debate-create-btn" disabled>Stwórz pokój</button>
+              </div>
+              <!-- After create: shareable link + QR for participants -->
+              <div class="debate-links mt-3" style="display:none">
+                <div class="input-group">
+                  <input type="text" class="form-control debate-link-val" readonly>
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-secondary debate-copy-btn" type="button">Kopiuj</button>
+                  </div>
+                </div>
+                <div id="debate-qr" class="mt-2 d-flex justify-content-center"></div>
+              </div>
+              <!-- After create: host name + camera/mic check, then enter the stage -->
+              <div class="debate-media-panel debate-create-setup mt-3" style="display:none">
+                <div class="s-setting-line">
+                  <span class="s-label">Imię</span>
+                  <input type="text" class="form-control debate-join-name" placeholder="Twoje imię" maxlength="40" autocomplete="off">
+                </div>
+                <p class="debate-join-hint">Sprawdź kamerę i mikrofon:</p>
+                <div class="debate-join-preview"></div>
+                <div class="mic-level-meter" style="display:none"><div class="mic-level-fill"></div></div>
+                <div class="d-flex flex-wrap align-items-center mb-2" style="gap:0.5rem">
+                  <select class="form-control form-control-sm debate-join-cam-select" style="width:auto;display:none"></select>
+                  <select class="form-control form-control-sm debate-join-mic-select" style="width:auto;display:none"></select>
+                </div>
+                <button type="button" class="btn btn-secondary debate-enter-btn">Wejdź do debaty</button>
+              </div>
+            </div>
+
+            <!-- RIGHT: join an existing debate room -->
+            <div class="debate-lobby-col debate-lobby-join">
+              <p class="sharing-col-title">Dołącz do istniejącego pokoju</p>
+              <div class="debate-join-connect d-flex align-items-center flex-wrap" style="gap:0.5rem">
+                <input type="text" class="form-control debate-join-room-input" placeholder="nazwa pokoju" style="max-width:150px">
+                <button type="button" class="btn btn-secondary debate-connect-btn" disabled>Dołącz</button>
+              </div>
+              <small class="debate-connect-error text-danger d-block mt-1"></small>
+              <!-- After connect: your name + camera/mic check, then enter -->
+              <div class="debate-media-panel debate-join-setup mt-3" style="display:none">
+                <div class="s-setting-line">
+                  <span class="s-label">Imię</span>
+                  <input type="text" class="form-control debate-join-name" placeholder="Twoje imię" maxlength="40" autocomplete="off">
+                </div>
+                <p class="debate-join-hint">Sprawdź kamerę i mikrofon przed dołączeniem:</p>
+                <div class="debate-join-preview"></div>
+                <div class="mic-level-meter" style="display:none"><div class="mic-level-fill"></div></div>
+                <div class="d-flex flex-wrap align-items-center mb-2" style="gap:0.5rem">
+                  <select class="form-control form-control-sm debate-join-cam-select" style="width:auto;display:none"></select>
+                  <select class="form-control form-control-sm debate-join-mic-select" style="width:auto;display:none"></select>
+                </div>
+                <button type="button" class="btn btn-secondary debate-join-btn">Dołącz</button>
+                <small class="debate-join-error text-danger d-block mt-1"></small>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Participant: hold screen while joining / waiting for admission -->
+        <div class="debate-waiting" style="display:none">
+          <div class="panel-header"><h2>Debata online</h2></div>
+          <p class="debate-waiting-hint">Dołączanie…</p>
+        </div>
+
+        <!-- Debate stage: 3-column layout -->
+        <div class="debate-stage" style="display:none">
+          <div class="debate-grid">
+
+            <!-- LEFT: proposition (oxford) / government (bp) / marshal / judges / audience -->
+            <div class="debate-side debate-side-left">
+              <div class="debate-zone oxford-only">
+                <h3 class="debate-zone-title">Propozycja</h3>
+                <div class="slot-list" data-zone="proposition" data-slots="4"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Otwierający rząd (OG)</h3>
+                <div class="slot-list" data-zone="og" data-slots="2"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Zamykający rząd (CG)</h3>
+                <div class="slot-list" data-zone="cg" data-slots="2"></div>
+              </div>
+              <div class="debate-zone debate-zone--marshal" style="display:none">
+                <h3 class="debate-zone-title">Marszałek</h3>
+                <div class="slot-list" data-zone="marszalek" data-slots="1"></div>
+              </div>
+              <div class="debate-zone">
+                <h3 class="debate-zone-title">Sędziowie</h3>
+                <div class="slot-list" data-zone="judges" data-slots="3"></div>
+              </div>
+              <div class="debate-zone">
+                <h3 class="debate-zone-title">Widzowie</h3>
+                <div class="slot-list slot-list--audience" data-zone="audience"></div>
+              </div>
+            </div>
+
+            <!-- CENTER: motion, video, clock, logos, timer controls -->
+            <div class="debate-center">
+              <h2 class="text-uppercase motion-text debate-motion"></h2>
+              <div class="debate-video">
+                <div class="debate-video-frame"></div>
+                <!-- Self-view PiP: the hidden publish iframe is appended into
+                     .debate-self-preview-frame (never into body) so it renders the
+                     local camera self-view in this corner. Sibling of the scene frame
+                     so embedVdo()'s rebuild of .debate-video-frame never wipes it. -->
+                <div class="debate-self-preview">
+                  <div class="debate-self-preview-frame"></div>
+                  <button type="button" class="debate-self-preview-eye" title="Ukryj podgląd">
+                    <svg class="dv-icon dv-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg class="dv-icon dv-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  </button>
+                </div>
+                <div class="debate-video-overlay">
+
+                  <div class="btn-group dropup dv-group dv-mic-group">
+                    <button type="button" class="btn dv-btn debate-mic-btn" title="Wycisz mikrofon">
+                      <svg class="dv-icon dv-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                      <svg class="dv-icon dv-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2"/><path d="M19 10v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    </button>
+                    <button type="button" class="btn dv-btn dv-caret dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" disabled>
+                      <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                      <span class="sr-only">Wybierz mikrofon</span>
+                    </button>
+                    <div class="dropdown-menu debate-mic-menu"></div>
+                  </div>
+
+                  <div class="btn-group dropup dv-group dv-cam-group">
+                    <button type="button" class="btn dv-btn debate-cam-btn" title="Wyłącz kamerę">
+                      <svg class="dv-icon dv-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                      <svg class="dv-icon dv-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                    <button type="button" class="btn dv-btn dv-caret dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" disabled>
+                      <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                      <span class="sr-only">Wybierz kamerę</span>
+                    </button>
+                    <div class="dropdown-menu debate-cam-menu"></div>
+                  </div>
+
+                  <button type="button" class="btn dv-btn debate-hand-btn" title="Zgłoś pytanie">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5.5"/>
+                      <path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0v7"/>
+                      <path d="M14 11.8V6a1.5 1.5 0 0 1 3 0v6.5"/>
+                      <path d="M17 13V9a1.5 1.5 0 0 1 3 0v6c0 3.5-2 6.5-6 6.5h-1.5c-2 0-3-.5-4.3-2.2L5 15.8c-.6-.8-.5-1.7.3-2.3.8-.6 1.8-.4 2.4.3L9 15.5"/>
+                    </svg>
+                  </button>
+
+                  <button type="button" class="btn dv-btn dv-text-btn debate-advocem-btn" title="Ad vocem">AV</button>
+
+                  <button type="button" class="btn dv-btn debate-breakout-btn" title="Pokój narad">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </button>
+
+                  <button type="button" class="btn dv-btn debate-leave-btn" title="Opuść pokój">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  </button>
+
+                  <!-- Odczepienie głównego iframe'a sceny do pływającego okna — widoczne tylko
+                       na App.debug (dev/local domyślnie, przełączalne z konsoli — patrz app.js,
+                       toggleMainFloat w online.js). Drugorzędne iframe'y (publish/director/
+                       preview) floatują się wtedy same, bez tego przycisku. -->
+                  <button type="button" class="btn dv-btn vdo-detach-btn" title="Odepnij scenę do pływającego okna">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </button>
+
+                  <button type="button" class="btn dv-btn debate-settings-btn" title="Ustawienia" data-toggle="modal" data-target="#debate-settings-modal">
+                    <svg class="dv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </button>
+
+                </div>
+              </div>
+              <div class="debate-clock-row">
+                <div class="debate-clock-main">
+                  <div class="timer">
+                    <span class="timer-minutes text-monospace">0</span>:<span class="timer-seconds text-monospace">00</span>
+                  </div>
+                  <div class="joker-timer">
+                    <p>Joker</p>
+                    <span class="joker-minutes text-monospace">0</span>:<span class="joker-seconds text-monospace">00</span>
+                  </div>
+                </div>
+                <div class="img-grid">
+                  <div class="img-container"><img class="img1" src="" alt="logo1"/></div>
+                  <div class="img-container"><img class="img2" src="" alt="logo2"/></div>
+                  <div class="img-container"><img class="img3" src="" alt="logo3"/></div>
+                  <div class="img-container"><img class="img4" src="" alt="logo4"/></div>
+                  <div class="img-container"><img class="img5" src="" alt="logo5"/></div>
+                  <div class="img-container"><img class="img6" src="" alt="logo6"/></div>
+                </div>
+              </div>
+              <div class="timer-controls debate-timer-controls">
+                <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
+                <button type="button" class="btn btn-outline-secondary reset">Reset</button>
+                <button type="button" class="btn btn-outline-secondary ad-vocem oxford-only">Ad vocem</button>
+                <button type="button" class="btn btn-outline-secondary joker oxford-joker">Joker</button>
+              </div>
+              <div class="timer-controls joker-controls debate-timer-controls">
+                <button type="button" class="btn btn-outline-secondary joker-start-stop">Start/stop</button>
+                <button type="button" class="btn btn-outline-secondary joker-reset">Reset</button>
+                <button type="button" class="btn btn-outline-secondary joker-off">Zakończ</button>
+              </div>
+            </div>
+
+            <!-- RIGHT: opposition (oxford) / opposition benches (bp) / chat -->
+            <div class="debate-side debate-side-right">
+              <div class="debate-zone oxford-only">
+                <h3 class="debate-zone-title">Opozycja</h3>
+                <div class="slot-list" data-zone="opposition" data-slots="4"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Otwierająca opozycja (OO)</h3>
+                <div class="slot-list" data-zone="oo" data-slots="2"></div>
+              </div>
+              <div class="debate-zone bp-only">
+                <h3 class="debate-zone-title">Zamykająca opozycja (CO)</h3>
+                <div class="slot-list" data-zone="co" data-slots="2"></div>
+              </div>
+              <div class="debate-chat">
+                <h3 class="debate-zone-title">Czat</h3>
+                <div class="debate-chat-box">
+                  <div class="debate-chat-tabs">
+                    <button type="button" class="btn btn-outline-secondary btn-sm debate-chat-tab debate-chat-tab-general active">Ogólny</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm debate-chat-tab debate-chat-tab-team">Zespół</button>
+                  </div>
+                  <div class="debate-chat-log"></div>
+                  <div class="input-group debate-chat-form">
+                    <input type="text" class="form-control debate-chat-input" placeholder="napisz wiadomość…" maxlength="300" autocomplete="off">
+                    <div class="input-group-append">
+                      <button class="btn btn-outline-secondary debate-chat-send" type="button">Wyślij</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <p class="comaster-hint">Jesteś wyznaczonym następcą (co-master) — w razie problemu z połączeniem prowadzącego automatycznie przejmiesz jego rolę.</p>
+
+          <!-- Participant management dialog (master only) -->
+          <div class="modal debate-roster-modal" id="debate-roster-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Zarządzanie uczestnikami</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Zamknij"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                  <div class="debate-roster"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Settings dialog (master only) — reached via the gear icon in the video overlay -->
+          <div class="modal debate-settings-modal" id="debate-settings-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Ustawienia debaty</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Zamknij"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body debate-settings-body">
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-invite-btn">Kopiuj link zaproszenia</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-roster-btn">Zarządzanie uczestnikami</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-muteall-btn">Wycisz wszystkich</button>
+                  <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input debate-allow-controls-checkbox" id="debateAllowControlsCheck">
+                    <label class="custom-control-label" for="debateAllowControlsCheck">Pozwól sterować zegarem</label>
+                  </div>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-waitroom-btn">Włącz poczekalnię</button>
+                  <div class="debate-prep-control">
+                    <input type="text" class="form-control form-control-sm input-prep-time" value="15:00" maxlength="5" title="Czas przygotowania">
+                    <button type="button" class="btn btn-outline-secondary btn-sm debate-prep-btn">Czas przygotowania</button>
+                  </div>
+                  <button type="button" class="btn btn-outline-secondary btn-sm debate-editmode-btn">Edytuj przypisanie miejsc</button>
+                  <button type="button" class="btn btn-outline-danger btn-sm debate-close-btn">Zamknij pokój</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <!--end of debate-->
+
+    </div>
+    <!--end of jumbotron-->
+
   </div>
-  
+  <!--end of container-->
 
-
-
-  
-<div class="jumbotron" >
-
-<div id="timer">
-  <div class="row justify-content-md-center">
-  <h2 id="teza" class="text-uppercase"></h2>  
-  </div>
-  <div class="row justify-content-md-center">
-  <div class="col-lg"></div>
-    <div class="col-lg timer"><span class="timer-minutes  text-monospace ">0</span>:<span class="timer-seconds text-monospace ">00</span></div>
-    <div class="col-lg"><div class="joker-timer"><p>Joker</p><span class="joker-minutes text-monospace ">0</span>:<span class="joker-seconds text-monospace ">00</span></div></div>
-  </div>
-
-  <div class="row img-grid justify-content-md-center">
-    <div class="img-container">
-      <img class="img1" src="img/idp.jpg" alt="logo1" />
-    </div>
-    <div class="img-container">
-      <img class="img2" src="img/idp.jpg" alt="logo1" />
-    </div>
-  </div>
-
-
-  <div class="row justify-content-md-center">
-    <div class="btn-group timer-controls">
-    <button type="button" class="btn btn-outline-secondary start-stop">Start</button>
-    <button type="button" class="btn btn-outline-secondary reset">Reset</button>
-    <button type="button" class="btn btn-outline-secondary ad-vocem">Ad vocem</button>
-    <button type="button" class="btn btn-outline-secondary joker">Joker</button>
-  </div> 
-  </div>
-  <div class="row justify-content-md-center">
-        <div class="btn-group timer-controls joker-controls">
-        <button type="button" class="btn btn-outline-primary joker-start-stop">Start/stop</button>
-        <button type="button" class="btn btn-outline-primary joker-reset">Reset</button>
-        <button type="button" class="btn btn-outline-primary joker-off">Zakończ</button>
-      </div> 
-  </div>
-</div>
- <!--end of timer-->
-<div id="settings">
- 
-<h2>Ustawienia</h2>
- 
- 
-
- 
-<div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania mowy </label></div>
-​<div class="col-auto"><input class="input-minuty form-control" name="minuty" value="05:00" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
-<div class="col-auto"><input type="submit" class="zastosuj-minuty btn btn-outline-secondary" value="Zastosuj"></div>
-</div>
-
-<div class="row sjustify-content-md-center">
-​<div class="col-auto"><label for="minuty" class="label-settings">Czas trwania ad vocem </label></div>
-​<div class="col-auto"><input class="input-minuty-advocem form-control" name="minuty" value="00:30" type="time" min="0" data-toggle="tooltip" data-placement="top" title="minuty : sekundy"></div>
-<div class="col-auto"><input type="submit" class="apply-advocem-time btn btn-outline-secondary" value="Zastosuj"></div>
-</div>
-    
-<div class="row ajustify-content-md-center">
-​​<div class="col-auto"><label for="teza" class="label-settings">Teza </label></div>
-<div class="col-auto"> <textarea type="text" class="input-teza form-control" name="teza" rows="2" value=""></textarea></div>
-<div class="col-auto"><input type="submit" class="zastosuj-teza btn btn-outline-secondary" value="Zastosuj"></div>
-</div>
-
-<div class="row">
-<div class="col-auto">
-<div class="custom-control custom-checkbox">
-  <input type="checkbox" class="custom-control-input  controls-checkbox" id="customCheck1" checked>
-  <label class="custom-control-label" for="customCheck1">Pokaż menu sterujące</label>
-</div>
-</div>
-</div>
-
-<div class="row">
-<div class="col-auto">
-<div class="custom-control custom-checkbox">
-  <input type="checkbox" class="custom-control-input  sound-switch"  id="customCheck2">
-  <label class="custom-control-label" for="customCheck2">Wyłącz dźwięki</label>
-</div>
-</div>
-</div>
-
-<div class="row">
-​​<div class="col-auto"><label for="sound-test" class="label-settings">Test dźwięku </label></div>
-​​<div class="col-auto"><button class="sound-test1 btn btn-outline-secondary">30s do końca</button></div>
-​​<div class="col-auto"><button class="sound-test2 btn btn-outline-secondary">Koniec czasu</button></div>
-</div>
-
-<div class="row border-top sjustify-content-md-center">
-    ​​<div class="col-lg-6">
-    <form id="form1" runat="server">
-     <div class="custom-file">
-  <input type="file" class="custom-file-input imgInp" id="imgInp1" lang="pl">
-  <label class="custom-file-label" for="customFileLang">Wybierz obraz z dysku</label>
-Lub
-<div class="dropdown1 ">
-  <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-      Wybierz obraz z listy
-  </button>
-<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
-<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-<a class="dropdown-item" data="KDUG.png" href="#">KDUG</a>
-<a class="dropdown-item" data="idp.png" href="#">IDP</a>
-<a class="dropdown-item" data="g5.jpg">G5</a>
-<a class="dropdown-item" data="WTDO.png">WTDO</a>
-<a class="dropdown-item" data="mpdo.png">MPDO</a>
-<a class="dropdown-item" data="ppdo.png">PPDO</a>
-<a class="dropdown-item" data="ksm.png">KSM</a>
-<a class="dropdown-item" data="ng.png">Nowy Głos</a>
-<a class="dropdown-item" data="fpe.jpg">FPE</a>
-<a class="dropdown-item" data="#">brak obrazu</a>6
-</div>
-</div>
-         
-</div>
-    </form>
-    </div>
-    <div class="col-lg-6">
-    <form id="form2" runat="server">
-           <div class="custom-file">
-  <input type="file" class="custom-file-input imgInp" id="imgInp2" lang="pl">
-  <label class="custom-file-label" for="customFileLang">Wybierz drugi obraz</label>
-               Lub
-<div class="dropdown2 ">
-  <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-      Wybierz obraz z listy
-  </button>
-<div class="dropdown-menu" aria-labelledby="dropdownMenuButton" x-placement="bottom-start" style="position: absolute; transform: translate3d(0px, 99px, 0px); top: 0px; left: 0px; will-change: transform;">
-<a class="dropdown-item" data="ergo.png" href="#">Ergo</a>
-<a class="dropdown-item" data="tld.png" href="#">TLD</a>
-<a class="dropdown-item" data="KDUG.png" href="#">KDUG</a>
-<a class="dropdown-item" data="idp.png" href="#">IDP</a>
-<a class="dropdown-item" data="g5.jpg">G5</a>
-<a class="dropdown-item" data="WTDO.png">WTDO</a>
-<a class="dropdown-item" data="mpdo.png">MPDO</a>
-<a class="dropdown-item" data="ppdo.png">PPDO</a>
-<a class="dropdown-item" data="ksm.png">KSM</a>
-<a class="dropdown-item" data="ng.png">Nowy Głos</a>
-<a class="dropdown-item" data="fpe.jpg">FPE</a>
-<a class="dropdown-item" data="#">brak obrazu</a>6
-</div>
-</div>
-</div>
-    </form>
-    </div>
-</div>
-  <div class="row img-grid justify-content-md-center">
-    <div class="img-container img-settings">
-      <img class="img1" src="img/idp.jpg" alt="logo1" />
-    </div>
-    <div class="img-container img-settings">
-      <img class="img2" src="img/idp.jpg" alt="logo1" />
-    </div>
-  </div>
-
-    <audio src="audio/end.mp3" type="audio/mp3" alt="koniec czasu - dźwięk" id="endoftime"></audio>
-    <audio src="audio/30s.mp3" type="audio/mp3" alt="30s do końca - dźwięk" id="30stoend"></audio>
-
-</div>
- <!--end of settings-->
-<div id="help">
-<h2>Pomoc</h2>
-  <p>Jak korzystać z licznika w szybki sposób?</p>            
-  <table class="table table-borderless">
-    <thead>
-      <tr>
-        <th>Klawisz</th>
-        <th>Akcja</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>1</td>
-        <td>Ustawienie licznika głównego w pozycji startowej</td>
-      </tr>
-      <tr>
-        <td>2</td>
-        <td>Ustawienie licznika ad vocem w pozycji startowej</td>
-      </tr>
-      <tr>
-        <td>Spacja</td>
-        <td>Rozpoczęcia/zapauzowanie liczenia</td>
-      </tr>
-      <tr>
-        <td>j</td>
-        <td>Rozpoczęcia odliczania asynchronicznego zegara Jokera</td>
-      </tr>
-        <tr>
-        <td>h</td>
-        <td>Rozpoczęcia/zapauzowanie Jokera</td>
-      </tr>
-        <tr>
-        <td>k</td>
-        <td>Zakończenie Jokera</td>
-      </tr>
-    </tbody>
-  </table>
-  <div class="row">
-    <div class="col border-top credits">
-     Repozytorium<br/>
-     <a href="https://github.com/maclask/licznik-czasu">github.com/maclask/licznik-czasu</a><br/>
-     &copy; Maciej Laskowski
-    </div>
-	</div>
-	  <div class="row">
-	<div class="col border-top credits">
-     Ikony<br/>
-     &copy; 2018 Steve Schoger
-    </div>
-</div>
-
-</div>
-
-</div>
- <!--end of timer-->
- </div>
-  <!--end of jumbotron-->
- <script src="assets/js/popper.min.js"></script>
- <script src="assets/js/jquery3.3.1.min.js"></script>
- <script src="assets/js/bootstrap.bundle.min.js"></script>
- <script src="assets/js/stoper.js"></script>
+  <script src="assets/js/jquery3.3.1.min.js"></script>
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- Load order matters: app.js defines the shared App namespace, stopwatch.js
+       fills App.core, online.js overrides App.onStateChange and uses App.core. -->
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/stopwatch.js"></script>
+  <script src="assets/js/online.js"></script>
 </body>
 </html>
