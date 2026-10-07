@@ -15,7 +15,7 @@
     // Debate (online) state — media via VDO.Ninja, app state via the PeerJS layer above
     // Pinned VDO.Ninja release. VDO silently serves the latest build for any path that
     // isn't a real release folder (/v31/, /v999/, …), so check `version = "…"` in the
-    // page source before bumping, then rerun the checklist in PLAN-VDO.md.
+    // page source before bumping, then retest the debate end to end.
     var VDO_BASE = 'https://vdo.ninja/v30/';
     var debateSessionId = null;   // == PeerJS session id; VDO room is 'debate' + this
     var isDebateMaster = false;
@@ -466,7 +466,7 @@
     // syncStage() then picks whose VIDEO is on screen with the {layout} command; the rest
     // stay connected and audible, which is what lets an opponent's question be heard from
     // the first word. (With &meshcast publishers their video keeps arriving too — the
-    // previous director/&scene=2 setup downloaded it just the same, see PLAN-VDO.md.)
+    // previous director/&scene=2 setup downloaded it just the same.)
     // A breakout room gets no layout: everyone in it is simply shown.
     // &hiddenscenebitrate=0 pauses video hidden by the layout on any P2P fallback stream.
     // &videodevice=0&audiodevice=0 stops VDO.Ninja from touching local camera/mic on THIS
