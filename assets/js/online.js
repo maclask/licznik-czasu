@@ -248,7 +248,7 @@
             // gets a second, complete one moments later once addRosterEntry runs.
             // With the waiting room on, an unknown peer gets nothing until admitted.
             if (debateRoster.length && connAdmitted(conn.peer)) {
-                safeSend(conn, { type: 'roster', roster: slimRoster() });
+                safeSend(conn, { type: 'roster', roster: slimRoster(), keys: keysFor(findEntryByPeer(conn.peer)) });
             }
             App.core.showAlert('Podłączono sesję');
         });
@@ -400,6 +400,53 @@
         return (me && me.breakout) ? me.zone : null;
     }
 
+    // VDO.Ninja room passwords. With &password the same room name is a separate room
+    // (VDO hashes the two together), so the predictable names above can't be joined by
+    // guessing. The master draws a random key for the main room and one per breakout
+    // room. A participant gets the main key only once admitted and a breakout key only
+    // while seated in that zone (keysFor, sent with every roster message), so the
+    // waiting room and breakout isolation hold for audio/video too, not just in our UI.
+    // Someone expelled or reseated still knows the keys they were given: the main key
+    // stays (replacing it would reload everyone's iframes), a breakout key is replaced
+    // as soon as anyone who was given it leaves the zone (rotateStaleBreakoutKeys).
+    var mainRoomKey = null;
+    var breakoutKeys = {};   // zone -> key (master: every zone used so far; participant: own zone only)
+    var keyHolders = {};     // master: zone -> {clientId: true}, who has been sent that zone's key
+    function randomKey() {
+        var bytes = new Uint8Array(12);
+        crypto.getRandomValues(bytes);
+        return Array.prototype.map.call(bytes, function(b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    }
+    function roomKey(zone) {
+        if (!zone) return mainRoomKey;
+        if (isDebateMaster && !breakoutKeys[zone]) breakoutKeys[zone] = randomKey();
+        return breakoutKeys[zone] || null;
+    }
+    // Master: the keys one participant may know.
+    function keysFor(entry) {
+        var keys = { main: mainRoomKey };
+        if (entry && zoneHasBreakout(entry.zone)) {
+            keys.breakout = { zone: entry.zone, key: roomKey(entry.zone) };
+            (keyHolders[entry.zone] = keyHolders[entry.zone] || {})[entry.clientId] = true;
+        }
+        return keys;
+    }
+    function rotateStaleBreakoutKeys() {
+        Object.keys(keyHolders).forEach(function(zone) {
+            var stale = Object.keys(keyHolders[zone]).some(function(clientId) {
+                var e = findEntry(clientId);
+                return !e || e.zone !== zone;
+            });
+            if (stale) { delete breakoutKeys[zone]; delete keyHolders[zone]; }
+        });
+    }
+    // Participant: replace whatever we knew with what the master sent.
+    function applyKeys(keys) {
+        mainRoomKey = (keys && keys.main) || null;
+        breakoutKeys = {};
+        if (keys && keys.breakout) breakoutKeys[keys.breakout.zone] = keys.breakout.key;
+    }
+
     // &scene and &push are mutually exclusive on a single VDO.Ninja link — per
     // docs.vdo.ninja/advanced-settings/mixer-scene-parameters/scene.md and .../and-solo.md,
     // "&solo and &scene also tells the system not to be a publisher, but a viewer", i.e.
@@ -433,7 +480,8 @@
         // odbieranym audio, więc przez powyższy &excludeaudio mówca nigdy nie widział
         // własnego kafelka. Kto jest widoczny, narzuca aplikacja — patrz syncStage().
         // &animated=0 gasi animację przesuwania kafelków przy zmianie mówcy.
-        return VDO_BASE + '?room=' + room + '&scene&hiddenscenebitrate=0' + vdoCleanParams() +
+        return VDO_BASE + '?room=' + room + '&password=' + roomKey(breakoutZone) +
+            '&scene&hiddenscenebitrate=0' + vdoCleanParams() +
             '&animated=0&videodevice=0&audiodevice=0' + selfMute;
     }
     // Publishers (people who took a debater/judge slot) send camera + mic through this
@@ -463,7 +511,8 @@
         // symmetric-NAT / blocked-UDP failure on the guest→viewer path disappears — the
         // "appearing then disappearing guest" reproduced at the raw VDO level. Trade: a
         // little latency + reliance on the Meshcast server.
-        return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
+        return VDO_BASE + '?room=' + room + '&password=' + roomKey(breakoutZone) +
+            '&label=' + encodeURIComponent(name || '') +
             '&push=' + encodeURIComponent(pushIdFor(pushId)) + '&view' +
             '&webcam&autostart&meshcast' + VDO_PUBLISH_BITRATE +
             (App.debug ? '' : '&cleanoutput&hidemenu&cover') + '&pushloudness';
@@ -569,7 +618,9 @@
     function handleSelfLoudness(loud) {
         if (!loud || (!isDebateMaster && !masterConn)) return;
         var report = isDebateMaster ? reportSelfSpeaking : reportSelfSpeakingToMaster;
-        var level = loud[pushIdFor(myPushId)];
+        // Nothing is reported from a breakout room — a 🎤 next to the name would tell the
+        // whole room that the team is talking.
+        var level = myBreakoutZone() ? null : loud[pushIdFor(myPushId)];
         if (level != null && level > SELF_SPEECH_THRESH) {
             if (selfSpeechHangoverTimer) { clearTimeout(selfSpeechHangoverTimer); selfSpeechHangoverTimer = null; }
             if (!amSelfSpeaking) { amSelfSpeaking = true; report(true); }
@@ -611,9 +662,10 @@
     var viewUrlBreakoutZone = null; // breakout zone (or null for the main room) baked in
     function embedVdo() {
         var bzone = myBreakoutZone();
-        var url = buildViewUrl(bzone);
-        if (debateIframe && url === viewUrl) return;  // zwykły no-op przy renderze rosteru — nie ruszamy odczepienia
+        var url = roomKey(bzone) ? buildViewUrl(bzone) : null;
+        if (url === viewUrl) return;  // zwykły no-op przy renderze rosteru — nie ruszamy odczepienia
         clearStage();
+        if (!url) return;
         viewUrl = url;
         viewUrlBreakoutZone = bzone;
         stageSids = null;       // świeży iframe pokazuje wszystkich, układ narzucimy od zera
@@ -1026,6 +1078,7 @@
         } else if (data.action === 'waiting') {
             // Waiting room: pull back anything already revealed and park on the hold screen
             $('.debate-stage').hide();
+            applyKeys(null);
             clearStage();
             removePublish();
             myEmbedMode = null;
@@ -1277,12 +1330,14 @@
         });
     }
 
-    // Master broadcasts a slim roster so every admitted participant renders the same zones
+    // Master broadcasts a slim roster so every admitted participant renders the same
+    // zones, together with the VDO room keys that participant may know (see keysFor).
     function broadcastRoster() {
+        rotateStaleBreakoutKeys();
         var slim = slimRoster();
         eachConn(function(conn, peerId) {
             if (!connAdmitted(peerId)) return;
-            safeSend(conn, { type: 'roster', roster: slim });
+            safeSend(conn, { type: 'roster', roster: slim, keys: keysFor(findEntryByPeer(peerId)) });
         });
     }
 
@@ -1631,7 +1686,7 @@
         // Rebuilt whenever the URL it should have changes — notably on entering/leaving
         // a "pokój narad". Mic/cam state survives via applyLocalMediaState (see embedPublish).
         var bzone = myBreakoutZone();
-        var url = mode === 'publish' ? buildPublishUrl(myDebateName, myPushId, bzone) : null;
+        var url = (mode === 'publish' && roomKey(bzone)) ? buildPublishUrl(myDebateName, myPushId, bzone) : null;
         if (url !== publishUrl) {
             removePublish();
             if (url) embedPublish(url, bzone);
@@ -1672,6 +1727,9 @@
             myGeneration = 0;
             nextJoinSeq = 1;
             expelledClientIds = {};
+            mainRoomKey = randomKey();
+            breakoutKeys = {};
+            keyHolders = {};
             myDebateName = 'Prowadzący';   // finalized from the name input on .debate-enter-btn
             markWasMaster(id);
             debateRoster = [{
@@ -1887,6 +1945,8 @@
         sessionConnections = {};
         debateRoster = [];
         expelledClientIds = {};
+        applyKeys(null);
+        keyHolders = {};
         isDebateMaster = false;
         isPrimaryComaster = false;
         myPushId = null;
@@ -2183,6 +2243,17 @@
         if (isDebateMaster) return; // already promoted — ignore a redundant trigger
         if (source && source.roster) debateRoster = source.roster;
         if (source && source.state) App.core.applyState(source.state);
+        // A handoff passes on every room key. After a crash we only know the main key
+        // and our own zone's breakout key, so all breakout keys are drawn afresh — whoever
+        // is in a breakout room gets the new one with the next roster and reconnects.
+        if (source && source.keys) {
+            mainRoomKey = source.keys.main;
+            breakoutKeys = source.keys.breakout || {};
+            keyHolders = source.keys.holders || {};
+        } else {
+            breakoutKeys = {};
+            keyHolders = {};
+        }
 
         // Drop the dead ex-master's entry — on a crash it was never removed (nobody's
         // 'close' handler ever fires for the master's own roster slot, only for
@@ -2236,7 +2307,10 @@
         if (!target) return;
 
         var rosterForHandoff = debateRoster.filter(function(e) { return e.role !== 'master'; });
-        sendToPeer(target.peerId, { type: 'promoteToMaster', state: App.core.getFullState(), roster: rosterForHandoff });
+        sendToPeer(target.peerId, {
+            type: 'promoteToMaster', state: App.core.getFullState(), roster: rosterForHandoff,
+            keys: { main: mainRoomKey, breakout: breakoutKeys, holders: keyHolders }
+        });
         markWasMaster(debateSessionId);
 
         // Same flush concern as closing the room: destroying our hub the instant after
@@ -2384,9 +2458,10 @@
         if (data.type === 'init' || data.type === 'state') App.core.applyState(data.state);
         else if (data.type === 'chat') appendChat(data.name, data.msg, data.channel);
         else if (data.type === 'cmd') handleDebateCmd(data);
-        else if (data.type === 'promoteToMaster') { promoteSelfToMaster({ state: data.state, roster: data.roster }); }
+        else if (data.type === 'promoteToMaster') { promoteSelfToMaster({ state: data.state, roster: data.roster, keys: data.keys }); }
         else if (data.type === 'roster') {
             debateRoster = data.roster || [];
+            applyKeys(data.keys);
             // The first roster that actually contains us doubles as the admission
             // signal: only then leave the hold screen for the stage (a roster without
             // our entry can arrive in between — e.g. broadcast for someone else's join
@@ -2428,6 +2503,10 @@
         }
     };
     App.debug = App.debug;  // od-odpal setter teraz, po podpięciu handlerów wyżej
+    // Z konsoli, np. console.table(App.debugState().roster) — pokój widziany z tej karty.
+    App.debugState = function () {
+        return { roster: debateRoster, master: isDebateMaster, embedMode: myEmbedMode, viewUrl: viewUrl, publishUrl: publishUrl };
+    };
 
     // Auto-join if URL contains ?s=sessionName (plain viewer or debate participant)
     (function() {
