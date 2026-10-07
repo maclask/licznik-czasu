@@ -847,9 +847,7 @@
     }
     function floatIframe(iframe, label) {
         var rec = { iframe: iframe, parent: iframe.parentNode, nextSibling: iframe.nextSibling };
-        // Liczone z autoFloated/mainFloatRecord, nie z $('.vdo-debug-win').length — ten
-        // selektor pasowałby też do panelu logów/URL-i (dzielą tę samą klasę dla
-        // przeciągania/skalowania), co rozjeżdżałoby siatkę floatowanych iframe'ów.
+        // Liczone z autoFloated/mainFloatRecord, nie z $('.vdo-debug-win').length.
         var idx = Object.keys(autoFloated).length + (mainFloatRecord ? 1 : 0);
         var perRow = Math.max(1, Math.floor((window.innerWidth - DEBUG_GAP) / (DEBUG_WIN_W + DEBUG_GAP)));
         var row = Math.floor(idx / perRow), col = idx % perRow;
@@ -2784,238 +2782,16 @@
         else if (data.type === 'confetti') App.core.launchConfetti();
     }
 
-    // ── Panel logów (App.verbose) ────────────────────────────────────────────────
-    // Podgląd na żywo tego, co dziś leci wyłącznie do konsoli przez App.vlog — z
-    // filtrowaniem po źródle/kierunku/typie, bo zdarzeń takich jak loudness (patrz
-    // handleLoudness/handleSelfLoudness/handlePreviewLoudness) jest tak dużo, że
-    // zalewają samą konsolę. Dostępny na każdym środowisku przy App.verbose = true
-    // (na dev domyślnie włączone razem z App.debug — patrz App.onDebugChange niżej).
-    var VLOG_MAX = 500;
-    var vlogEntries = [];
-    var vlogSeenTypes = {};                 // typ -> true, w kolejności odkrycia (do listy filtrów)
-    var vlogTypeFilter = { loudness: false }; // typ -> false = ukryty; brak wpisu = widoczny
-    var vlogSourceFilter = { peerjs: true, vdo: true };
-    var vlogDirFilter = { out: true, in: true };
-
-    function escapeHtml(s) {
-        return $('<div>').text(s == null ? '' : String(s)).html();
-    }
-    function parseVlogEntry(raw) {
-        var tag = String(raw.tag || '');
-        var source = tag.indexOf('[PeerJS') === 0 ? 'peerjs' : (tag.indexOf('[VDO') === 0 ? 'vdo' : 'other');
-        var dir = tag.indexOf('→') !== -1 ? 'out' : (tag.indexOf('←') !== -1 ? 'in' : '');
-        var payload = (raw.args && raw.args.length) ? raw.args[raw.args.length - 1] : null;
-        var type = 'other';
-        if (payload && typeof payload === 'object') {
-            if (typeof payload.type === 'string') type = payload.type;
-            else if (typeof payload.action === 'string') type = payload.action;
-            else if (payload.loudness !== undefined) type = 'loudness';
-        }
-        return { ts: raw.ts, tag: tag, source: source, dir: dir, type: type, payload: payload };
-    }
-    function vlogEntryVisible(e) {
-        if (e.source === 'peerjs' && !vlogSourceFilter.peerjs) return false;
-        if (e.source === 'vdo' && !vlogSourceFilter.vdo) return false;
-        if (e.dir === 'out' && !vlogDirFilter.out) return false;
-        if (e.dir === 'in' && !vlogDirFilter.in) return false;
-        if (vlogTypeFilter[e.type] === false) return false;
-        return true;
-    }
-    function fmtVlogTime(ts) {
-        var d = new Date(ts);
-        function pad(n, w) { var s = String(n); while (s.length < (w || 2)) s = '0' + s; return s; }
-        return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.' + pad(d.getMilliseconds(), 3);
-    }
-    function vlogRowHtml(e) {
-        var text;
-        try { text = JSON.stringify(e.payload); } catch (err) { text = String(e.payload); }
-        if (text && text.length > 200) text = text.slice(0, 200) + '…';
-        return '<div class="vlog-row"><span class="vlog-ts">' + fmtVlogTime(e.ts) + '</span>' +
-            '<span class="vlog-tag">' + escapeHtml(e.tag) + '</span>' +
-            '<span class="vlog-payload">' + escapeHtml(text || '') + '</span></div>';
-    }
-    function renderVlogTypeFilters() {
-        var $box = $('.vlog-panel .vlog-types');
-        if (!$box.length) return;
-        var html = Object.keys(vlogSeenTypes).sort().map(function(type) {
-            var checked = vlogTypeFilter[type] !== false;
-            return '<label><input type="checkbox" class="vlog-f-type" value="' + escapeHtml(type) + '"' +
-                (checked ? ' checked' : '') + '> ' + escapeHtml(type) + '</label>';
-        }).join('');
-        $box.html(html);
-    }
-    function renderVlogList() {
-        var $list = $('.vlog-panel .vlog-list');
-        if (!$list.length) return;
-        $list.html(vlogEntries.filter(vlogEntryVisible).map(vlogRowHtml).join(''));
-        $list.scrollTop($list.get(0).scrollHeight);
-    }
-    function appendVlogEntry(raw) {
-        var e = parseVlogEntry(raw);
-        vlogEntries.push(e);
-        if (vlogEntries.length > VLOG_MAX) vlogEntries.shift();
-        var isNewType = !vlogSeenTypes[e.type];
-        if (isNewType) vlogSeenTypes[e.type] = true;
-        var $list = $('.vlog-panel .vlog-list');
-        if (!$list.length) return;
-        if (isNewType) renderVlogTypeFilters();
-        if (!vlogEntryVisible(e)) return;
-        var $el = $list.get(0);
-        var nearBottom = $el.scrollTop + $el.clientHeight >= $el.scrollHeight - 20;
-        $list.append(vlogRowHtml(e));
-        while ($list.children().length > VLOG_MAX) $list.children().first().remove();
-        if (nearBottom) $list.scrollTop($el.scrollHeight);
-    }
-    // Odsunięte od góry o tyle, by nie zasłaniać własnego paska nawigacji aplikacji
-    // (ikony Licznik/Ustawienia/Debata/Pomoc/Pełen ekran) — inaczej okno z z-index:2000
-    // blokowałoby kliknięcia w te ikony, dopóki ktoś ręcznie by go nie przesunął.
-    var PANEL_TOP_OFFSET = 76;
-    function ensureVlogPanel() {
-        if ($('.vlog-panel').length) return;
-        var w = 380, h = 340;
-        var $panel = $(
-            '<div class="vlog-panel vdo-debug-win">' +
-            '<div class="vdo-debug-title"><span class="vdo-debug-label">Logi (PeerJS / VDO.Ninja)</span>' +
-            '<button type="button" class="vdo-debug-min" title="Zwiń">–</button></div>' +
-            '<div class="vdo-debug-body vlog-body">' +
-            '<div class="vlog-filters">' +
-            '<label><input type="checkbox" class="vlog-f-source" value="peerjs" checked> PeerJS</label>' +
-            '<label><input type="checkbox" class="vlog-f-source" value="vdo" checked> VDO.Ninja</label>' +
-            '<label><input type="checkbox" class="vlog-f-dir" value="out" checked> →</label>' +
-            '<label><input type="checkbox" class="vlog-f-dir" value="in" checked> ←</label>' +
-            '<button type="button" class="vlog-clear-btn btn btn-sm btn-outline-secondary">Wyczyść</button>' +
-            '</div>' +
-            '<div class="vlog-types"></div>' +
-            '<div class="vlog-list"></div>' +
-            '</div>' +
-            '<div class="vdo-debug-grip" title="Zmień rozmiar"></div>' +
-            '</div>'
-        );
-        $panel.css({
-            left: (window.innerWidth - w - 16) + 'px',
-            top: PANEL_TOP_OFFSET + 'px',
-            width: w + 'px',
-            height: h + 'px'
-        });
-        $('body').append($panel);
-        renderVlogTypeFilters();
-        renderVlogList();
-    }
-    function removeVlogPanel() {
-        $('.vlog-panel').remove();
-    }
-    $(document).on('change', '.vlog-f-source', function() {
-        vlogSourceFilter[$(this).val()] = $(this).prop('checked');
-        renderVlogList();
-    });
-    $(document).on('change', '.vlog-f-dir', function() {
-        vlogDirFilter[$(this).val()] = $(this).prop('checked');
-        renderVlogList();
-    });
-    $(document).on('change', '.vlog-f-type', function() {
-        vlogTypeFilter[$(this).val()] = $(this).prop('checked');
-        renderVlogList();
-    });
-    $(document).on('click', '.vlog-clear-btn', function() {
-        vlogEntries = [];
-        renderVlogList();
-    });
-
-    // ── Panel pokoju / adresów iframe / ID (App.verbose) ─────────────────────────
-    // Adresy iframe'ów (do kopiowania — pomocne przy diagnozowaniu przez VDO.Ninja
-    // Wsparcie), nazwa pokoju/pokoi breakout i identyfikatory uczestników.
-    function vinfoRow(label, value) {
-        var v = value == null ? '' : String(value);
-        return '<div class="vinfo-row"><span class="vinfo-label">' + escapeHtml(label) + '</span>' +
-            '<span class="vinfo-value">' + escapeHtml(v) + '</span>' +
-            (v ? '<button type="button" class="vinfo-copy-btn" data-copy="' + escapeHtml(v) + '" title="Kopiuj">⧉</button>' : '') +
-            '</div>';
-    }
-    var vinfoRefreshTimer = null;
-    function renderVinfoPanel() {
-        var $body = $('.vinfo-panel .vinfo-body');
-        if (!$body.length) return;
-        var html = '';
-        html += '<div class="vinfo-section"><h6>Pokój</h6>';
-        html += vinfoRow('VDO room', vdoRoom());
-        html += vinfoRow('Sesja (PeerJS)', debateSessionId || '');
-        var zonesInUse = {};
-        debateRoster.forEach(function(e) { if (e.breakout && e.zone) zonesInUse[e.zone] = true; });
-        Object.keys(zonesInUse).sort().forEach(function(zone) {
-            html += vinfoRow('Breakout ' + zone, breakoutRoomId(zone));
-        });
-        html += '</div>';
-        html += '<div class="vinfo-section"><h6>Ja</h6>';
-        html += vinfoRow('clientId', myClientId);
-        html += vinfoRow('pushId', myPushId);
-        html += vinfoRow('push (sanitized)', myPushId ? pushIdFor(myPushId) : '');
-        html += '</div>';
-        html += '<div class="vinfo-section"><h6>Uczestnicy</h6><table class="vinfo-roster"><tbody>';
-        debateRoster.forEach(function(e) {
-            html += '<tr><td>' + escapeHtml(e.name || '') + '</td><td>' + escapeHtml(e.zone || '') + '</td>' +
-                '<td>' + escapeHtml(e.clientId || '') +
-                (e.clientId ? '<button type="button" class="vinfo-copy-btn" data-copy="' + escapeHtml(e.clientId) + '" title="Kopiuj clientId">⧉</button>' : '') +
-                '</td><td>' + escapeHtml(e.pushId || '') +
-                (e.pushId ? '<button type="button" class="vinfo-copy-btn" data-copy="' + escapeHtml(e.pushId) + '" title="Kopiuj pushId">⧉</button>' : '') +
-                '</td></tr>';
-        });
-        html += '</tbody></table></div>';
-        html += '<div class="vinfo-section"><h6>Iframe\'y</h6>';
-        liveVdoFrames().forEach(function(iframe) {
-            html += vinfoRow(vdoFrameLabel(iframe), iframe.src);
-        });
-        html += '</div>';
-        $body.html(html);
-    }
-    function ensureVinfoPanel() {
-        if ($('.vinfo-panel').length) return;
-        var w = 380, h = 340;
-        var $panel = $(
-            '<div class="vinfo-panel vdo-debug-win">' +
-            '<div class="vdo-debug-title"><span class="vdo-debug-label">Pokój / URL / ID</span>' +
-            '<button type="button" class="vdo-debug-min" title="Zwiń">–</button></div>' +
-            '<div class="vdo-debug-body vinfo-body"></div>' +
-            '<div class="vdo-debug-grip" title="Zmień rozmiar"></div>' +
-            '</div>'
-        );
-        $panel.css({
-            left: (window.innerWidth - w - 16) + 'px',
-            top: (PANEL_TOP_OFFSET + 340 + 12) + 'px',  // pod panelem logów
-            width: w + 'px',
-            height: h + 'px'
-        });
-        $('body').append($panel);
-        renderVinfoPanel();
-        vinfoRefreshTimer = setInterval(renderVinfoPanel, 1000);
-    }
-    function removeVinfoPanel() {
-        if (vinfoRefreshTimer) { clearInterval(vinfoRefreshTimer); vinfoRefreshTimer = null; }
-        $('.vinfo-panel').remove();
-    }
-    $(document).on('click', '.vinfo-copy-btn', function() {
-        var text = $(this).attr('data-copy') || '';
-        if (navigator.clipboard) navigator.clipboard.writeText(text);
-    });
-    // Minimalizacja działa też na te panele — .closest szuka .vdo-debug-win, którą obie
-    // klasy dziedziczą (patrz ensureVlogPanel/ensureVinfoPanel), więc istniejący handler
-    // (patrz startWinGesture i .vdo-debug-min niżej) obsługuje je bez zmian.
-
     // ── Spięcie App.debug / App.verbose / App.vlog na końcu warstwy online ──────
     App.onDebugChange = function (on) {
         rebuildLiveFrameSrcs();
         if (on) {
             autoFloatSecondaryFrames();
-            App.verbose = true;
         } else {
             unfloatSecondaryFrames();
             if (mainFloatRecord) { unfloatIframe(mainFloatRecord); mainFloatRecord = null; }
         }
     };
-    App.onVerboseChange = function (on) {
-        if (on) { ensureVlogPanel(); ensureVinfoPanel(); }
-        else { removeVlogPanel(); removeVinfoPanel(); }
-    };
-    App.onVlog = function (entry) { appendVlogEntry(entry); };
     App.debug = App.debug;  // od-odpal setter teraz, po podpięciu handlerów wyżej
 
     // Auto-join if URL contains ?s=sessionName (plain viewer or debate participant)

@@ -518,10 +518,8 @@ body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
 body.is-debug .vdo-detach-btn.dv-btn { display: flex; }
 .vdo-detach-btn.active { background: rgba(255, 255, 255, 0.22); opacity: 1; }
 
-/* ── Pływające okna: żywe iframe'y VDO.Ninja floatowane na App.debug, plus panel
-   logów i panel pokoju/URL/ID dostępne na App.verbose (patrz online.js). Wszystkie
-   dzielą klasę .vdo-debug-win — przeciąganie/skalowanie/zwijanie działa dla każdego
-   bez dodatkowego kodu (patrz startWinGesture i .vdo-debug-min niżej).
+/* ── Pływające okna: żywe iframe'y VDO.Ninja floatowane na App.debug (patrz online.js;
+   przeciąganie/skalowanie/zwijanie — startWinGesture i .vdo-debug-min niżej).
    Okna z żywym iframe'em trzymają TEN SAM element (przeniesiony, nie kopię — patrz
    floatIframe), więc reguła parkująca .vdo-director-iframe poza ekranem musi tu
    przegrać: selektor potomny .vdo-debug-win iframe ma wyższą specyficzność i wraca
@@ -604,79 +602,6 @@ body.is-debug .vdo-detach-btn.dv-btn { display: flex; }
 .vdo-debug-win.is-min .vdo-debug-grip { display: none; }
 /* Podczas dragu kursor nie może wpaść do iframe'a (połknąłby pointermove mimo capture) */
 body.vdo-debug-dragging .vdo-debug-win iframe { pointer-events: none; }
-
-/* ── Zawartość panelu logów (.vlog-panel) i panelu pokoju/URL/ID (.vinfo-panel) —
-   oba to .vdo-debug-win bez iframe'a w środku, więc tylko własna treść .vdo-debug-body. ── */
-.vlog-body, .vinfo-body {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  color: #ddd;
-  font-family: 'Chivo Mono', monospace;
-  font-size: 0.72rem;
-}
-.vlog-filters {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  padding: 6px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-.vlog-filters label { display: flex; align-items: center; gap: 3px; margin: 0; cursor: pointer; white-space: nowrap; }
-.vlog-clear-btn { margin-left: auto; padding: 1px 8px; font-size: 0.68rem; }
-.vlog-types {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  padding: 4px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  max-height: 4.2em;
-  overflow-y: auto;
-}
-.vlog-types label { display: flex; align-items: center; gap: 3px; margin: 0; cursor: pointer; white-space: nowrap; }
-.vlog-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 8px; }
-.vlog-row {
-  display: flex;
-  gap: 6px;
-  padding: 1px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.vlog-ts { flex: 0 0 auto; color: #888; }
-.vlog-tag { flex: 0 0 auto; color: #7fd0ff; }
-.vlog-payload { flex: 1 1 auto; color: #ccc; }
-
-.vinfo-body { overflow-y: auto; padding: 8px; gap: 10px; }
-.vinfo-section h6 { color: #9ad; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; margin: 0 0 4px; }
-.vinfo-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
-.vinfo-label { flex: 0 0 auto; color: #888; min-width: 90px; }
-.vinfo-value { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vinfo-copy-btn {
-  flex: 0 0 auto;
-  border: 0;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  border-radius: 4px;
-  width: 18px;
-  height: 18px;
-  line-height: 1;
-  cursor: pointer;
-  font-size: 0.7rem;
-}
-.vinfo-copy-btn:hover { background: rgba(255, 255, 255, 0.28); }
-.vinfo-roster { width: 100%; border-collapse: collapse; }
-.vinfo-roster td {
-  padding: 2px 4px 2px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 90px;
-}
 
 /* Prep time: label the clock so it's obviously not a protected speech timer */
 body.is-prep-time .timer { position: relative; }
