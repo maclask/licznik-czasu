@@ -13,7 +13,10 @@
     ];
 
     // Debate (online) state — media via VDO.Ninja, app state via the PeerJS layer above
-    var VDO_BASE = 'https://vdo.ninja/';
+    // Pinned VDO.Ninja release. VDO silently serves the latest build for any path that
+    // isn't a real release folder (/v31/, /v999/, …), so check `version = "…"` in the
+    // page source before bumping, then rerun the checklist in PLAN-VDO.md.
+    var VDO_BASE = 'https://vdo.ninja/v30/';
     var debateSessionId = null;   // == PeerJS session id; VDO room is 'debate' + this
     var isDebateMaster = false;
     var debateRoster = [];        // [{clientId, peerId, pushId, name, role, zone, index, ...}] — identity = clientId
