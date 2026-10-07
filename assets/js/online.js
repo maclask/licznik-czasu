@@ -1049,12 +1049,13 @@
         // disconnect detection eventually catches up. The master's own entry is never
         // evicted, even by a join from the same browser (a second tab).
         var stale = debateRoster.filter(function(e) {
-            return e.role !== 'master' && e.clientId === clientId && e.peerId !== peerId;
+            return e.role !== 'master' && e.clientId === clientId;
         });
         debateRoster = debateRoster.filter(function(e) {
             return e.role === 'master' || (e.clientId !== clientId && e.peerId !== peerId);
         });
         stale.forEach(function(e) {
+            if (e.peerId === peerId) return;
             var staleConn = sessionConnections[e.peerId];
             if (staleConn) {
                 delete sessionConnections[e.peerId];
@@ -1071,16 +1072,18 @@
             pending: waitingRoomOn
         };
         // Same browser rejoining (e.g. after an accidental F5): give back their seat,
-        // raised signal, queue seniority — and their admission, so they skip the
+        // raised signal, queue seniority, marshal role — and their admission, so they skip the
         // waiting room they already passed through.
         var prev = stale[0];
         if (prev) {
             entry.joinSeq = prev.joinSeq;
             entry.signals = prev.signals || {};
             entry.pending = prev.pending && waitingRoomOn;
+            entry.marshal = !!prev.marshal;
             if (prev.zone !== 'audience' && !occupant(prev.zone, prev.index)) {
                 entry.zone = prev.zone;
                 entry.index = prev.index;
+                entry.breakout = !!prev.breakout;
             }
         }
         debateRoster.push(entry);
