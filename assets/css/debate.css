@@ -4,6 +4,7 @@
 
 /* ── Session ────────────────────────────────────────────────── */
 .session-lost-alert { display: none; }
+.vdo-blocked-alert { display: none; width: min(560px, calc(100vw - 2rem)); }
 .session-links { display: none; }
 
 /* A debate slave (joined a room straight from a shared link) has no use for

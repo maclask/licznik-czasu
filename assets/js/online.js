@@ -546,6 +546,7 @@
         );
         previewIframe = panel.find('.debate-join-preview iframe').get(0);
         if (previewIframe) {
+            watchVdoFrame(previewIframe);
             previewIframe.onload = function() {
                 pollDeviceList('preview', function() { return previewIframe; });
             };
@@ -682,6 +683,7 @@
         $('.debate-video').addClass('debate-video--has-frame').toggleClass('debate-video--breakout', !!bzone);
         debateIframe = $('.debate-video-frame iframe').get(0);
         if (debateIframe) {
+            watchVdoFrame(debateIframe);
             debateIframe.onload = function() {
                 // Dołączenie w trakcie: ktoś może już mówić
                 syncStage(true);
@@ -717,6 +719,7 @@
         // getUserMedia). The widget just keeps it off-screen when the preview is hidden.
         $('.debate-self-preview-frame').append($f);
         publishIframe = $f.get(0);
+        watchVdoFrame(publishIframe);
         publishIframe.onload = function() {
             pollDeviceList('publish', function() { return publishIframe; });
             // A fresh iframe (first embed, breakout rebuild, or an App.debug toggle reload)
@@ -747,6 +750,31 @@
         if (iframe === previewIframe) return 'preview';
         return 'iframe';
     }
+    // An ad blocker or script blocker (uBlock Origin's "no inline scripts", NoScript, …)
+    // leaves a VDO.Ninja iframe loaded but dead: VDO runs on inline scripts, so it never
+    // starts and never answers. Each VDO iframe is probed after every load; one that
+    // stays silent gets the user a hint instead of a blank stage. Any message from the
+    // frame (see the 'message' listener) marks it alive.
+    var VDO_ALIVE_TIMEOUT_MS = 15000;
+    function watchVdoFrame(iframe) {
+        iframe.addEventListener('load', function() {
+            iframe.vdoAlive = false;
+            var started = Date.now();
+            var probe = setInterval(function() {
+                if (iframe.vdoAlive || !iframe.isConnected) { clearInterval(probe); return; }
+                if (Date.now() - started > VDO_ALIVE_TIMEOUT_MS) {
+                    clearInterval(probe);
+                    $('.vdo-blocked-alert').fadeIn(50);
+                    return;
+                }
+                postToFrame(iframe, { getStreamIDs: true });
+            }, 2000);
+        });
+    }
+    $(document).on('click', '.vdo-blocked-alert .close', function() {
+        $('.vdo-blocked-alert').fadeOut();
+    });
+
     function postToFrame(iframe, obj) {
         if (iframe && iframe.contentWindow) {
             App.vlog('[VDO→ ' + vdoFrameLabel(iframe) + ']', obj);
@@ -2068,6 +2096,9 @@
     window.addEventListener('message', function(e) {
         var d = e.data;
         if (!d) return;
+        [debateIframe, publishIframe, previewIframe].forEach(function(f) {
+            if (f && e.source === f.contentWindow) f.vdoAlive = true;
+        });
         if (debateIframe && e.source === debateIframe.contentWindow) {
             App.vlog('[VDO← debate]', d);
             // Nowy strumień w pokoju: VDO sam stosuje do niego zapamiętany układ, ale
