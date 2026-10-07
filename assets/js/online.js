@@ -2504,6 +2504,7 @@
         App.core.showWarn('Utracono połączenie z prowadzącym — próba przełączenia…');
         var fromGen = myGeneration;
         tryConnect(genName(fromGen), 5000, function(ok, conn) {
+            if (isDebateMaster) { if (conn) { try { conn.close(); } catch (e) {} } return; }
             if (ok) {
                 attachMasterConn(conn, fromGen, 'Połączono ponownie z prowadzącym');
                 resendJoinAfterReconnect();
@@ -2511,6 +2512,7 @@
             }
             if (isPrimaryComaster) { promoteSelfToMaster(null); return; }
             probeForward(fromGen + 1, fromGen + 10, function(gen, conn2) {
+                if (isDebateMaster) { try { conn2.close(); } catch (e) {} return; }
                 attachMasterConn(conn2, gen, 'Połączono ponownie z prowadzącym');
                 resendJoinAfterReconnect();
             }, function() {
@@ -2530,6 +2532,7 @@
     // be re-attached to a fresh connection after a failover reconnect.
     function handleSlaveData(data) {
         App.vlog('[PeerJS←]', masterConn && masterConn.peer, data);
+        if (isDebateMaster) return;
         if (data.type === 'init' || data.type === 'state') App.core.applyState(data.state);
         else if (data.type === 'chat') appendChat(data.name, data.msg, data.channel);
         else if (data.type === 'cmd') handleDebateCmd(data);
