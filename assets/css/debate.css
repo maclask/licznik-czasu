@@ -504,15 +504,13 @@ body.is-debate-edit .slot { outline: 1px dashed #ccc; outline-offset: 2px; }
   background: #fff;
   margin-bottom: 0.5rem;
 }
-/* Director iframes stay parked off-screen: they exist only to send &forward commands.
-   The publish iframe is NOT parked here — it now lives inside the self-preview widget
-   (.debate-self-preview-frame) and is sized/hidden there, so its camera keeps streaming
-   even while the preview is visually hidden (never display:none — that throttles the send). */
-.vdo-director-iframe { position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; border: 0; }
+/* The publish iframe lives inside the self-preview widget (.debate-self-preview-frame)
+   and is sized/hidden there, so its camera keeps streaming even while the preview is
+   visually hidden (never display:none — that throttles the send). */
 
 /* Przycisk odczepienia sceny istnieje tylko na App.debug — klasę na body stawia
    setter App.debug (app.js), więc `App.debug = true/false` z konsoli pokazuje/chowa
-   go od razu, na każdym środowisku. Drugorzędne iframe'y (publish/director/preview)
+   go od razu, na każdym środowisku. Drugorzędne iframe'y (publish/preview)
    floatują się wtedy same, bez udziału tego przycisku — patrz autoFloatFrame (online.js). */
 .vdo-detach-btn { display: none; }
 body.is-debug .vdo-detach-btn.dv-btn { display: flex; }
@@ -521,9 +519,7 @@ body.is-debug .vdo-detach-btn.dv-btn { display: flex; }
 /* ── Pływające okna: żywe iframe'y VDO.Ninja floatowane na App.debug (patrz online.js;
    przeciąganie/skalowanie/zwijanie — startWinGesture i .vdo-debug-min niżej).
    Okna z żywym iframe'em trzymają TEN SAM element (przeniesiony, nie kopię — patrz
-   floatIframe), więc reguła parkująca .vdo-director-iframe poza ekranem musi tu
-   przegrać: selektor potomny .vdo-debug-win iframe ma wyższą specyficzność i wraca
-   do normalnego layoutu. Pozycję i rozmiar okna trzyma style inline (drag + uchwyt
+   floatIframe). Pozycję i rozmiar okna trzyma style inline (drag + uchwyt
    skalowania). ── */
 .vdo-debug-win {
   position: fixed;

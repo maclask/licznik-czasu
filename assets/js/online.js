@@ -381,31 +381,14 @@
     function vdoCleanParams() {
         return App.debug ? '' : '&cleanoutput&hidemenu&transparent&cover';
     }
-    // Baza: nieaktywni publikujący na 0kbps do ręcznego dodania — patrz
-    // docs.vdo.ninja/advanced-settings/mixer-scene-parameters/scene.md.
-    // Kto konkretnie jest "ręcznie dodawany" na ciepło (żeby strona przeciwna
-    // do mówiącej nie miała opóźnienia przy wtrąceniu) — patrz updatePrewarm().
-    var VDO_SCENE = '&scene=2';
-    // Sufit pobierania na gościa dla całego pokoju — ustawiany na linku reżysera,
-    // patrz docs.vdo.ninja/advanced-settings/video-bitrate-parameters/roombitrate.md.
-    // Wartość konserwatywna z myślą o słabszym łączu szkolnym; do doprecyzowania po teście.
-    var VDO_DIRECTOR_BITRATE = '&totalroombitrate=4500';
-    // Sufit tego, ile inni goście mogą pociągnąć z TEGO publikującego — niezależny
-    // od sufitu całego pokoju, chroni przed jedną kamerą zjadającą cały budżet.
+    // Sufit tego, ile inni goście mogą pociągnąć z TEGO publikującego (dotyczy połączeń
+    // P2P — np. gdy Meshcast zawiedzie i VDO wróci do P2P).
     var VDO_PUBLISH_BITRATE = '&roombitrate=2000';
 
     // A stable, predictable VDO.Ninja stream id per participant (instead of a random one)
-    // so the director can target a specific person with &push/&forward regardless of when
+    // so the stage can pick a specific person's tile (see syncStage) regardless of when
     // they joined.
     function pushIdFor(peerId) { return String(peerId).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 64); }
-
-    // Every director command VDO.Ninja's own examples send includes a callback id
-    // (cib) — we don't use the callback, but omitting it seems to route addScene
-    // through a different, crashing internal code path (observed as an uncaught
-    // "postMessage ... cannot be converted to a sequence" error inside VDO.Ninja's
-    // own remoteInterfaceAPI). Just needs to be present and unique per call.
-    var cibCounter = 0;
-    function nextCib() { return 'c' + (++cibCounter) + '_' + Date.now(); }
 
     function breakoutRoomId(zone) {
         return vdoRoom() + 'bo' + zone;
@@ -416,61 +399,46 @@
         var me = myEntry();
         return (me && me.breakout) ? me.zone : null;
     }
-    // Who's actually inside a given zone's breakout room right now — the &view list
-    // for buildViewUrl's breakout link, since there's no director there to curate a scene.
-    function breakoutOccupantSids(zone) {
-        return debateRoster.filter(function(e) { return e.zone === zone && e.breakout; })
-            .map(function(e) { return pushIdFor(e.pushId); });
-    }
 
     // &scene and &push are mutually exclusive on a single VDO.Ninja link — per
     // docs.vdo.ninja/advanced-settings/mixer-scene-parameters/scene.md and .../and-solo.md,
     // "&solo and &scene also tells the system not to be a publisher, but a viewer", i.e.
     // adding &scene to a &push link silently drops the &push and the guest never actually
-    // publishes camera/mic at all. So publishing and scene-viewing need two SEPARATE
-    // iframes: buildViewUrl() for the always-present visible stage (see embedVdo), and
-    // buildPublishUrl() for a hidden send-only iframe (see embedPublish), same split as
-    // the existing debateIframe / directorIframe pattern.
+    // publishes camera/mic at all. So publishing and viewing need two SEPARATE iframes:
+    // buildViewUrl() for the always-present visible stage (see embedVdo), and
+    // buildPublishUrl() for a hidden send-only iframe (see embedPublish).
 
     // Everyone (audience / unassigned / master watching / seated publishers) sees the
-    // scene through this link. &videodevice=0&audiodevice=0 stops VDO.Ninja from touching
-    // local camera/mic on THIS iframe at all — that only ever happens on the publish
-    // iframe below, so viewers on hardware without either can still join and watch.
+    // room through this link. &scene with no number is scene 0: every publisher in the
+    // room is received and played automatically — no director. In the main room
+    // syncStage() then picks whose VIDEO is on screen with the {layout} command; the rest
+    // stay connected and audible, which is what lets an opponent's question be heard from
+    // the first word. (With &meshcast publishers their video keeps arriving too — the
+    // previous director/&scene=2 setup downloaded it just the same, see PLAN-VDO.md.)
+    // A breakout room gets no layout: everyone in it is simply shown.
+    // &hiddenscenebitrate=0 pauses video hidden by the layout on any P2P fallback stream.
+    // &videodevice=0&audiodevice=0 stops VDO.Ninja from touching local camera/mic on THIS
+    // iframe at all — that only ever happens on the publish iframe below, so viewers on
+    // hardware without either can still join and watch.
     function buildViewUrl(breakoutZone) {
         var room = encodeURIComponent(breakoutZone ? breakoutRoomId(breakoutZone) : vdoRoom());
-        // This viewer has no idea the publish iframe's stream is "us", so once we're
-        // addScene'd (or, in a breakout room, listed in &view below) it would play our
-        // own mic back with full WebRTC latency (delayed self-echo). &excludeaudio
+        // This viewer has no idea the publish iframe's stream is "us", so it would play
+        // our own mic back with full WebRTC latency (delayed self-echo). &excludeaudio
         // drops just that stream's audio while keeping its video on stage.
         // (docs.vdo.ninja/advanced-settings/audio-parameters/noaudio.md misspells it
         // "exludeaudio" — the correct spelling is what works.)
         // Harmless for audience: the id simply never publishes.
         var selfMute = myPushId ? '&excludeaudio=' + encodeURIComponent(pushIdFor(myPushId)) : '';
-        if (breakoutZone) {
-            // A bare &room=X guest link isn't actually viewer-only — VDO.Ninja treats it
-            // as someone who MIGHT publish and gates it behind its own "Join Room" click
-            // (autoplay-policy workaround), which is exactly the blank stage this was
-            // built to avoid. There's also no director in a breakout room to curate a
-            // &scene, so instead we name the exact streams to show via &view (comma-separated
-            // per docs.vdo.ninja/advanced-settings/mixer-scene-parameters/view.md) and add
-            // &solo, which — like &scene — marks the link as viewer-only and skips the
-            // join gate (docs .../and-solo.md: "&solo and &scene ... tells the system not
-            // to be a publisher, but a viewer").
-            var sids = breakoutOccupantSids(breakoutZone);
-            return VDO_BASE + '?room=' + room + '&solo&view=' + encodeURIComponent(sids.join(',')) +
-                vdoCleanParams() + '&animated=0&videodevice=0&audiodevice=0' + selfMute;
-        }
         // Celowo BEZ &activespeaker: jego detekcja jest lokalna per viewer i oparta na
         // odbieranym audio, więc przez powyższy &excludeaudio mówca nigdy nie widział
-        // własnego kafelka. Kto jest widoczny, narzuca aplikacja — patrz applySpeakerView().
-        // &animated=0 gasi domyślną animację przesuwania kafelków przy przestawianiu
-        // sceny — przy zmianie mówcy (replace) klatkowała zamiast płynnie przełączyć.
-        return VDO_BASE + '?room=' + room + VDO_SCENE + vdoCleanParams() + '&animated=0' +
-            '&videodevice=0&audiodevice=0' + selfMute;
+        // własnego kafelka. Kto jest widoczny, narzuca aplikacja — patrz syncStage().
+        // &animated=0 gasi animację przesuwania kafelków przy zmianie mówcy.
+        return VDO_BASE + '?room=' + room + '&scene&hiddenscenebitrate=0' + vdoCleanParams() +
+            '&animated=0&videodevice=0&audiodevice=0' + selfMute;
     }
     // Publishers (people who took a debater/judge slot) send camera + mic through this
     // hidden iframe. &webcam picks "Join Room with Camera" and &autostart skips the entry
-    // screen. What they see of the room — including their own video, once addScene'd —
+    // screen. What they see of the room — including their own video, while on stage —
     // comes back through the always-present buildViewUrl() iframe, same as everyone else.
     function buildPublishUrl(name, pushId, breakoutZone) {
         var room = encodeURIComponent(breakoutZone ? breakoutRoomId(breakoutZone) : vdoRoom());
@@ -490,61 +458,15 @@
         // App.debug toggle, which reloads this iframe with/without &cleanoutput&hidemenu&cover
         // (see rebuildLiveFrameSrcs). See handleSelfLoudness.
         // &meshcast routes this publisher's stream through a hosted distribution server
-        // instead of raw P2P; viewers (buildViewUrl scene) auto-pull the server feed over
-        // the peer-to-peer one. Both sides then only make OUTBOUND connections, so the
-        // symmetric-NAT / blocked-UDP failure on the guest→scene path disappears — the
-        // "appearing then disappearing guest" reproduced at the raw VDO level (director
-        // sees the guest, but addScene'ing them flickers then drops on the scene). Trade:
-        // a little latency + reliance on the Meshcast server. See connectionProblem.md.
+        // instead of raw P2P; viewers (buildViewUrl) auto-pull the server feed over the
+        // peer-to-peer one. Both sides then only make OUTBOUND connections, so the
+        // symmetric-NAT / blocked-UDP failure on the guest→viewer path disappears — the
+        // "appearing then disappearing guest" reproduced at the raw VDO level. Trade: a
+        // little latency + reliance on the Meshcast server.
         return VDO_BASE + '?room=' + room + '&label=' + encodeURIComponent(name || '') +
             '&push=' + encodeURIComponent(pushIdFor(pushId)) + '&view' +
             '&webcam&autostart&meshcast' + VDO_PUBLISH_BITRATE +
             (App.debug ? '' : '&cleanoutput&hidemenu&cover') + '&pushloudness';
-    }
-
-    // An invisible iframe that holds director permissions for the main room — kept
-    // off-screen so its own control panel (record/mute/scene buttons) never leaks into
-    // our UI. Used for addScene (see updatePrewarm) to keep the opposing side warm
-    // before they're cut to. The master's visible iframe stays a plain scene viewer /
-    // publisher, unchanged. Breakout rooms have no director at all — see embedPublish /
-    // publishBreakoutZone for how occupants move in and out of them.
-    var directorIframe = null;
-
-    // Kto realnie może wtrącić się, gdy mówi dana strefa. Sędziowie/widownia
-    // celowo nie mają tu wpisu — brak wpisu = brak podgrzewania, zgodnie z
-    // założeniem, że oni mogą znieść sekundowe opóźnienie.
-    var INTERJECT_OPPONENTS = {
-        proposition: ['opposition'], opposition: ['proposition'],
-        og: ['oo', 'co'], cg: ['oo', 'co'],
-        oo: ['og', 'cg'], co: ['og', 'cg']
-    };
-    function zonePushIds(zone) {
-        // Excludes anyone currently in a breakout room: their publish iframe is pointed
-        // at that room's own &room instead (see embedPublish/publishBreakoutZone), so
-        // their stream isn't in the main room at all — targeting them with addScene has
-        // no control-box to act on and would just misfire once they're back.
-        return debateRoster.filter(function(e) { return e.zone === zone && !e.breakout; }).map(function(e) { return e.pushId; });
-    }
-
-    function buildDirectorUrl() {
-        var room = encodeURIComponent(vdoRoom());
-        return VDO_BASE + '?director=' + room + VDO_DIRECTOR_BITRATE + '&novideo&noaudio' +
-            (App.debug ? '' : '&cleanoutput&hidemenu');
-    }
-    function embedDirector() {
-        if (directorIframe) return;
-        var $f = $('<iframe class="vdo-director-iframe" allow="autoplay" src="' + buildDirectorUrl() + '"></iframe>');
-        $('body').append($f);
-        directorIframe = $f.get(0);
-        autoFloatFrame(directorIframe);
-        watchdogTimer = setInterval(watchdogTick, 2000);
-    }
-    function removeDirector() {
-        if (directorIframe) autoUnfloatFrame(directorIframe);
-        if (directorIframe) { $(directorIframe).remove(); directorIframe = null; }
-        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
-        resetPrewarmState();
-        resetSelfSpeech();
     }
 
     // Local self-view for the join screen — lets the user test camera/mic before
@@ -679,92 +601,60 @@
     }
 
     // The visible stage — a plain scene viewer, never swapped on publish/view role
-    // changes (see buildViewUrl for why it can't also publish). Rebuilt when myPushId
-    // changes (a master handoff mints a new peer id, and the &excludeaudio baked into
-    // the old URL would keep pointing at the previous stream, bringing the self-echo
-    // back for the ex-master once they take a seat again) or when we enter/leave a
-    // breakout room — updateMyEmbed() rebuilds our OWN publish iframe to move our stream
-    // to/from that room (see publishBreakoutZone), but this viewer iframe is a separate
-    // connection that has to be re-pointed at it too, otherwise nobody sees any video
-    // once inside ("pokój narad" stays blank). A teammate joining/leaving that SAME
-    // breakout room does NOT rebuild — see
-    // syncBreakoutView, which adds/removes just that one stream live instead.
-    var viewUrlPushId = null;      // myPushId baked into the current iframe's URL
+    // changes (see buildViewUrl for why it can't also publish). Rebuilt whenever the URL
+    // it should have changes: a new myPushId (a master handoff mints a new peer id, and
+    // the &excludeaudio baked into the old URL would keep pointing at the previous
+    // stream, bringing the self-echo back) or entering/leaving a breakout room
+    // (updateMyEmbed() moves our OWN publish iframe to/from that room, but this viewer is
+    // a separate connection that has to be re-pointed at it too).
+    var viewUrl = null;             // src the current stage iframe was built with
     var viewUrlBreakoutZone = null; // breakout zone (or null for the main room) baked in
-    var viewUrlBreakoutSids = '';   // breakout &view targets currently shown (joined string)
     function embedVdo() {
         var bzone = myBreakoutZone();
-        if (debateIframe && (viewUrlPushId !== myPushId || viewUrlBreakoutZone !== bzone)) {
-            if (mainFloatRecord) { unfloatIframe(mainFloatRecord); mainFloatRecord = null; }  // scena mogła być odczepiona — najpierw wróć nią na miejsce
-            $('.debate-video-frame').empty();
-            debateIframe = null;
-        }
-        if (debateIframe) { syncBreakoutView(bzone); return; }  // zwykły no-op przy renderze rosteru — nie ruszamy odczepienia
-        if (mainFloatRecord) { unfloatIframe(mainFloatRecord); mainFloatRecord = null; }
-        viewUrlPushId = myPushId;
+        var url = buildViewUrl(bzone);
+        if (debateIframe && url === viewUrl) return;  // zwykły no-op przy renderze rosteru — nie ruszamy odczepienia
+        clearStage();
+        viewUrl = url;
         viewUrlBreakoutZone = bzone;
-        viewUrlBreakoutSids = bzone ? breakoutOccupantSids(bzone).join(',') : '';
-        speakerViewSids = null; // świeży iframe = czysty grid, filtr narzucimy od zera
-        updateSelfPreview();    // świeży grid pokazuje też nas → podgląd chowamy do czasu applySpeakerView
+        stageSids = null;       // świeży iframe pokazuje wszystkich, układ narzucimy od zera
+        updateSelfPreview();
         var allow = 'autoplay; fullscreen; picture-in-picture';
         $('.debate-video-frame').html(
-            '<iframe class="vdo-iframe" allow="' + allow + '" src="' + buildViewUrl(bzone) + '"></iframe>'
+            '<iframe class="vdo-iframe" allow="' + allow + '" src="' + url + '"></iframe>'
         );
         $('.debate-video').addClass('debate-video--has-frame').toggleClass('debate-video--breakout', !!bzone);
         debateIframe = $('.debate-video-frame iframe').get(0);
         if (debateIframe) {
             debateIframe.onload = function() {
-                // Dołączenie w trakcie: ktoś może już mówić, zanim dotrą zdarzenia sceny
-                applySpeakerView(true);
+                // Dołączenie w trakcie: ktoś może już mówić
+                syncStage(true);
             };
         }
     }
-
-    // Keeps an already-open breakout stage in sync as teammates join/leave, without
-    // reloading the iframe (see embedVdo). No director/&scene is running in a breakout
-    // room, so &view's static list can't be updated by re-declaring it — instead we ask
-    // the viewer to fetch the new stream (requestStream) and show it (target/add), or
-    // drop a departed one (target/remove). Both are documented IFRAME API viewer
-    // commands (docs.vdo.ninja/guides/iframe-api-documentation).
-    function syncBreakoutView(bzone) {
-        if (!bzone || !debateIframe) return;
-        var current = breakoutOccupantSids(bzone);
-        var joined = current.join(',');
-        if (joined === viewUrlBreakoutSids) return;
-        var prevSet = {};
-        (viewUrlBreakoutSids ? viewUrlBreakoutSids.split(',') : []).forEach(function(sid) {
-            if (sid) prevSet[sid] = true;
-        });
-        var curSet = {};
-        current.forEach(function(sid) {
-            curSet[sid] = true;
-            if (!prevSet[sid]) {
-                postToVdo({ requestStream: sid });
-                postToVdo({ target: sid, add: true });
-            }
-        });
-        Object.keys(prevSet).forEach(function(sid) {
-            if (!curSet[sid]) postToVdo({ target: sid, remove: true });
-        });
-        viewUrlBreakoutSids = joined;
+    function clearStage() {
+        if (mainFloatRecord) { unfloatIframe(mainFloatRecord); mainFloatRecord = null; }  // scena mogła być odczepiona — najpierw wróć nią na miejsce
+        $('.debate-video-frame').empty();
+        $('.debate-video').removeClass('debate-video--has-frame');
+        debateIframe = null;
+        viewUrl = null;
     }
 
     // Hidden send-only iframe for when we've taken a debater/judge slot — see
     // buildPublishUrl for why this has to be separate from the visible viewer iframe.
-    // Rebuilt (removePublish + embedPublish) whenever our own breakout room stops
-    // matching publishBreakoutZone — see updateMyEmbed — since VDO.Ninja has no "change
-    // room" self-command; moving between rooms means a fresh iframe with &room pointed
-    // at the destination, same tradeoff as embedVdo's viewUrlPushId/viewUrlBreakoutZone.
+    // Rebuilt (removePublish + embedPublish) whenever the URL it should have changes —
+    // see updateMyEmbed — since VDO.Ninja has no "change room" self-command; moving
+    // between rooms means a fresh iframe with &room pointed at the destination.
     var publishIframe = null;
+    var publishUrl = null;          // src the current publishIframe was built with
     var publishBreakoutZone = null; // breakout zone baked into the current publishIframe's URL (null = main room)
-    function embedPublish(name, pushId, breakoutZone) {
+    function embedPublish(url, breakoutZone) {
         if (publishIframe) return;
         // Camera/microphone must be delegated to the cross-origin vdo.ninja iframe with
         // "*" (bare "camera" means 'self' only, which silently blocks getUserMedia there).
         var allow = 'camera *; microphone *; display-capture *; autoplay; fullscreen; picture-in-picture';
+        publishUrl = url;
         publishBreakoutZone = breakoutZone || null;
-        var $f = $('<iframe class="vdo-publish-iframe" allow="' + allow + '" src="' +
-            buildPublishUrl(name, pushId, publishBreakoutZone) + '"></iframe>');
+        var $f = $('<iframe class="vdo-publish-iframe" allow="' + allow + '" src="' + url + '"></iframe>');
         // Into the self-preview widget, NOT body: this same iframe doubles as the corner
         // self-view, and moving an iframe in the DOM later would reload it (restarting
         // getUserMedia). The widget just keeps it off-screen when the preview is hidden.
@@ -784,6 +674,7 @@
         if (publishIframe) autoUnfloatFrame(publishIframe);  // wyjmij z okna debug, zanim skasujemy iframe
         stopDeviceListPoll('publish');
         if (publishIframe) { $(publishIframe).remove(); publishIframe = null; }
+        publishUrl = null;
         publishBreakoutZone = null;
         updateSelfPreview();
         resetSelfSpeech();
@@ -796,7 +687,6 @@
     function vdoFrameLabel(iframe) {
         if (iframe === debateIframe) return 'debate';
         if (iframe === publishIframe) return 'publish';
-        if (iframe === directorIframe) return 'director';
         if (iframe === previewIframe) return 'preview';
         return 'iframe';
     }
@@ -812,23 +702,18 @@
     // ── Pływające okna VDO.Ninja, sterowane App.debug ────────────────────────────
     // Na App.debug (domyślnie true na dev/local, false na prod — patrz app.js;
     // przełączalne w locie z konsoli na każdym środowisku) drugorzędne iframe'y
-    // (publish/director/preview) lądują same, od razu po utworzeniu, w pływającym
+    // (publish/preview) lądują same, od razu po utworzeniu, w pływającym
     // okienku z pełnym, natywnym interfejsem VDO.Ninja (parametry go czyszczące są
     // wtedy w ogóle pomijane przy budowie URL-a — patrz vdoCleanParams i
-    // buildPublishUrl/buildDirectorUrl/buildPreviewUrl). Główny iframe sceny zostaje
+    // buildPublishUrl/buildPreviewUrl). Główny iframe sceny zostaje
     // na miejscu, ale zyskuje ręczny przycisk odczepienia (.vdo-detach-btn).
     // Okna trzymają TE SAME elementy iframe (przeniesione), nie kopie: kopia z tym
-    // samym &push to konflikt strumienia, a kopia sceny/reżysera to drugi pełny
-    // odbiór pokoju.
+    // samym &push to konflikt strumienia, a kopia sceny to drugi pełny odbiór pokoju.
     var DEBUG_WIN_W = 360, DEBUG_WIN_H = 230, DEBUG_GAP = 8;
     var DEBUG_WIN_MIN_W = 220, DEBUG_WIN_MIN_H = 140;
     var autoFloated = {};       // etykieta (vdoFrameLabel) -> rekord, dla iframe'ów floatowanych bo App.debug jest włączone
     var mainFloatRecord = null; // ustawiane, gdy scenę ręcznie odczepiono przyciskiem .vdo-detach-btn
 
-    function liveVdoFrames() {
-        var frames = [debateIframe, publishIframe, directorIframe, previewIframe];
-        return frames.filter(function(f) { return !!f; });
-    }
     function floatIframe(iframe, label) {
         var rec = { iframe: iframe, parent: iframe.parentNode, nextSibling: iframe.nextSibling };
         // Liczone z autoFloated/mainFloatRecord, nie z $('.vdo-debug-win').length.
@@ -871,8 +756,7 @@
         rec.parent.insertBefore(rec.iframe, ref);
         $(rec.win).remove();
     }
-    // Wywoływane po utworzeniu każdego drugorzędnego iframe'a (embedPublish/embedDirector/
-    // embedPreview) i przy włączeniu App.debug w locie (patrz App.onDebugChange) — no-op
+    // Wywoływane po utworzeniu każdego drugorzędnego iframe'a (embedPublish/embedPreview) i przy włączeniu App.debug w locie (patrz App.onDebugChange) — no-op
     // gdy App.debug jest wyłączone albo iframe już jest floatowany.
     function autoFloatFrame(iframe) {
         if (!iframe || !App.debug) return;
@@ -882,7 +766,7 @@
         updateSelfPreview();
     }
     // MUSI polecieć przed usunięciem/przebudową drugorzędnego iframe'a (patrz wywołania w
-    // removePublish/removeDirector/clearPreview) — inaczej zostałoby osierocone okno.
+    // removePublish/clearPreview) — inaczej zostałoby osierocone okno.
     function autoUnfloatFrame(iframe) {
         var label = vdoFrameLabel(iframe);
         if (!autoFloated[label]) return;
@@ -891,7 +775,7 @@
         updateSelfPreview();
     }
     function autoFloatSecondaryFrames() {
-        [publishIframe, directorIframe, previewIframe].forEach(autoFloatFrame);
+        [publishIframe, previewIframe].forEach(autoFloatFrame);
     }
     function unfloatSecondaryFrames() {
         Object.keys(autoFloated).forEach(function(label) {
@@ -918,9 +802,8 @@
     // funkcjami budującymi, które go stworzyły, floatuje/odfloatuje drugorzędne
     // iframe'y i (przy wyłączeniu) sprowadza z powrotem ręcznie odczepioną scenę.
     function rebuildLiveFrameSrcs() {
-        if (debateIframe) debateIframe.src = buildViewUrl(viewUrlBreakoutZone);
-        if (publishIframe) publishIframe.src = buildPublishUrl(myDebateName, myPushId, publishBreakoutZone);
-        if (directorIframe) directorIframe.src = buildDirectorUrl();
+        if (debateIframe) debateIframe.src = viewUrl = buildViewUrl(viewUrlBreakoutZone);
+        if (publishIframe) publishIframe.src = publishUrl = buildPublishUrl(myDebateName, myPushId, publishBreakoutZone);
         if (previewIframe) previewIframe.src = buildPreviewUrl();
     }
 
@@ -1142,11 +1025,8 @@
             updateControlsVisibility();
         } else if (data.action === 'waiting') {
             // Waiting room: pull back anything already revealed and park on the hold screen
-            if (mainFloatRecord) { unfloatIframe(mainFloatRecord); mainFloatRecord = null; }  // ta ścieżka czyści scenę z pominięciem embedVdo()
             $('.debate-stage').hide();
-            $('.debate-video-frame').empty();
-            $('.debate-video').removeClass('debate-video--has-frame');
-            debateIframe = null;
+            clearStage();
             removePublish();
             myEmbedMode = null;
             $('.debate-waiting-hint').text('Prowadzący włączył poczekalnię — czekasz na wpuszczenie…');
@@ -1157,15 +1037,6 @@
         } else if (data.action === 'kick') {
             window.alert('Prowadzący usunął Cię z pokoju debaty');
             window.location.replace(window.location.origin + window.location.pathname);
-        } else if (data.action === 'republish') {
-            // Master's watchdog: our publish iframe never reached the director (blocked
-            // ICE/TURN) — a fresh connection is the same fix a manual re-join gives.
-            // Only meaningful while actually publishing outside a breakout room (in a
-            // breakout there's no director/addScene at all — see zonePushIds).
-            if (myEmbedMode === 'publish' && !myBreakoutZone()) {
-                removePublish();
-                embedPublish(myDebateName, myPushId, myBreakoutZone());
-            }
         }
     }
 
@@ -1330,23 +1201,12 @@
     // here we only flip entry.breakout and re-render; the occupant's own browser (master
     // or, over the roster broadcast, a participant) notices the mismatch and rebuilds.
     function resetBreakout(entry) {
-        if (entry && entry.breakout) {
-            entry.breakout = false;
-            // Room membership just changed — re-evaluate scene-2 warm targets right away
-            // instead of waiting for the next incidental loudness tick: leaving breakout
-            // must pick this sid back up immediately if their zone is already speaking (a
-            // teammate carried on without them), rather than sitting un-warmed until
-            // someone's volume changes.
-            updatePrewarm();
-        }
+        if (entry) entry.breakout = false;
     }
     function setBreakout(clientId, on) {
         var e = findEntry(clientId);
         if (!e || !zoneHasBreakout(e.zone)) return;
         e.breakout = !!on;
-        // See resetBreakout above — entering breakout must drop this sid from the warm
-        // set immediately (see zonePushIds), too.
-        updatePrewarm();
         renderDebate();
     }
     function requestBreakout(on) {
@@ -1749,10 +1609,11 @@
         setSignal(String($(this).data('client')), String($(this).data('kind')), false);
     });
 
-    // The visible stage is always on (a no-op after the first call); on top of that,
+    // The visible stage is always on (a no-op unless its URL changed); on top of that,
     // switch our hidden send iframe in/out depending on whether we hold a seat.
     function updateMyEmbed() {
         embedVdo();
+        syncStage();  // who is in the main room may have changed (seat taken, breakout)
         var me = myEntry();
         // Signal buttons (question / ad vocem) are for team seats only; the breakout
         // button additionally covers judges — see debate.css
@@ -1761,16 +1622,16 @@
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
-            if (mode === 'publish') embedPublish(myDebateName, myPushId, myBreakoutZone()); else removePublish();
             $('body').toggleClass('is-publishing', mode === 'publish');
             if (mode === 'publish') { setMicBtn(true); camOn = true; $('.debate-cam-btn').removeClass('is-off').attr('title', 'Wyłącz kamerę'); }
-        } else if (mode === 'publish' && publishBreakoutZone !== myBreakoutZone()) {
-            // Already publishing, but our own breakout room no longer matches what's
-            // baked into the iframe's URL (entered/left a "pokój narad") — rebuild it
-            // pointed at the new room. Mic/cam state survives via applyLocalMediaState
-            // (see embedPublish).
+        }
+        // Rebuilt whenever the URL it should have changes — notably on entering/leaving
+        // a "pokój narad". Mic/cam state survives via applyLocalMediaState (see embedPublish).
+        var bzone = myBreakoutZone();
+        var url = mode === 'publish' ? buildPublishUrl(myDebateName, myPushId, bzone) : null;
+        if (url !== publishUrl) {
             removePublish();
-            embedPublish(myDebateName, myPushId, myBreakoutZone());
+            if (url) embedPublish(url, bzone);
         }
         updateControlsVisibility();
     }
@@ -1794,7 +1655,7 @@
         $('.debate-name-input').val(name).trigger('input');
     });
 
-    // Master: create the room in the background (hub + director) and reveal the invite
+    // Master: create the room in the background (PeerJS hub) and reveal the invite
     // link/QR plus a camera check. The host stays in the lobby — real entry to the stage
     // happens on .debate-enter-btn, so their name/devices are set before they go live.
     $('.debate-create-btn').click(function() {
@@ -1816,7 +1677,6 @@
                 signals: {}, speaking: false, breakout: false,
                 joinSeq: 0, comaster: null, honorary: false, pending: false
             }];
-            embedDirector();
             $('body').addClass('is-debate-master');
             updateShareLinks();  // fills + shows the link/QR in the create column
             $('.debate-name-input, .debate-random-btn').prop('disabled', true);
@@ -2032,12 +1892,9 @@
         waitingRoomOn = false;
         $('.debate-waitroom-btn').removeClass('active').text('Włącz poczekalnię');
         $('body').removeClass('is-debate-master is-publishing is-comaster-primary');
-        if (mainFloatRecord) { unfloatIframe(mainFloatRecord); mainFloatRecord = null; }  // jw. — kontener czyszczony bez pośrednictwa embedVdo()
-        $('.debate-video-frame').empty();
-        $('.debate-video').removeClass('debate-video--has-frame');
-        debateIframe = null;
+        selfReportedSpeaking = {};
+        clearStage();
         removePublish();
-        removeDirector();
         $('.debate-stage').hide();
         $('.debate-roster-modal').modal('hide');
         // Back to a fresh lobby so the host can create again.
@@ -2075,14 +1932,10 @@
         if (!d) return;
         if (debateIframe && e.source === debateIframe.contentWindow) {
             App.vlog('[VDO← debate]', d);
-            // Zmiana topologii sceny (nowy strumień, zmiana slotów, wejście/wyjście ze
-            // sceny) mogła dorenderować kafelki spoza naszego filtra — narzuć go na nowo.
-            if (d.action === 'guest-connected' || d.action === 'view-connection' ||
-                d.action === 'slot-updated' || d.action === 'scene-connected' ||
-                d.action === 'push-connection' || d.action === 'add-to-scene' ||
-                d.action === 'remove-from-scene') {
-                applySpeakerView(true);
-            }
+            // Nowy strumień w pokoju: VDO sam stosuje do niego zapamiętany układ, ale
+            // świeżo załadowany iframe mógł przegapić pierwszy {layout} (wysłany w onload,
+            // zanim VDO podpiął swój odbiornik postMessage) — narzuć go na nowo.
+            if (d.action === 'guest-connected' || d.action === 'view-connection') syncStage(true);
         } else if (publishIframe && e.source === publishIframe.contentWindow) {
             App.vlog('[VDO← publish]', d);
             if (d.deviceList) {
@@ -2097,13 +1950,6 @@
                 if (deviceListHasLabels(d.deviceList)) stopDeviceListPoll('preview');
             }
             if (d.loudness !== undefined) handlePreviewLoudness(d.loudness);
-        } else if (directorIframe && e.source === directorIframe.contentWindow) {
-            // The director iframe reports back its own actions — most importantly
-            // {action:'add-to-scene'/'remove-from-scene'} after an addScene command
-            // actually toggles a guest, and 'control-box' when a publisher lands
-            // in the director's room. These drive the prewarm reconciliation.
-            App.vlog('[VDO← director]', d);
-            handleDirectorEvent(d);
         }
     });
 
@@ -2116,7 +1962,7 @@
             var sp = !!selfReportedSpeaking[e.clientId];
             if (sp !== !!e.speaking) { e.speaking = sp; changed = true; }
         });
-        if (changed) { renderZones(); broadcastSpeaking(); updatePrewarm(); applySpeakerView(); }
+        if (changed) { renderZones(); broadcastSpeaking(); syncStage(); }
     }
     function broadcastSpeaking() {
         var ids = debateRoster.filter(function(e) { return e.speaking; }).map(function(e) { return e.pushId; });
@@ -2126,45 +1972,46 @@
         });
     }
 
-    // Kto jest WIDOCZNY na scenie, narzuca aplikacja — nie &activespeaker VDO (patrz
-    // buildViewUrl). Źródłem prawdy jest stan `speaking` rosteru (u mastera z detekcji
-    // głośności, u pozostałych z broadcastu 'speaking'), nakładany lokalnie na własny
-    // iframe sceny komendami DOM {target, replace/add}. To warstwa niezależna od
-    // addScene/prewarm poniżej: skład sceny 2 decyduje, czyje media w ogóle płyną
-    // (podgrzanie wideo + natychmiastowa słyszalność wtrąceń), a ten filtr — co widać.
-    var speakerViewSids = null; // ostatnio narzucona lista widocznych sid (null = jeszcze nic)
+    // Kto jest WIDOCZNY na scenie głównego pokoju, narzuca aplikacja — nie &activespeaker
+    // VDO (patrz buildViewUrl). Źródłem prawdy jest stan `speaking` rosteru (u mastera
+    // z samodzielnych zgłoszeń, u pozostałych z broadcastu 'speaking'), nakładany lokalnie
+    // na własny iframe sceny komendą {layout}. Dźwięk wszystkich obecnych w głównym
+    // pokoju gra niezależnie od tego — layout decyduje tylko o obrazie.
+    var stageSids = null; // sid-y w ostatnio narzuconym układzie; null = siatka VDO ze wszystkimi
 
-    function applySpeakerView(reapply) {
-        // A breakout room's stage has no curated scene to filter (see buildViewUrl) —
-        // everyone forwarded into it is just shown, full stop.
+    // Seated people whose stream is in the main room right now (breakout occupants
+    // publish into their own room instead — see buildPublishUrl).
+    function mainRoomSids() {
+        return debateRoster.filter(function(e) { return e.zone && e.zone !== 'audience' && !e.breakout; })
+            .map(function(e) { return pushIdFor(e.pushId); });
+    }
+
+    function syncStage(reapply) {
+        // A breakout room's stage gets no layout — everyone in it is just shown.
         if (!debateIframe || viewUrlBreakoutZone) return;
-        var sids = [];
-        debateRoster.forEach(function(e) {
-            if (e.speaking && e.zone) sids.push(pushIdFor(e.pushId));
-        });
-        // Cisza nie czyści widoku — ostatni mówca zostaje na ekranie (spójnie z
-        // updatePrewarm); przy re-aplikacji ponawiamy ostatni znany układ, bo scena
-        // mogła właśnie dorenderować kafelki podgrzanych (a milczących) przeciwników.
-        if (!sids.length) {
-            if (reapply && speakerViewSids === null) {
-                // Świeży iframe, a jeszcze NIKT nigdy nie mówił — scena zostaje
-                // nieskurowana (wszyscy na 0kbps), więc naszego kafelka i tak tam
-                // realnie nie widać. Przejdź z null na pustą listę, żeby
-                // amIOnSpeakerStage() przestało zakładać, że jesteśmy na scenie,
-                // i podgląd własny się pokazał zamiast wisieć schowany w nieskończoność.
-                speakerViewSids = [];
-                updateSelfPreview();
-            }
-            if (!reapply || !speakerViewSids.length) return;
-            sids = speakerViewSids;
-        }
-        if (!reapply && speakerViewSids && sids.join(',') === speakerViewSids.join(',')) return;
-        speakerViewSids = sids;
-        // replace atomowo usuwa wszystkie pozostałe kafelki; ewentualni równocześni
-        // mówcy (np. wtrącenie w trakcie) dochodzą add-em.
-        postToVdo({ target: sids[0], replace: true });
-        for (var i = 1; i < sids.length; i++) postToVdo({ target: sids[i], add: true });
+        var present = mainRoomSids();
+        var isPresent = function(sid) { return present.indexOf(sid) !== -1; };
+        var sids = debateRoster.filter(function(e) { return e.speaking; })
+            .map(function(e) { return pushIdFor(e.pushId); }).filter(isPresent);
+        // Cisza nie czyści widoku — ostatni mówca zostaje na ekranie, dopóki jest w pokoju.
+        // Zanim ktokolwiek się odezwie, VDO pokazuje siatkę wszystkich (układ null).
+        if (!sids.length) sids = (stageSids || []).filter(isPresent);
+        if (!sids.length) sids = null;
+        if (!reapply && String(sids) === String(stageSids)) return;
+        stageSids = sids;
+        postToVdo({ layout: sids ? stageLayout(sids) : null });
         updateSelfPreview(); // zmienił się skład sceny → przelicz, czy jesteśmy na niej
+    }
+    // Equal tiles in a near-square grid, in % of the stage — VDO's {layout} takes an
+    // object keyed by streamID (an array is read as slot positions instead).
+    function stageLayout(sids) {
+        var cols = Math.ceil(Math.sqrt(sids.length));
+        var rows = Math.ceil(sids.length / cols);
+        var layout = {};
+        sids.forEach(function(sid, i) {
+            layout[sid] = { x: (i % cols) * 100 / cols, y: Math.floor(i / cols) * 100 / rows, w: 100 / cols, h: 100 / rows };
+        });
+        return layout;
     }
 
     // Corner self-view PiP. Source is the existing publishIframe (the hidden send
@@ -2174,14 +2021,10 @@
     // exactly the state the user last chose (open, or collapsed-to-eye). Requirement 4.
     var selfPreviewUserHidden = false;
     function amIOnSpeakerStage() {
-        // speakerViewSids === null only briefly, between embedVdo() resetting it and the
-        // fresh iframe's onload firing applySpeakerView(true) — treat that narrow window
-        // as "on stage" so the corner preview doesn't flash on top of a loading iframe.
-        // applySpeakerView flips it to [] (not null) the moment the scene is actually
-        // evaluated, even with nobody speaking, so this never freezes true indefinitely —
-        // see the null-check there.
-        if (!speakerViewSids) return true;
-        return speakerViewSids.indexOf(pushIdFor(myPushId)) !== -1;
+        // No layout (a fresh iframe, nobody has spoken yet, or a breakout room) means
+        // VDO shows everyone in the room — us included, while we publish there.
+        if (!stageSids) return true;
+        return stageSids.indexOf(pushIdFor(myPushId)) !== -1;
     }
     function updateSelfPreview() {
         var $w = $('.debate-self-preview');
@@ -2196,161 +2039,6 @@
         $w.find('.debate-self-preview-eye')
             .toggleClass('is-closed', selfPreviewUserHidden)
             .attr('title', selfPreviewUserHidden ? 'Pokaż podgląd' : 'Ukryj podgląd');
-    }
-
-    // Selektywne "podgrzewanie" (addScene) strony przeciwnej do aktualnie mówiącej —
-    // patrz VDO_SCENE. addScene jest komendą WYŁĄCZNIE dla reżysera (director) i zmienia
-    // globalny, wspólny dla całego pokoju skład sceny — więc wysyła ją tylko master,
-    // przez directorIframe. "value" to numer docelowej sceny (musi być zgodny z
-    // VDO_SCENE, czyli 2) — to TOGGLE, nie flaga on/off.
-    //
-    // addScene działa przez programowe "kliknięcie" przycisku S2 danego gościa w DOM
-    // panelu reżysera — a ten przycisk powstaje dopiero, gdy reżyser zobaczy publikującego
-    // gościa. Komenda wysłana wcześniej po cichu nie robi NIC (świeżo posadzony mówca
-    // regularnie przegrywał ten wyścig). Dlatego nie zakładamy, że wysłana komenda
-    // zadziałała: stan sceny śledzimy po zdarzeniach zwrotnych add-to-scene /
-    // remove-from-scene z iframe reżysera, a rozjazd chciane-vs-potwierdzone
-    // uzgadnia syncPrewarm() — ponawiany też, gdy reżyser zgłosi nowego gościa.
-    // Wszystkie trzy mapy są kluczowane sanitized streamID (pushIdFor), bo tak
-    // identyfikuje gości sam VDO.
-    var warmDesired = {};   // sid -> true: kogo chcemy mieć w scenie 2
-    var warmConfirmed = {}; // sid -> true: kogo reżyser potwierdził jako dodanego
-    var warmPending = {};   // sid -> timestamp ostatniego toggle (tłumi dublowanie w locie)
-    var lastSpeakingZones = null; // ostatni niepusty speakingZones — patrz updatePrewarm
-
-    // Watchdog na "gość niewidoczny dla reżysera" (docs.vdo.ninja/common-errors-and-known-issues/
-    // appearing-then-disappearing-guest): handshake gościa z reżyserem czasem nie domyka się
-    // (blokada UDP/TURN) i addScene nigdy nie ma na czym zadziałać — stan wisi w nieskończoność,
-    // aż ktoś ręcznie dołączy od nowa. Ten mechanizm automatyzuje dokładnie ten ręczny fix:
-    // gdy sid siedzi w warmDesired dłużej niż WATCHDOG_MS bez potwierdzenia, każemy jego
-    // właścicielowi przebudować publish iframe (świeże połączenie WebRTC z reżyserem).
-    var warmUnconfirmedSince = {}; // sid -> ts, odkąd jest chciany-a-niepotwierdzony
-    var lastRepublishReq = {};     // sid -> ts ostatniego żądania republish (cooldown)
-    var republishAttempts = {};    // sid -> licznik prób w bieżącym incydencie
-    var WATCHDOG_MS = 6000;            // grace ≥ czas na normalny ICE + retry przez syncPrewarm
-    var REPUBLISH_COOLDOWN_MS = 15000; // nie zapętlać przeładowań przy trwale zablokowanej sieci
-    var MAX_REPUBLISH = 3;             // limit prób na incydent
-    var watchdogTimer = null;          // setInterval, żyje dopóki istnieje directorIframe
-
-    function resetPrewarmState() {
-        warmDesired = {}; warmConfirmed = {}; warmPending = {}; lastSpeakingZones = null;
-        selfReportedSpeaking = {};
-        warmUnconfirmedSince = {}; lastRepublishReq = {}; republishAttempts = {};
-    }
-
-    // Dla `sid` z warmDesired, który za długo nie doczekał się potwierdzenia od reżysera —
-    // każ jego właścicielowi przebudować publish iframe. Cooldown + MAX_REPUBLISH chronią
-    // przed pętlą przeładowań, gdy sieć (TURN) jest trwale niedostępna.
-    function watchdogTick() {
-        if (!directorIframe) return;
-        var now = Date.now();
-        Object.keys(warmUnconfirmedSince).forEach(function(sid) {
-            if (now - warmUnconfirmedSince[sid] < WATCHDOG_MS) return;
-            if (lastRepublishReq[sid] && now - lastRepublishReq[sid] < REPUBLISH_COOLDOWN_MS) return;
-            var attempts = republishAttempts[sid] || 0;
-            if (attempts >= MAX_REPUBLISH) return;
-            var e = debateRoster.filter(function(entry) { return pushIdFor(entry.pushId) === sid; })[0];
-            if (!e) return;
-            lastRepublishReq[sid] = now;
-            republishAttempts[sid] = attempts + 1;
-            App.vlog('[watchdog] republish', sid);
-            if (e.clientId === myClientId) {
-                // Własny sid mastera: nie ma połączenia PeerJS do samego siebie, więc
-                // przebudowa leci lokalnie, tak samo jak dla zwykłego uczestnika.
-                removePublish();
-                embedPublish(myDebateName, myPushId, myBreakoutZone());
-            } else {
-                sendToPeer(e.peerId, { type: 'cmd', action: 'republish' });
-            }
-            if (republishAttempts[sid] >= MAX_REPUBLISH) {
-                App.core.showWarn('Uczestnik ' + (e.name || '') + ' nie łączy się z reżyserem — możliwa blokada sieci/TURN');
-            }
-        });
-    }
-
-    function sendSceneToggle(sid) {
-        var now = Date.now();
-        if (warmPending[sid] && now - warmPending[sid] < 1000) return; // komenda w locie
-        warmPending[sid] = now;
-        postToFrame(directorIframe, { action: 'addScene', target: sid, value: 2, cib: nextCib() });
-    }
-
-    function syncPrewarm() {
-        if (!directorIframe) return; // tylko master ma uprawnienia reżysera
-        Object.keys(warmDesired).forEach(function(sid) {
-            if (!warmConfirmed[sid]) {
-                if (!warmUnconfirmedSince[sid]) warmUnconfirmedSince[sid] = Date.now();
-                sendSceneToggle(sid);
-            }
-        });
-        Object.keys(warmConfirmed).forEach(function(sid) {
-            if (!warmDesired[sid]) sendSceneToggle(sid);
-        });
-        // Przestał być chciany, zanim zdążył się potwierdzić — watchdog ma go przestać liczyć.
-        Object.keys(warmUnconfirmedSince).forEach(function(sid) {
-            if (!warmDesired[sid]) delete warmUnconfirmedSince[sid];
-        });
-    }
-
-    // Zdarzenia zwrotne z iframe reżysera napędzające uzgadnianie stanu sceny.
-    function handleDirectorEvent(d) {
-        if (!d || !d.action) return;
-        var sid = d.streamID;
-        if (d.action === 'add-to-scene' && String(d.value) === '2' && sid) {
-            warmConfirmed[sid] = true;
-            delete warmPending[sid];
-            delete warmUnconfirmedSince[sid];
-            delete lastRepublishReq[sid];
-            delete republishAttempts[sid];
-            syncPrewarm(); // jeśli w międzyczasie przestał być chciany — od razu zdejmij
-        } else if (d.action === 'remove-from-scene' && String(d.value) === '2' && sid) {
-            delete warmConfirmed[sid];
-            delete warmPending[sid];
-            syncPrewarm();
-        } else if (d.action === 'control-box' || d.action === 'guest-connected' || (d.action === 'push-connection' && d.value)) {
-            // Nowy gość właśnie dostał panel u reżysera — dopiero teraz addScene może
-            // zadziałać; ponów zaległe dodania. guest-connected to jedyne z tych trzech
-            // udokumentowane wprost (docs.vdo.ninja/guides/iframe-api-documentation/
-            // detecting-user-joins-disconnects) jako odpalane przy KAŻDYM połączeniu
-            // gościa — dorzucone na wypadek, gdyby control-box/push-connection(true)
-            // nie odpaliły ponownie przy powrocie z pokoju narad.
-            delete warmPending[d.streamID];
-            syncPrewarm();
-        } else if (d.action === 'push-connection' && !d.value && sid) {
-            // Gość zniknął — jego stan sceny u reżysera wyparował razem z panelem.
-            delete warmConfirmed[sid];
-            delete warmPending[sid];
-        }
-    }
-
-    function updatePrewarm() {
-        if (!directorIframe) return;
-        var speakingZones = {};
-        debateRoster.forEach(function(e) { if (e.speaking && e.zone) speakingZones[e.zone] = true; });
-        // Nikt teraz nie mówi — zostaw ostatnio mówiącą strefę jako bazę (nie czyść
-        // sceny), zamiast gasić obraz na czas ciszy między mówcami. ALE dalej przeliczamy
-        // target z niej na żywo (zonePushIds/INTERJECT_OPPONENTS poniżej) zamiast całkiem
-        // pomijać funkcję — inaczej ktoś wracający z pokoju narad w trakcie ciszy (typowy
-        // moment na powrót: między wypowiedziami) nigdy nie wróciłby do scen 2, bo
-        // warmDesired zamrażałoby się na składzie sprzed jego wyjścia aż do najbliższej
-        // zmiany speaking, która — bez bycia w scenie — może nigdy nie nadejść.
-        if (Object.keys(speakingZones).length) {
-            lastSpeakingZones = speakingZones;
-        } else if (!lastSpeakingZones) {
-            return; // jeszcze nikt nigdy nie mówił — nie ma czego podgrzewać
-        }
-        var target = {};
-        Object.keys(lastSpeakingZones).forEach(function(zone) {
-            // Mówiąca strefa nigdy nie może wypaść z target — inaczej w momencie
-            // przejścia "podgrzany przeciwnik" → "teraz mówi" dostałaby toggle
-            // (czyli zostałaby wyrzucona ze sceny) w trakcie własnej wypowiedzi.
-            zonePushIds(zone).forEach(function(pid) { target[pushIdFor(pid)] = true; });
-            (INTERJECT_OPPONENTS[zone] || []).forEach(function(opp) {
-                zonePushIds(opp).forEach(function(pid) { target[pushIdFor(pid)] = true; });
-            });
-        });
-        warmDesired = target;
-        syncPrewarm();
     }
 
     // --- Comaster failover: promotion, backup hub, reconnect cascade ---
@@ -2526,7 +2214,6 @@
 
         syncPrimaryComaster();      // designate the new primary comaster (next generation)
 
-        embedDirector();
         updateShareLinks();
         $('body').addClass('is-debate-master').removeClass('is-comaster-primary');
         App.core.showAlert('Zostałeś nowym prowadzącym debaty');
@@ -2559,7 +2246,8 @@
         sessionConnections = {};
         isDebateMaster = false;
         App.state.isSlaveSession = true;
-        removeDirector();
+        selfReportedSpeaking = {};
+        resetSelfSpeech();
         $('body').removeClass('is-debate-master');
         $('.debate-roster-modal').modal('hide');
         App.core.showAlert('Przekazano rolę prowadzącego');
@@ -2721,8 +2409,7 @@
         else if (data.type === 'speaking') {
             debateRoster.forEach(function(e) { e.speaking = (data.pushIds || []).indexOf(e.pushId) !== -1; });
             renderZones();
-            updatePrewarm();
-            applySpeakerView();
+            syncStage();
         }
         else if (data.type === 'confetti') App.core.launchConfetti();
     }
