@@ -15,12 +15,17 @@
 (function () {
     window.App = window.App || {};
 
+    // Dev/local vs. production — recognised by hostname or a '/dev' path segment.
+    var isDevEnv = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ||
+        location.pathname.indexOf('/dev') !== -1;
+
     // Feature switches — flip to true to bring a feature back into the UI. Both are
-    // fully implemented (online.js / debate.css) but hidden on master for now; the
+    // fully implemented (online.js / debate.css) but hidden in production for now; the
     // code stays in place so re-enabling is just flipping the flag, no merge surgery.
+    // The online debate is already shown on dev/local, where it's being tested.
     App.features = {
-        onlineDebate: false,   // "Debata online" nav tab (VDO.Ninja video debate)
-        styleSwitcher: false   // "Styl" dropdown in Settings (glassmorphic theme)
+        onlineDebate: isDevEnv, // "Debata online" nav tab (VDO.Ninja video debate)
+        styleSwitcher: false    // "Styl" dropdown in Settings (glassmorphic theme)
     };
     if (document.body) {
         // Runs at the bottom of <body>, so the DOM is already there.
@@ -63,13 +68,11 @@
         }
     });
 
-    // Dev/local vs. production — recognised by hostname or a '/dev' path segment. Unlike
-    // `verbose` this defaults true on dev/local and false elsewhere, but is the same kind
-    // of live-toggleable accessor: `App.debug = true/false` from the console works
-    // identically on every environment (see online.js's onDebugChange), only the starting
-    // value differs by environment.
-    var debug = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ||
-        location.pathname.indexOf('/dev') !== -1;
+    // Unlike `verbose` this defaults true on dev/local (isDevEnv) and false elsewhere, but
+    // is the same kind of live-toggleable accessor: `App.debug = true/false` from the
+    // console works identically on every environment (see online.js's onDebugChange),
+    // only the starting value differs by environment.
+    var debug = isDevEnv;
     Object.defineProperty(App, 'debug', {
         get: function () { return debug; },
         set: function (on) {
