@@ -290,9 +290,7 @@
             } else if (data.type === 'breakout') {
                 if (sender) setBreakout(sender.clientId, data.on);
             } else if (data.type === 'i-speak') {
-                // A participant's own bootstrap report — see handleSelfLoudness /
-                // recomputeSpeaking. Kept in a separate map from scene-loudness so a
-                // scene tick that hasn't picked them up yet can't immediately zero it back out.
+                // A participant's own speech report — see handleSelfLoudness / recomputeSpeaking.
                 if (sender) { selfReportedSpeaking[sender.clientId] = !!data.speaking; recomputeSpeaking(); }
             } else if (data.type === 'confetti') {
                 App.core.launchConfetti();
@@ -635,20 +633,14 @@
     // a device VDO.Ninja already has open either fails or silently hands back a stream
     // of pure silence — see handlePreviewLoudness / embedPreview.
 
-    // Self-speech detection, for everyone with a publish iframe (master AND ordinary
-    // participants). handleLoudness() only sees audio VDO.Ninja actually RECEIVES on the
-    // master's scene iframe — and that scene only carries audio for whoever the director
-    // has already addScene'd (see updatePrewarm/INTERJECT_OPPONENTS). Judges/audience,
-    // or a debater whose zone is never a listed interjection opponent, are never
-    // pre-warmed — so without this, their mic is never detected as loud by ANYONE and
-    // they can never get promoted into the scene in the first place (a no-way-out loop).
-    // publishIframe's own outbound audio pipeline reports OUR loudness back to us
-    // (streamID-keyed, same &pushloudness mechanism as the mic meter above) — see
-    // handleSelfLoudness / embedPublish. The master turns this into their own roster
-    // entry directly (reportSelfSpeaking); everyone else has no roster to mutate locally,
-    // so they just tell the master (reportSelfSpeakingToMaster) and wait for the
+    // Speech detection: everyone with a publish iframe (master AND ordinary participants)
+    // reports themselves. publishIframe's own outbound audio pipeline reports OUR loudness
+    // back to us (streamID-keyed, same &pushloudness mechanism as the mic meter above) —
+    // see handleSelfLoudness / embedPublish. This is the only source of the roster's
+    // `speaking` flag: the master records its own report directly (reportSelfSpeaking),
+    // everyone else tells the master (reportSelfSpeakingToMaster) and waits for the
     // broadcast — see recomputeSpeaking / handleSlaveData's 'speaking' branch.
-    var SELF_SPEECH_THRESH = 5; // same units/scale as handleLoudness's THRESH below
+    var SELF_SPEECH_THRESH = 5; // VDO loudness scale: ~100 loud speech, under 5 quiet background
     var SELF_SPEECH_HANGOVER_MS = 1000; // avoid flicker during natural pauses in speech
     var selfSpeechHangoverTimer = null;
     var amSelfSpeaking = false;
@@ -674,20 +666,14 @@
             if (isDebateMaster) reportSelfSpeaking(false); else reportSelfSpeakingToMaster(false);
         }
     }
-    // Master only — mutates our own roster entry directly, same as handleLoudness does
-    // for everyone else's (see recomputeSpeaking, which skips myClientId for this reason).
+    // Master only — there's no connection to ourselves, so record the report directly.
     function reportSelfSpeaking(speaking) {
-        var me = myEntry();
-        if (!me || !!me.speaking === speaking) return;
-        me.speaking = speaking;
-        renderZones();
-        broadcastSpeaking();
-        updatePrewarm();
-        applySpeakerView();
+        selfReportedSpeaking[myClientId] = !!speaking;
+        recomputeSpeaking();
     }
     // Non-master participants have no roster to mutate locally — just tell the master,
-    // who folds it into recomputeSpeaking() alongside scene loudness and broadcasts the
-    // result back (handleSlaveData's 'speaking' branch is what actually lights up our 🎤).
+    // who folds it into recomputeSpeaking() and broadcasts the result back
+    // (handleSlaveData's 'speaking' branch is what actually lights up our 🎤).
     function reportSelfSpeakingToMaster(speaking) {
         if (masterConn && masterConn.open) safeSend(masterConn, { type: 'i-speak', speaking: !!speaking });
     }
@@ -728,11 +714,6 @@
         debateIframe = $('.debate-video-frame iframe').get(0);
         if (debateIframe) {
             debateIframe.onload = function() {
-                // Master's iframe hears everyone → loudness tells us who is talking
-                if (isDebateMaster) {
-                    postToVdo({ getLoudness: true });
-                    setTimeout(function() { postToVdo({ getLoudness: true }); }, 3000);
-                }
                 // Dołączenie w trakcie: ktoś może już mówić, zanim dotrą zdarzenia sceny
                 applySpeakerView(true);
             };
@@ -1239,9 +1220,7 @@
 
     function removeRosterEntry(clientId) {
         debateRoster = debateRoster.filter(function(e) { return e.clientId !== clientId; });
-        // A disconnected participant must not linger as "forever speaking" for whoever
-        // takes their seat next (clientId is per-tab, but pushId/streamID could recur).
-        delete sceneLoudSpeaking[clientId];
+        // A disconnected participant must not linger as "forever speaking".
         delete selfReportedSpeaking[clientId];
         syncPrimaryComaster();
         renderDebate();
@@ -2096,7 +2075,6 @@
         if (!d) return;
         if (debateIframe && e.source === debateIframe.contentWindow) {
             App.vlog('[VDO← debate]', d);
-            if (d.loudness !== undefined) handleLoudness(d.loudness);
             // Zmiana topologii sceny (nowy strumień, zmiana slotów, wejście/wyjście ze
             // sceny) mogła dorenderować kafelki spoza naszego filtra — narzuć go na nowo.
             if (d.action === 'guest-connected' || d.action === 'view-connection' ||
@@ -2129,47 +2107,13 @@
         }
     });
 
-    // Two independent sources feed each roster entry's `speaking` flag, kept in separate
-    // clientId-keyed maps rather than writing straight into e.speaking: handleLoudness
-    // ticks often and would otherwise stomp a self-report back to false on the very next
-    // tick, before the scene has even picked the newcomer up (see reportSelfSpeakingToMaster
-    // for why a self-report is needed at all). recomputeSpeaking ORs them together.
-    var sceneLoudSpeaking = {};     // clientId -> bool, from the master's own scene loudness (handleLoudness)
-    var selfReportedSpeaking = {};  // clientId -> bool, self-reported by the participant themselves (i-speak)
+    var selfReportedSpeaking = {};  // clientId -> bool, self-reported (i-speak / reportSelfSpeaking)
 
-    // Best-effort talk detection from VDO loudness — thresholds/shape need live tuning.
-    // Every publisher's VDO streamID is our own deterministic pushIdFor(pushId) (we
-    // always set &push), so loud streams map straight onto roster entries — no name
-    // matching, which used to conflate two participants sharing a display name. Only
-    // sees audio for whoever the director has already addScene'd — see
-    // handleSelfLoudness for why this alone can't ever promote a never-warmed guest.
-    function handleLoudness(loud) {
-        if (!isDebateMaster) return;
-        var THRESH = 5;
-        var loudIds = {};
-        var consider = function(streamID, level) {
-            if (streamID && level != null && level > THRESH) loudIds[streamID] = true;
-        };
-        if (Array.isArray(loud)) {
-            loud.forEach(function(x) { consider(x.streamID || x.id, x.loudness != null ? x.loudness : x.level); });
-        } else if (loud && typeof loud === 'object') {
-            Object.keys(loud).forEach(function(k) { consider(k, loud[k]); });
-        }
-        debateRoster.forEach(function(e) {
-            // Our own entry is driven by local self-speech detection (see
-            // reportSelfSpeaking) — WebRTC never loops our own mic back to us as a
-            // received stream, so loudIds can never legitimately contain our own pushId.
-            if (e.clientId === myClientId) return;
-            sceneLoudSpeaking[e.clientId] = !!loudIds[pushIdFor(e.pushId)];
-        });
-        recomputeSpeaking();
-    }
-    // Folds scene loudness + self-reports into each roster entry's `speaking` flag.
+    // Master: turns the self-reports into each roster entry's `speaking` flag.
     function recomputeSpeaking() {
         var changed = false;
         debateRoster.forEach(function(e) {
-            if (e.clientId === myClientId) return; // see reportSelfSpeaking
-            var sp = !!sceneLoudSpeaking[e.clientId] || !!selfReportedSpeaking[e.clientId];
+            var sp = !!selfReportedSpeaking[e.clientId];
             if (sp !== !!e.speaking) { e.speaking = sp; changed = true; }
         });
         if (changed) { renderZones(); broadcastSpeaking(); updatePrewarm(); applySpeakerView(); }
@@ -2290,7 +2234,7 @@
 
     function resetPrewarmState() {
         warmDesired = {}; warmConfirmed = {}; warmPending = {}; lastSpeakingZones = null;
-        sceneLoudSpeaking = {}; selfReportedSpeaking = {};
+        selfReportedSpeaking = {};
         warmUnconfirmedSince = {}; lastRepublishReq = {}; republishAttempts = {};
     }
 
@@ -2560,6 +2504,13 @@
         // person to join here would look senior to everyone already seated.
         nextJoinSeq = debateRoster.reduce(function(max, e) { return Math.max(max, e.joinSeq + 1); }, 1);
 
+        // Speech reports went to the previous master and are only re-sent on change, so
+        // seed them from the inherited roster — otherwise whoever is talking right now
+        // would drop off the stage at the next unrelated report.
+        selfReportedSpeaking = {};
+        debateRoster.forEach(function(e) { if (e.speaking) selfReportedSpeaking[e.clientId] = true; });
+        selfReportedSpeaking[myClientId] = amSelfSpeaking;
+
         // Taking over is just flipping the role field on my own (clientId-keyed) entry —
         // peerId and pushId stay untouched, so my VDO stream and seat survive as-is.
         var me = myEntry();
@@ -2580,15 +2531,6 @@
         $('body').addClass('is-debate-master').removeClass('is-comaster-primary');
         App.core.showAlert('Zostałeś nowym prowadzącym debaty');
         renderDebate();
-
-        // getLoudness was only ever requested by the *previous* master's own iframe
-        // (in embedVdo's onload); ours never asked, and updateMyEmbed() above only
-        // re-embeds on a mode change — which usually doesn't happen here — so the
-        // speaking indicator would otherwise go dark for the rest of the debate.
-        if (debateIframe) {
-            postToVdo({ getLoudness: true });
-            setTimeout(function() { postToVdo({ getLoudness: true }); }, 3000);
-        }
     }
 
     // Master: hand off the role to a specific comaster without leaving the room —
