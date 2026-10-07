@@ -287,6 +287,11 @@
                 if (sender && (sender.marshal || sender.clientId === String(data.clientId))) {
                     setSignal(String(data.clientId), data.kind, false);
                 }
+            } else if (data.type === 'moderate') {
+                // Only the marshal may mute / switch off cameras on the master's behalf
+                if (sender && sender.marshal && (data.action === 'mute' || data.action === 'camera-off')) {
+                    moderate(data.action, String(data.target), sender.clientId, true);
+                }
             } else if (data.type === 'breakout') {
                 if (sender) setBreakout(sender.clientId, data.on);
             } else if (data.type === 'i-speak') {
@@ -1061,12 +1066,26 @@
         });
     }
 
-    // Participant: apply a command relayed from the master
-    function handleDebateCmd(data) {
-        if (data.action === 'mute') {
+    // Switch our own mic / camera off on request (marshal or master) and say who asked.
+    // A request, not a lock: our own mic and camera buttons turn them back on.
+    function applyModeration(action, by) {
+        var who = by === 'marshal' ? 'Marszałek' : 'Prowadzący';
+        if (action === 'mute') {
             postToPublish({ mic: false });
             setMicBtn(false);
-            App.core.showWarn('Prowadzący wyciszył Twój mikrofon');
+            App.core.showWarn(who + ' wyciszył Twój mikrofon');
+        } else if (action === 'camera-off') {
+            postToPublish({ camera: false });
+            camOn = false;
+            $('.debate-cam-btn').addClass('is-off').attr('title', 'Włącz kamerę');
+            App.core.showWarn(who + ' wyłączył Twoją kamerę');
+        }
+    }
+
+    // Participant: apply a command relayed from the master
+    function handleDebateCmd(data) {
+        if (data.action === 'mute' || data.action === 'camera-off') {
+            applyModeration(data.action, data.by);
         } else if (data.action === 'close') {
             App.core.showWarn('Prowadzący zamknął pokój debaty');
             setTimeout(function() {
@@ -1309,6 +1328,32 @@
         else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'leaveSlot' });
     }
 
+    // Master: mute / switch off the camera of one participant (target = clientId) or of
+    // everybody admitted except the requester (target = 'all'). `by` tells the receiver
+    // whether the master or the marshal asked. Turning anything back on is deliberately
+    // not offered — each person does that for themselves.
+    function moderate(action, target, requesterId, byMarshal) {
+        if (action !== 'mute' && action !== 'camera-off') return;
+        var by = byMarshal ? 'marshal' : 'master';
+        var targets = target === 'all'
+            ? debateRoster.filter(function(e) { return !e.pending && e.clientId !== requesterId; })
+            : debateRoster.filter(function(e) { return !e.pending && e.clientId === target; });
+        targets.forEach(function(e) {
+            if (e.clientId === myClientId) applyModeration(action, by);
+            else sendToPeer(e.peerId, { type: 'cmd', action: action, by: by });
+        });
+    }
+
+    // Called locally (master) or relayed to master (participant — accepted only from the marshal)
+    function requestModerate(action, target) {
+        if (isDebateMaster) moderate(action, target, myClientId, false);
+        else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'moderate', action: action, target: target });
+        else return;
+        App.core.showAlert(target === 'all'
+            ? (action === 'mute' ? 'Wyciszono wszystkich' : 'Wyłączono kamery wszystkim')
+            : (action === 'mute' ? 'Wyciszono uczestnika' : 'Wyłączono kamerę'));
+    }
+
     // renderDebate = the visual zones (everyone) + the master management list (master only)
     function renderDebate() {
         renderZones();
@@ -1386,6 +1431,17 @@
         else if (masterConn && masterConn.open) safeSend(masterConn, { type: 'clearSignal', clientId: clientId, kind: kind });
     });
 
+    // Same crossed-out mic / camera drawings as the .debate-mic-btn / .debate-cam-btn off icons
+    var MOD_SVG = {
+        'mute':
+            '<svg class="slot-mod-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M15 9.34V4a3 3 0 0 0-5.94-.6"/>' +
+            '<path d="M17 16.95A7 7 0 0 1 5 12v-2"/><path d="M19 10v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
+        'camera-off':
+            '<svg class="slot-mod-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M16 16v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    };
+
     function slotEl(entry, zone, index) {
         var mine = entry && entry.clientId === myClientId;
         var draggable = isDebateMaster && debateEditMode && !!entry;
@@ -1415,6 +1471,15 @@
         if (entry.breakout) $n.append(' ').append($('<span class="badge badge-secondary roster-breakout-badge"></span>').text('Narada'));
         if (entry.comaster === 'primary') $n.append(' ').append($('<span class="badge badge-info comaster-badge" title="Wyznaczony następca mastera"></span>').text('Co-master'));
         $s.append($n);
+        if (!mine) {
+            var $mod = $('<span class="slot-mod"></span>');
+            [['mute', 'Wycisz'], ['camera-off', 'Wyłącz kamerę']].forEach(function(a) {
+                $('<button type="button" class="slot-mod-btn"></button>')
+                    .attr('data-client', entry.clientId).attr('data-action', a[0]).attr('title', a[1])
+                    .html(MOD_SVG[a[0]]).appendTo($mod);
+            });
+            $s.append($mod);
+        }
         return $s;
     }
 
@@ -1581,6 +1646,8 @@
             if (e.role !== 'master') {
                 $('<button type="button" class="btn btn-outline-secondary btn-sm roster-mute">Wycisz</button>')
                     .attr('data-client', e.clientId).appendTo($row);
+                $('<button type="button" class="btn btn-outline-secondary btn-sm roster-camoff">Wyłącz kamerę</button>')
+                    .attr('data-client', e.clientId).appendTo($row);
                 if (e.comaster === 'primary') {
                     $('<button type="button" class="btn btn-outline-primary btn-sm roster-promote">Uczyń masterem</button>')
                         .attr('data-client', e.clientId).appendTo($row);
@@ -1657,10 +1724,17 @@
     });
 
     $(document).on('click', '.roster-mute', function() {
-        var e = findEntry(String($(this).data('client')));
-        if (!e) return;
-        sendToPeer(e.peerId, { type: 'cmd', action: 'mute' });
-        App.core.showAlert('Wyciszono uczestnika');
+        requestModerate('mute', String($(this).data('client')));
+    });
+    $(document).on('click', '.roster-camoff', function() {
+        requestModerate('camera-off', String($(this).data('client')));
+    });
+
+    // Mute / camera-off icons on another person's seat tile — shown to the master and
+    // the marshal only (debate.css). Stop the click here so it never reaches the tile.
+    $(document).on('click', '.slot-mod-btn', function(ev) {
+        ev.stopPropagation();
+        requestModerate(String($(this).attr('data-action')), String($(this).attr('data-client')));
     });
 
     $(document).on('click', '.roster-signal', function() {
@@ -1674,9 +1748,11 @@
         syncStage();  // who is in the main room may have changed (seat taken, breakout)
         var me = myEntry();
         // Signal buttons (question / ad vocem) are for team seats only; the breakout
-        // button additionally covers judges — see debate.css
+        // button additionally covers judges; the moderation buttons are for the marshal
+        // (the master has its own) — see debate.css
         $('body').toggleClass('is-debater', !!(me && isDebaterZone(me.zone)))
-            .toggleClass('has-breakout', !!(me && zoneHasBreakout(me.zone)));
+            .toggleClass('has-breakout', !!(me && zoneHasBreakout(me.zone)))
+            .toggleClass('is-marshal', !!(me && me.marshal));
         var mode = (me && me.zone && me.zone !== 'audience') ? 'publish' : 'view';
         if (mode !== myEmbedMode) {
             myEmbedMode = mode;
@@ -1923,10 +1999,9 @@
     });
 
     // Master room controls
-    $('.debate-muteall-btn').click(function() {
-        eachConn(function(c) { safeSend(c, { type: 'cmd', action: 'mute' }); });
-        App.core.showAlert('Wyciszono wszystkich');
-    });
+    // (the same buttons also sit in the stage bar for the marshal)
+    $('.debate-muteall-btn').click(function() { requestModerate('mute', 'all'); });
+    $('.debate-camoffall-btn').click(function() { requestModerate('camera-off', 'all'); });
 
     $('.debate-close-btn').click(function() {
         if (!window.confirm('Zamknąć pokój debaty? Wszyscy uczestnicy zostaną rozłączeni.')) return;

@@ -267,6 +267,20 @@ body.is-debater .debate-advocem-btn,
 body.has-breakout .debate-breakout-btn { display: flex; }
 body.is-publishing:not(.is-debate-master) .debate-leave-btn { display: flex; }
 
+/* Marshal-only "everybody" mute / camera-off in the bar; the master has the same
+   two buttons in the settings modal, so they are not doubled up when the master is
+   also the marshal. */
+.dv-mod-all-btn { display: none; }
+body.is-marshal:not(.is-debate-master) .dv-mod-all-btn { display: flex; }
+.dv-wide-btn {
+  width: auto;
+  padding: 0 7px 0 4px;
+  gap: 2px;
+  border-radius: 999px;
+}
+.dv-wide-btn .dv-icon { width: clamp(14px, 3vmin, 18px); height: clamp(14px, 3vmin, 18px); }
+.dv-wide-btn span { font-size: 0.62rem; font-weight: 700; }
+
 .debate-hand-btn.active,
 .debate-advocem-btn.active,
 .debate-breakout-btn.active {
@@ -353,7 +367,7 @@ body.is-debate-master .debate-settings-btn { display: flex; }
 
 .slot-list { display: flex; flex-direction: column; gap: 0.4rem; }
 
-.slot { display: flex; align-items: center; gap: 0.5rem; }
+.slot { position: relative; display: flex; align-items: center; gap: 0.5rem; }
 .slot-avatar {
   width: 34px;
   height: 34px;
@@ -371,6 +385,46 @@ body.is-debate-master .debate-settings-btn { display: flex; }
 .slot-name { font-size: 0.95rem; }
 .slot--empty .slot-avatar { border-style: dashed; opacity: 0.45; }
 .slot--empty .slot-name { color: #bbb; }
+
+/* Mute / camera-off on someone else's seat (master and marshal only — body classes
+   set in updateMyEmbed). Floated over the tile's right edge so the layout never
+   shifts; revealed on hover, always shown where there is no hover. */
+.slot-mod {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  gap: 2px;
+  padding: 2px 3px;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.6);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+body.is-debate-master .slot-mod,
+body.is-marshal .slot-mod { display: flex; }
+.slot:hover .slot-mod,
+.slot-mod:focus-within { opacity: 1; }
+@media (hover: none) {
+  .slot-mod { opacity: 1; }
+}
+.slot-mod-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  opacity: 0.85;
+  cursor: pointer;
+}
+.slot-mod-btn:hover, .slot-mod-btn:focus { background: rgba(255, 255, 255, 0.2); opacity: 1; }
+.slot-mod-icon { width: 14px; height: 14px; }
 
 /* Raised-signal badges beside the name — hand drawing for a question,
    "AV" for ad vocem, each with its own colour */
