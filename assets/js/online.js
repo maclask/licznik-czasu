@@ -675,6 +675,7 @@
         viewUrl = url;
         viewUrlBreakoutZone = bzone;
         stageSids = null;       // świeży iframe pokazuje wszystkich, układ narzucimy od zera
+        stageMissingSince = {};
         updateSelfPreview();
         var allow = 'autoplay; fullscreen; picture-in-picture';
         $('.debate-video-frame').html(
@@ -2105,6 +2106,7 @@
             // świeżo załadowany iframe mógł przegapić pierwszy {layout} (wysłany w onload,
             // zanim VDO podpiął swój odbiornik postMessage) — narzuć go na nowo.
             if (d.action === 'guest-connected' || d.action === 'view-connection') syncStage(true);
+            if (d.detailedState) checkStageMedia(d.detailedState);
         } else if (publishIframe && e.source === publishIframe.contentWindow) {
             App.vlog('[VDO← publish]', d);
             if (d.deviceList) {
@@ -2150,6 +2152,46 @@
 
     // Seated people whose stream is in the main room right now (breakout occupants
     // publish into their own room instead — see buildPublishUrl).
+    // Self-heal for a VDO.Ninja race: now and then a viewer connects to a Meshcast
+    // publisher but is never told where to pull that publisher's media from (WHEP), so
+    // this one person stays silent and invisible for this viewer indefinitely while
+    // everyone else receives them fine. The stage reports every few seconds which
+    // streams it has media for (getDetailedState: videoVolume exists only once there is
+    // a media element); a stream that should be in the room but has had no media for
+    // STAGE_HEAL_MS gets this viewer's stage iframe rebuilt — a fresh connection gets
+    // the media. At most STAGE_HEAL_MAX tries per person and one per cooldown, so a
+    // publisher whose camera/mic genuinely never works can't keep reloading everyone.
+    var STAGE_CHECK_MS = 5000, STAGE_HEAL_MS = 25000, STAGE_HEAL_COOLDOWN_MS = 60000, STAGE_HEAL_MAX = 2;
+    var stageMissingSince = {};   // sid -> since when it is expected but has no media
+    var stageHeals = {};          // sid -> rebuilds already done because of it
+    var lastStageHeal = 0;
+    setInterval(function() { if (debateIframe) postToVdo({ getDetailedState: true }); }, STAGE_CHECK_MS);
+    function checkStageMedia(detailed) {
+        var have = {};
+        Object.keys(detailed).forEach(function(k) {
+            var it = detailed[k];
+            if (it && it.streamID && it.videoVolume !== undefined) have[it.streamID] = true;
+        });
+        var expected = viewUrlBreakoutZone
+            ? debateRoster.filter(function(e) { return e.zone === viewUrlBreakoutZone && e.breakout; }).map(function(e) { return pushIdFor(e.pushId); })
+            : mainRoomSids();
+        var now = Date.now();
+        Object.keys(stageMissingSince).forEach(function(sid) {
+            if (have[sid] || expected.indexOf(sid) === -1) delete stageMissingSince[sid];
+        });
+        var stuck = expected.filter(function(sid) {
+            if (have[sid] || (stageHeals[sid] || 0) >= STAGE_HEAL_MAX) return false;
+            if (!stageMissingSince[sid]) stageMissingSince[sid] = now;
+            return now - stageMissingSince[sid] > STAGE_HEAL_MS;
+        });
+        if (!stuck.length || now - lastStageHeal < STAGE_HEAL_COOLDOWN_MS) return;
+        lastStageHeal = now;
+        stuck.forEach(function(sid) { stageHeals[sid] = (stageHeals[sid] || 0) + 1; });
+        App.vlog('[stage] no media from', stuck, '— rebuilding the stage iframe');
+        clearStage();
+        embedVdo();
+    }
+
     function mainRoomSids() {
         return debateRoster.filter(function(e) { return e.zone && e.zone !== 'audience' && !e.breakout; })
             .map(function(e) { return pushIdFor(e.pushId); });
